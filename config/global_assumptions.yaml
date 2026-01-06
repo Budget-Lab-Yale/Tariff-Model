@@ -1,0 +1,49 @@
+# =============================================================================
+# Global Assumptions
+# =============================================================================
+#
+# These parameters apply to ALL scenarios and cannot be overridden.
+# They represent methodological choices and fixed economic parameters.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Price Effect Parameters
+# -----------------------------------------------------------------------------
+
+# Domestic price passthrough rate
+# How much of tariff cost is passed through to domestic prices
+price_passthrough: 0.50
+
+# Goods share of Personal Consumption Expenditures (BEA)
+goods_share_pce: 0.31471
+
+# Import share of goods consumption (BEA)
+import_share: 0.20570
+
+# USD offset for exchange rate response
+# Calculated as: exchange_rate_response (0.3) * import_content (0.58)
+usd_offset: 0.174
+
+# -----------------------------------------------------------------------------
+# Revenue Parameters
+# -----------------------------------------------------------------------------
+
+# Compliance effect: reduction in collections due to noncompliance/evasion
+# Applied as negative adjustment to gross revenue
+compliance_effect: 0.10
+
+# Income effect: reduction from lower taxable income due to tariff burden
+# Applied as negative adjustment to gross revenue
+income_effect: 0.23
+
+# -----------------------------------------------------------------------------
+# Phase-in Schedule
+# -----------------------------------------------------------------------------
+
+# Fraction of tariff effects phased in by fiscal year
+# Years not listed default to 1.0 (fully phased in)
+phase_in:
+  2025: 0.33
+  2026: 0.66
+  2027: 1.00
