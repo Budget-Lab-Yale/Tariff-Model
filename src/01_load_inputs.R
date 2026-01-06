@@ -136,6 +136,31 @@ load_inputs <- function(scenario) {
     message('  No sector outputs found (optional)')
   }
 
+  # GTAP foreign GDP effects (qgdp by region)
+  foreign_gdp_file <- file.path(gtap_outputs_dir, 'foreign_gdp.csv')
+  if (file.exists(foreign_gdp_file)) {
+    inputs$foreign_gdp <- read_csv(foreign_gdp_file, show_col_types = FALSE)
+    message(sprintf('  Loaded GTAP foreign GDP: %d regions', nrow(inputs$foreign_gdp)))
+  } else {
+    message('  No foreign GDP data found (optional)')
+  }
+
+  # GTAP product prices (commodity-level price effects)
+  product_prices_file <- file.path(gtap_outputs_dir, 'product_prices.csv')
+  if (file.exists(product_prices_file)) {
+    inputs$product_prices <- read_csv(product_prices_file, show_col_types = FALSE)
+    message(sprintf('  Loaded GTAP product prices: %d products', nrow(inputs$product_prices)))
+  } else {
+    message('  No product prices found (optional)')
+  }
+
+  # Product parameters (coefficients and weights for aggregation)
+  product_params_file <- 'resources/products/product_params.csv'
+  if (file.exists(product_params_file)) {
+    inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
+    message('  Loaded product parameters')
+  }
+
   # ============================
   # MAUS outputs (scenario-specific, optional)
   # ============================
@@ -195,6 +220,18 @@ load_inputs <- function(scenario) {
     message('  Loaded CBO revenue sensitivity parameters')
   } else {
     message('  No CBO revenue sensitivity parameters found (optional)')
+  }
+
+  # ============================
+  # Distribution parameters
+  # ============================
+
+  dist_file <- 'resources/distribution/decile_parameters.csv'
+  if (file.exists(dist_file)) {
+    inputs$decile_parameters <- read_csv(dist_file, show_col_types = FALSE)
+    message('  Loaded distribution parameters (10 deciles)')
+  } else {
+    message('  No distribution parameters found (optional)')
   }
 
   return(inputs)

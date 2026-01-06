@@ -22,6 +22,10 @@ source('src/04_calculate_revenue.R')
 source('src/05_calculate_macro.R')
 source('src/06_calculate_sectors.R')
 source('src/07_calculate_dynamic_revenue.R')
+source('src/08_calculate_foreign_gdp.R')
+source('src/09_calculate_distribution.R')
+source('src/10_calculate_products.R')
+source('src/11_write_outputs.R')
 
 
 #' Run the complete tariff model for a scenario
@@ -118,6 +122,42 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
   }
 
   #---------------------------
+  # Step 8: Calculate foreign GDP effects
+  #---------------------------
+
+  message('\nStep 8: Calculating foreign GDP effects...')
+  foreign_gdp_results <- NULL
+  if (!is.null(inputs$foreign_gdp)) {
+    foreign_gdp_results <- calculate_foreign_gdp(inputs)
+  } else {
+    message('  Skipping foreign GDP (no foreign_gdp data)')
+  }
+
+  #---------------------------
+  # Step 9: Calculate distribution
+  #---------------------------
+
+  message('\nStep 9: Calculating distribution by income decile...')
+  distribution_results <- NULL
+  if (!is.null(inputs$decile_parameters)) {
+    distribution_results <- calculate_distribution(price_results, inputs)
+  } else {
+    message('  Skipping distribution (no decile_parameters data)')
+  }
+
+  #---------------------------
+  # Step 10: Calculate product price effects
+  #---------------------------
+
+  message('\nStep 10: Calculating product price effects...')
+  product_results <- NULL
+  if (!is.null(inputs$product_prices)) {
+    product_results <- calculate_products(inputs)
+  } else {
+    message('  Skipping product prices (no product_prices data)')
+  }
+
+  #---------------------------
   # Compile results
   #---------------------------
 
@@ -131,8 +171,18 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
     revenue = revenue_results,
     macro = macro_results,
     sectors = sector_results,
-    dynamic = dynamic_results
+    dynamic = dynamic_results,
+    foreign_gdp = foreign_gdp_results,
+    distribution = distribution_results,
+    products = product_results
   )
+
+  #---------------------------
+  # Step 11: Write outputs to disk
+  #---------------------------
+
+  message('\nStep 11: Writing outputs to disk...')
+  write_outputs(results, scenario)
 
   # Print key results summary
   message('\n----------------------------------------------------------')
@@ -142,8 +192,15 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
   message(sprintf('Post-substitution ETR increase: %.2f%%', etr_results$post_sub_increase))
   message(sprintf('Pre-sub price increase:         %.3f%%', price_results$pre_sub_price_increase))
   message(sprintf('Post-sub price increase:        %.3f%%', price_results$post_sub_price_increase))
-  message(sprintf('Pre-sub per-HH cost:            $%.0f', price_results$pre_sub_per_hh_cost))
-  message(sprintf('Post-sub per-HH cost:           $%.0f', price_results$post_sub_per_hh_cost))
+
+  # Use distribution results for per-HH cost if available (more accurate)
+  if (!is.null(distribution_results)) {
+    message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub$avg_per_hh_cost)))
+    message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub$avg_per_hh_cost)))
+  } else {
+    message(sprintf('Pre-sub per-HH cost:            $%.0f (approx)', price_results$pre_sub_per_hh_cost))
+    message(sprintf('Post-sub per-HH cost:           $%.0f (approx)', price_results$post_sub_per_hh_cost))
+  }
   message(sprintf('10-yr conventional revenue:     $%.0fB', revenue_results$conventional_10yr))
   if (!is.null(dynamic_results)) {
     message(sprintf('10-yr dynamic effect:           $%.0fB', dynamic_results$dynamic_effect_10yr))
@@ -175,6 +232,48 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
     message(sprintf('Utilities:                      %.2f%%', sector_results$utilities))
     message(sprintf('Construction:                   %.2f%%', sector_results$construction))
     message(sprintf('Services:                       %.2f%%', sector_results$services))
+  }
+
+  if (!is.null(foreign_gdp_results)) {
+    message('----------------------------------------------------------')
+    message('FOREIGN GDP EFFECTS (Long-Run)')
+    message('----------------------------------------------------------')
+    message(sprintf('USA:                            %+.2f%%', foreign_gdp_results$usa))
+    message(sprintf('China:                          %+.2f%%', foreign_gdp_results$china))
+    message(sprintf('Canada:                         %+.2f%%', foreign_gdp_results$canada))
+    message(sprintf('Mexico:                         %+.2f%%', foreign_gdp_results$mexico))
+    message(sprintf('EU:                             %+.2f%%', foreign_gdp_results$eu))
+    message(sprintf('UK:                             %+.2f%%', foreign_gdp_results$uk))
+    message(sprintf('Japan:                          %+.2f%%', foreign_gdp_results$japan))
+    message(sprintf('ROW:                            %+.2f%%', foreign_gdp_results$row))
+  }
+
+  if (!is.null(product_results)) {
+    message('----------------------------------------------------------')
+    message('PRODUCT PRICE EFFECTS')
+    message('----------------------------------------------------------')
+    message(sprintf('Food (Short-Run):               %.4f%%', product_results$food_sr))
+    message(sprintf('Food (Long-Run):                %.4f%%', product_results$food_lr))
+    message(sprintf('Total products:                 %d', product_results$n_products))
+    message(sprintf('Food products:                  %d', product_results$n_food))
+  }
+
+  if (!is.null(distribution_results)) {
+    message('----------------------------------------------------------')
+    message('DISTRIBUTION BY INCOME DECILE (Pre-Substitution)')
+    message('----------------------------------------------------------')
+    dist <- distribution_results$pre_sub$by_decile
+    for (i in 1:nrow(dist)) {
+      message(sprintf('Decile %2d ($%s income):  $%s (%.2f%% of income)',
+                      dist$decile[i],
+                      format(dist$income[i], big.mark = ',', scientific = FALSE),
+                      format(round(abs(dist$cost_per_hh[i])), big.mark = ',', scientific = FALSE),
+                      abs(dist$pct_of_income[i])))
+    }
+    message(sprintf('Average per-HH cost:            $%s',
+                    format(round(abs(distribution_results$pre_sub$avg_per_hh_cost)), big.mark = ',', scientific = FALSE)))
+    message(sprintf('Regressivity ratio (D1/D10):    %.2fx',
+                    distribution_results$regressivity$burden_ratio))
   }
   message('----------------------------------------------------------')
 

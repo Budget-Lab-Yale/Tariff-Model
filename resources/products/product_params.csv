@@ -1,0 +1,66 @@
+gtap_sector,description,lr_coef,weight,is_food
+lea,Leather products,15.41,46353.235,0
+wap,Wearing apparel,15.04,115801.801,0
+eeq,Electrical equipment,13.07,62008.213,0
+fmp,Metal products,11.59,18103.242,0
+ele,"Computer, electronic and optic",12.22,95229.497,0
+nfm,Metals nec,12.06,113.059,0
+tex,Textiles,10.26,26806.04,0
+mvh,Motor vehicles and parts,12.22,237456.422,0
+ome,Machinery and equipment nec,9.57,10243.248,0
+otn,Transport equipment nec,7.7,21707.631,0
+omf,Manufactures nec,6.4,349668.961,0
+rpp,Rubber and plastic products,6.41,41614.857,0
+nmm,Mineral products nec,6.01,11419.288,0
+i_s,Ferrous metals,6.81,686.122,0
+ocr,Crops nec,3.6,6810.928,1
+pcr,Processed rice,7.52,1474.361,1
+lum,Wood products,3.74,5036.355,0
+chm,Chemical products,3.06,73597.545,0
+fsh,Fishing,3.07,4438.922,1
+vol,Vegetable oils and fats,2.17,9794.382,1
+b_t,Beverages and tobacco products,3.4,188714.322,1
+ofd,Food products nec,2.59,278630.188,1
+pdr,Paddy rice,1.55,34.087,1
+ppp,"Paper products, publishing",2.7,33241.604,0
+v_f,"Vegetables, fruit, nuts",1.54,50266.172,1
+oxt,Minerals nec,1.01,260.475,0
+frs,Forestry,1.72,593.053,0
+oap,Animal products nec,1.25,11422.569,1
+oil,Oil,0.38,0.104,0
+sgr,Sugar,2.17,23787.72,1
+gro,Cereal grains nec,1.61,2119.332,1
+mil,Dairy products,2.06,69568.212,1
+bph,Basic pharmaceutical products,1.04,178150.992,0
+p_c,"Petroleum, coal products",0.56,137212.217,0
+omt,Meat products nec,1.41,58288.164,1
+osd,Oil seeds,0.28,229.81,1
+wol,"Wool, silk-worm cocoons",6.6,499.176,0
+cmt,Bovine meat products,1.32,72995.006,1
+pfb,Plant-based fibers,1.18,7173.284,1
+gas,Gas,0.8,61.227,0
+ctl,"Bovine cattle, sheep and goats",0.94,3510.721,1
+c_b,"Sugar cane, sugar beet",0.05,388.628,1
+wht,Wheat,1.12,2071.381,1
+coa,Coal,0.47,16.187,0
+ely,Electricity,1.19,148064.632,0
+cns,Construction,2.16,2094.322,0
+rmk,Raw milk,1.57,2577.8,1
+wtr,Water,1.93,71486.507,0
+gdt,"Gas manufacture, distribution",1.3,15753.085,0
+atp,Air transport,0.86,147721.814,0
+afs,"Accommodation, Food and servic",1.34,913283.719,0
+cmn,Communication,1.57,535553.486,0
+wtp,Water transport,1.34,22583.327,0
+ofi,Financial services nec,1.24,483914.828,0
+ins,Insurance,1.15,499028.039,0
+obs,Business services nec,1.47,319029.891,0
+otp,Transport nec,1.37,192562.314,0
+whs,Warehousing and support activi,1.84,4928.192,0
+ros,Recreational and other service,1.45,717146.264,0
+hht,Human health and social work a,1.53,2470541.819,0
+osg,Public Administration and defe,1.55,70994.802,0
+rsa,Real estate activities,1.32,534227.6,0
+trd,Trade,1.46,1938648.733,0
+dwe,Dwellings,1.21,1582226,0
+edu,Education,1.31,383237.951,0
