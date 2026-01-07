@@ -183,26 +183,18 @@ run_scenario <- function(scenario, skip_gtap = FALSE, skip_maus_pause = FALSE) {
   # Step 3b: Calculate product price effects (if GTAP data available)
   #---------------------------
 
-  if (is.null(inputs$etr_matrix) || is.null(inputs$viws) || is.null(inputs$ppm)) {
-    stop('Product price effects require etr_matrix, viws, and ppm inputs')
+  if (is.null(inputs$etr_matrix) || is.null(inputs$viws) || is.null(inputs$ppd)) {
+    stop('Product price effects require etr_matrix, viws, and ppd inputs')
   }
 
   message('\nStep 3b: Calculating product price effects from GTAP...')
 
-  # Use post-substitution price effect as overall SR effect
-  overall_sr_effect <- price_results$post_sub_price_increase / 100
-
-  # Calculate overall LR effect as weighted average of ppm
-  ppm_usa <- inputs$ppm[, 'usa']
-  viws_total <- rowSums(inputs$viws)
-  overall_lr_effect <- sum(ppm_usa * viws_total) / sum(viws_total)
-
+  # SR = weighted ETR per sector (direct tariff impact)
+  # LR = ppd (domestic purchase price change from GTAP)
   inputs$product_prices <- get_price_effects(
-    gtap_data = list(viws = inputs$viws, ppm = inputs$ppm),
+    gtap_data = list(viws = inputs$viws, ppd = inputs$ppd),
     etr_matrix = inputs$etr_matrix,
     product_params = inputs$product_params,
-    overall_sr_effect = overall_sr_effect,
-    overall_lr_effect = overall_lr_effect,
     target_region = 'usa'
   )
 

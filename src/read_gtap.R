@@ -557,62 +557,63 @@ get_sector_outputs_full <- function(gtap_data, sector_mapping, target_region = '
 #' Calculates short-run and long-run price effects by product.
 #' - SR: Derived from ETR matrix weighted by VIWS imports
 #' - LR: Derived from GTAP ppm (import market price) changes
+#' Calculate product-level price effects
 #'
-#' @param gtap_data Result from read_gtap_full()
+#' SR price = weighted ETR per sector (direct tariff impact)
+#' LR price = ppd (domestic purchase price change from GTAP)
+#'
+#' @param gtap_data Result from read_gtap_full() - must contain viws and ppd
 #' @param etr_matrix ETR matrix from Tariff-ETRs (gtap_sector x country)
 #' @param product_params Product parameters with is_food flag
-#' @param overall_sr_effect Overall short-run price effect (scalar)
-#' @param overall_lr_effect Overall long-run price effect (scalar)
 #' @param target_region Region to extract (default 'usa')
 #' @return Data frame with gtap_sector, sr_price_effect, lr_price_effect, is_food
 get_price_effects <- function(gtap_data, etr_matrix, product_params,
-                              overall_sr_effect, overall_lr_effect,
                               target_region = 'usa') {
   if (is.null(gtap_data$viws)) {
     stop('viws not found in GTAP data')
   }
-  if (is.null(gtap_data$ppm)) {
-    stop('ppm not found in GTAP data')
+  if (is.null(gtap_data$ppd)) {
+    stop('ppd not found in GTAP data')
   }
 
   viws_full <- gtap_data$viws
-  ppm_full <- gtap_data$ppm
+  ppd_full <- gtap_data$ppd
 
-  # Only process commodities that exist in ETR matrix (goods sectors only)
-  all_commodities <- rownames(viws_full)
+  # Get all 65 commodities from ppd (includes services)
+  all_commodities <- rownames(ppd_full)
   goods_sectors <- etr_matrix$gtap_code
-  commodities <- intersect(all_commodities, goods_sectors)
 
-  # Filter viws and ppm to goods sectors only
-  goods_indices <- match(commodities, all_commodities)
-  viws <- viws_full[goods_indices, , drop = FALSE]
-  ppm <- ppm_full[goods_indices, , drop = FALSE]
+  # Get ppd (domestic purchase price) for target region - this is LR effect
+  region_idx <- which(colnames(ppd_full) == target_region)
+  if (length(region_idx) == 0) {
+    stop('Region not found in ppd: ', target_region)
+  }
+  lr_effects <- ppd_full[, region_idx]
 
-  # Get ppm for target region
-  region_idx <- which(colnames(ppm) == target_region)
-  ppm_values <- ppm[, region_idx]
+  # SR price effect: weighted ETR for goods sectors, 0 for services
+  sr_effects <- numeric(length(all_commodities))
+  names(sr_effects) <- all_commodities
 
-  # Calculate weighted average ppm
-  total_imports_by_product <- rowSums(viws)
-  weighted_avg_ppm <- sum(ppm_values * total_imports_by_product) / sum(total_imports_by_product)
-
-  # LR price effect: scale each product's ppm by overall effect
-  lr_effects <- overall_lr_effect * ppm_values / weighted_avg_ppm
-
-  # SR price effect: ETR-weighted calculation
-  # Need to match ETR matrix columns to VIWS columns
-  sr_effects <- numeric(length(commodities))
-  names(sr_effects) <- commodities
-
-  # Country columns in ETR matrix (same names as VIWS columns)
-  # ETR matrix has: china, canada, mexico, uk, japan, eu, row, ftrow
+  # Country columns in ETR matrix
   etr_countries <- c('china', 'canada', 'mexico', 'uk', 'japan', 'eu', 'row', 'ftrow')
 
-  for (i in seq_along(commodities)) {
-    comm <- commodities[i]
+  for (i in seq_along(all_commodities)) {
+    comm <- all_commodities[i]
 
-    # Get imports for this commodity by country
-    comm_imports <- viws[i, ]
+    # Services sectors (not in ETR matrix) have SR = 0
+    if (!comm %in% goods_sectors) {
+      sr_effects[i] <- 0
+      next
+    }
+
+    # Get imports for this commodity by country from viws
+    comm_idx <- which(rownames(viws_full) == comm)
+    if (length(comm_idx) == 0) {
+      sr_effects[i] <- 0
+      next
+    }
+
+    comm_imports <- viws_full[comm_idx, ]
     total_comm_imports <- sum(comm_imports)
 
     if (total_comm_imports == 0) {
@@ -620,40 +621,27 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
       next
     }
 
-    # Get ETR row for this commodity (if exists in etr_matrix)
-    # Note: etr_matrix uses gtap_code column
+    # Get ETR row for this commodity
     etr_row_idx <- which(etr_matrix$gtap_code == comm)
-    if (length(etr_row_idx) == 0) {
-      stop('ETR matrix missing gtap_code for sector: ', comm)
-    }
 
-    # Calculate weighted ETR for this product
+    # Calculate import-weighted ETR for this sector
     weighted_etr <- 0
     for (country in etr_countries) {
-      if (!country %in% names(etr_matrix)) {
-        stop('ETR matrix missing required country column: ', country)
+      if (country %in% names(comm_imports) && country %in% names(etr_matrix)) {
+        import_weight <- comm_imports[country]
+        etr_value <- etr_matrix[[country]][etr_row_idx]
+        weighted_etr <- weighted_etr + (etr_value * import_weight)
       }
-      if (!country %in% names(comm_imports)) {
-        stop('VIWS missing required country column: ', country)
-      }
-      import_weight <- comm_imports[country]
-      etr_value <- etr_matrix[[country]][etr_row_idx]
-      weighted_etr <- weighted_etr + (etr_value * import_weight)
     }
 
+    # SR effect is the weighted ETR (already in percentage points)
     sr_effects[i] <- weighted_etr / total_comm_imports
   }
 
-  # Scale SR effects by overall effect ratio
-  avg_sr <- sum(sr_effects * total_imports_by_product) / sum(total_imports_by_product)
-  if (avg_sr > 0) {
-    sr_effects <- overall_sr_effect * sr_effects / avg_sr
-  }
-
-  # Build result data frame
+  # Build result data frame - all 65 sectors
   result <- data.frame(
-    gtap_sector = commodities,
-    sr_price_effect = round(sr_effects * 100, 2),  # Convert to percentage
+    gtap_sector = all_commodities,
+    sr_price_effect = round(sr_effects, 2),
     lr_price_effect = round(lr_effects, 2),
     stringsAsFactors = FALSE
   )
@@ -671,10 +659,8 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
       by = 'gtap_sector'
     )
 
-  if (any(is.na(result$is_food))) {
-    missing_food <- result$gtap_sector[is.na(result$is_food)]
-    stop('Missing is_food flag for gtap_sector(s): ', paste(missing_food, collapse = ', '))
-  }
+  # Fill NA is_food with 0 (services are not food)
+  result$is_food[is.na(result$is_food)] <- 0
 
   return(result)
 }
@@ -693,13 +679,10 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
 #' @param sector_mapping Data frame with sector classifications
 #' @param product_params Data frame with product parameters (is_food)
 #' @param etr_matrix ETR matrix from Tariff-ETRs (optional, for price effects)
-#' @param overall_sr_effect Overall SR price effect (optional)
-#' @param overall_lr_effect Overall LR price effect (optional)
 #' @return List containing all GTAP outputs
 load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
                                  sector_mapping = NULL,
-                                 product_params = NULL, etr_matrix = NULL,
-                                 overall_sr_effect = NULL, overall_lr_effect = NULL) {
+                                 product_params = NULL, etr_matrix = NULL) {
   # Build file pattern based on prefix
   if (!is.null(file_prefix)) {
     sol_pattern <- paste0('^', file_prefix, '\\.sol$')
@@ -758,12 +741,10 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$sector_outputs <- get_sector_outputs_full(gtap_data, sector_mapping, 'usa')
   message(sprintf('    - Sector outputs: %d sectors (with mappings)', nrow(result$sector_outputs)))
 
-  # Price effects (if ETR matrix provided)
-  if (!is.null(etr_matrix) && !is.null(product_params) &&
-      !is.null(overall_sr_effect) && !is.null(overall_lr_effect)) {
+  # Price effects (if ETR matrix and ppd provided)
+  if (!is.null(etr_matrix) && !is.null(product_params) && !is.null(gtap_data$ppd)) {
     result$product_prices <- get_price_effects(
-      gtap_data, etr_matrix, product_params,
-      overall_sr_effect, overall_lr_effect, 'usa'
+      gtap_data, etr_matrix, product_params, 'usa'
     )
     message(sprintf('    - Product prices: %d products', nrow(result$product_prices)))
   }
