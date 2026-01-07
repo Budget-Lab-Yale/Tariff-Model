@@ -18,7 +18,7 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
   output_dir <- file.path('output', scenario, 'gtap')
   shocks_file <- file.path('output', scenario, 'tariff_etrs', 'shocks.txt')
   template_file <- 'resources/gtap/cmf_template.cmf'
-  retaliation_file <- 'config/retaliation/shocks.txt'
+  retaliation_file <- file.path(scenario_dir, 'retaliation', 'shocks.txt')
 
   # Load model params for GTAP config
   params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))

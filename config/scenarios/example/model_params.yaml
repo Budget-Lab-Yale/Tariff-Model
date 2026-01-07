@@ -17,5 +17,5 @@ gtap:
   # Working directory for GTAP (where basedata.har etc. are located)
   work_dir: 'C:/Users/jar335/Documents/GTAP/work'
 
-  # Include retaliation shocks from config/retaliation/shocks.txt
+  # Include retaliation shocks from this scenario's retaliation/shocks.txt
   include_retaliation: true
