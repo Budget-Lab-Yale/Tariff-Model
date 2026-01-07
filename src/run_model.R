@@ -15,6 +15,7 @@ library(yaml)
 
 # Source helper modules
 source('src/00_run_tariff_etrs.R')
+source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
 source('src/02_calculate_etr.R')
 source('src/03_calculate_prices.R')
@@ -115,10 +116,11 @@ Continuing with model execution...
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
-#' @param skip_tariff_etrs If TRUE, skip running Tariff-ETRs (use existing outputs)
+#' @param skip_gtap If TRUE, skip running GTAP (use existing outputs)
+#' @param skip_maus_pause If TRUE, skip MAUS pause (use existing outputs)
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, skip_tariff_etrs = FALSE, skip_maus_pause = FALSE) {
+run_scenario <- function(scenario, skip_gtap = FALSE, skip_maus_pause = FALSE) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -134,11 +136,18 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE, skip_maus_pause = F
   # Step 0: Run Tariff-ETRs
   #---------------------------
 
-  if (!skip_tariff_etrs) {
-    message('Step 0: Running Tariff-ETRs...')
-    run_tariff_etrs(scenario)
+  message('Step 0: Running Tariff-ETRs...')
+  run_tariff_etrs(scenario)
+
+  #---------------------------
+  # Step 0b: Run GTAP
+  #---------------------------
+
+  if (!skip_gtap) {
+    message('\nStep 0b: Running GTAP...')
+    run_gtap(scenario)
   } else {
-    message('Step 0: Skipping Tariff-ETRs (using existing outputs)')
+    message('\nStep 0b: Skipping GTAP (using existing outputs)')
   }
 
   #---------------------------
@@ -174,28 +183,30 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE, skip_maus_pause = F
   # Step 3b: Calculate product price effects (if GTAP data available)
   #---------------------------
 
-  if (!is.null(inputs$etr_matrix) && !is.null(inputs$viws) && !is.null(inputs$ppm)) {
-    message('\nStep 3b: Calculating product price effects from GTAP...')
-
-    # Use post-substitution price effect as overall SR effect
-    overall_sr_effect <- price_results$post_sub_price_increase / 100
-
-    # Calculate overall LR effect as weighted average of ppm
-    ppm_usa <- inputs$ppm[, 'usa']
-    viws_total <- rowSums(inputs$viws)
-    overall_lr_effect <- sum(ppm_usa * viws_total) / sum(viws_total)
-
-    inputs$product_prices <- get_price_effects(
-      gtap_data = list(viws = inputs$viws, ppm = inputs$ppm),
-      etr_matrix = inputs$etr_matrix,
-      product_params = inputs$product_params,
-      overall_sr_effect = overall_sr_effect,
-      overall_lr_effect = overall_lr_effect,
-      target_region = 'usa'
-    )
-
-    message(sprintf('  Calculated price effects for %d products', nrow(inputs$product_prices)))
+  if (is.null(inputs$etr_matrix) || is.null(inputs$viws) || is.null(inputs$ppm)) {
+    stop('Product price effects require etr_matrix, viws, and ppm inputs')
   }
+
+  message('\nStep 3b: Calculating product price effects from GTAP...')
+
+  # Use post-substitution price effect as overall SR effect
+  overall_sr_effect <- price_results$post_sub_price_increase / 100
+
+  # Calculate overall LR effect as weighted average of ppm
+  ppm_usa <- inputs$ppm[, 'usa']
+  viws_total <- rowSums(inputs$viws)
+  overall_lr_effect <- sum(ppm_usa * viws_total) / sum(viws_total)
+
+  inputs$product_prices <- get_price_effects(
+    gtap_data = list(viws = inputs$viws, ppm = inputs$ppm),
+    etr_matrix = inputs$etr_matrix,
+    product_params = inputs$product_params,
+    overall_sr_effect = overall_sr_effect,
+    overall_lr_effect = overall_lr_effect,
+    target_region = 'usa'
+  )
+
+  message(sprintf('  Calculated price effects for %d products', nrow(inputs$product_prices)))
 
   #---------------------------
   #---------------------------
@@ -229,72 +240,60 @@ Loading MAUS output levels...')
   #---------------------------
 
   message('\nStep 5: Calculating macro effects...')
-  macro_results <- NULL
-  if (!is.null(inputs$maus)) {
-    macro_results <- calculate_macro(inputs)
-  } else {
-    message('  Skipping macro calculations (no MAUS data)')
+  if (is.null(inputs$maus)) {
+    stop('MAUS data is required for macro calculations')
   }
+  macro_results <- calculate_macro(inputs)
 
   #---------------------------
   # Step 6: Calculate sector effects
   #---------------------------
 
   message('\nStep 6: Calculating sector effects...')
-  sector_results <- NULL
-  if (!is.null(inputs$sector_outputs)) {
-    sector_results <- calculate_sectors(inputs)
-  } else {
-    message('  Skipping sector calculations (no sector_outputs data)')
+  if (is.null(inputs$sector_outputs)) {
+    stop('sector_outputs data is required for sector calculations')
   }
+  sector_results <- calculate_sectors(inputs)
 
   #---------------------------
   # Step 7: Calculate dynamic revenue
   #---------------------------
 
   message('\nStep 7: Calculating dynamic revenue...')
-  dynamic_results <- NULL
-  if (!is.null(inputs$maus) && !is.null(inputs$cbo_sensitivity)) {
-    dynamic_results <- calculate_dynamic_revenue(inputs, revenue_results)
-  } else {
-    message('  Skipping dynamic revenue (requires MAUS + CBO data)')
+  if (is.null(inputs$cbo_sensitivity)) {
+    stop('CBO sensitivity data is required for dynamic revenue')
   }
+  dynamic_results <- calculate_dynamic_revenue(inputs, revenue_results)
 
   #---------------------------
   # Step 8: Calculate foreign GDP effects
   #---------------------------
 
   message('\nStep 8: Calculating foreign GDP effects...')
-  foreign_gdp_results <- NULL
-  if (!is.null(inputs$foreign_gdp)) {
-    foreign_gdp_results <- calculate_foreign_gdp(inputs)
-  } else {
-    message('  Skipping foreign GDP (no foreign_gdp data)')
+  if (is.null(inputs$foreign_gdp)) {
+    stop('foreign_gdp data is required for foreign GDP calculations')
   }
+  foreign_gdp_results <- calculate_foreign_gdp(inputs)
 
   #---------------------------
   # Step 9: Calculate distribution
   #---------------------------
 
   message('\nStep 9: Calculating distribution by income decile...')
-  distribution_results <- NULL
-  if (!is.null(inputs$decile_parameters)) {
-    distribution_results <- calculate_distribution(price_results, inputs)
-  } else {
-    message('  Skipping distribution (no decile_parameters data)')
+  if (is.null(inputs$decile_parameters)) {
+    stop('decile_parameters data is required for distribution calculations')
   }
+  distribution_results <- calculate_distribution(price_results, inputs)
 
   #---------------------------
   # Step 10: Calculate product price effects
   #---------------------------
 
   message('\nStep 10: Calculating product price effects...')
-  product_results <- NULL
-  if (!is.null(inputs$product_prices)) {
-    product_results <- calculate_products(inputs)
-  } else {
-    message('  Skipping product prices (no product_prices data)')
+  if (is.null(inputs$product_prices)) {
+    stop('product_prices data is required for product calculations')
   }
+  product_results <- calculate_products(inputs)
 
   #---------------------------
   # Compile results
