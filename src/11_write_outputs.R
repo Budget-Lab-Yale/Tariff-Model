@@ -69,8 +69,7 @@ write_outputs <- function(results, scenario) {
 
   # Distribution
   key_results <- key_results %>%
-    add_row(metric = 'avg_per_hh_cost_pre_sub', value = abs(results$distribution$pre_sub$avg_per_hh_cost), unit = 'dollars') %>%
-    add_row(metric = 'avg_per_hh_cost_post_sub', value = abs(results$distribution$post_sub$avg_per_hh_cost), unit = 'dollars') %>%
+    add_row(metric = 'avg_per_hh_cost', value = abs(results$distribution$avg_per_hh_cost), unit = 'dollars') %>%
     add_row(metric = 'regressivity_ratio', value = results$distribution$regressivity$burden_ratio, unit = 'ratio')
 
   # Products
@@ -159,15 +158,9 @@ write_outputs <- function(results, scenario) {
   # Distribution by Decile
   # ============================
 
-  # Pre-substitution
-  write_csv(results$distribution$pre_sub$by_decile,
-            file.path(output_dir, 'distribution_pre_sub.csv'))
-  message('    distribution_pre_sub.csv (10 deciles)')
-
-  # Post-substitution
-  write_csv(results$distribution$post_sub$by_decile,
-            file.path(output_dir, 'distribution_post_sub.csv'))
-  message('    distribution_post_sub.csv (10 deciles)')
+  write_csv(results$distribution$by_decile,
+            file.path(output_dir, 'distribution.csv'))
+  message('    distribution.csv (10 deciles)')
 
   # ============================
   # Product Prices

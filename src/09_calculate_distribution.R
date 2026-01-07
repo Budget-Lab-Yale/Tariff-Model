@@ -93,41 +93,15 @@ calculate_distribution <- function(price_results, inputs) {
   message(sprintf('  Median per-HH cost: $%.0f', median_cost))
 
   # -------------------------------------------------------------------------
-  # Calculate post-substitution distribution
-  # -------------------------------------------------------------------------
-
-  post_sub_pce <- price_results$post_sub_price_increase / 100
-
-  distribution_post_sub <- decile_params %>%
-    mutate(
-      pce_effect = post_sub_pce * pce_variation,
-      pct_of_income = pce_effect * scaling_factor * 100,
-      cost_per_hh = -1 * (pct_of_income / 100) * income
-    )
-
-  avg_cost_post_sub <- mean(distribution_post_sub$cost_per_hh)
-
-  message(sprintf('  Post-sub average per-HH cost: $%.0f', avg_cost_post_sub))
-
-  # -------------------------------------------------------------------------
   # Compile results
   # -------------------------------------------------------------------------
 
   results <- list(
-    # Pre-substitution distribution
-    pre_sub = list(
-      by_decile = distribution %>%
-        select(decile, income, pct_of_income, cost_per_hh),
-      avg_per_hh_cost = avg_cost,
-      median_per_hh_cost = median_cost
-    ),
-
-    # Post-substitution distribution
-    post_sub = list(
-      by_decile = distribution_post_sub %>%
-        select(decile, income, pct_of_income, cost_per_hh),
-      avg_per_hh_cost = avg_cost_post_sub
-    ),
+    # Distribution by decile
+    by_decile = distribution %>%
+      select(decile, income, pct_of_income, cost_per_hh),
+    avg_per_hh_cost = avg_cost,
+    median_per_hh_cost = median_cost,
 
     # Regressivity measures
     regressivity = list(
@@ -168,7 +142,7 @@ calculate_distribution <- function(price_results, inputs) {
 #'
 #' @return TRUE if validation passes, FALSE otherwise
 validate_distribution <- function(results, expected_avg = 1671) {
-  actual_avg <- abs(results$pre_sub$avg_per_hh_cost)
+  actual_avg <- abs(results$avg_per_hh_cost)
   pct_diff <- abs(actual_avg - expected_avg) / expected_avg * 100
 
   if (pct_diff > 5) {
