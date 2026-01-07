@@ -1,0 +1,12 @@
+! Custom GTAP variable map for Yale Budget Lab Tariff Model
+! Maps variables to header numbers expected by read_gtap.R
+!
+! Format: header_number variable_name
+! Header numbers must match GTAP_HEADERS in src/read_gtap.R
+
+0001 qo
+0030 qmwreg
+0042 qgdp
+0058 ppa
+0066 ppd
+0078 ppm

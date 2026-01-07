@@ -1,0 +1,50 @@
+! CMF Template for Yale Budget Lab Tariff Model
+! This template is used by run_gtap.R to generate scenario-specific CMF files
+! Dynamic values marked with {{PLACEHOLDER}} are replaced at runtime
+
+CPU = yes;  ! log show simulation times
+NDS = yes;  ! no displays
+Extrapolation accuracy file = YES ; ! XAC file
+
+file GTAPSUM = SUMMARY.har;
+file WELVIEW = DECOMP.har;
+file GTAPVOL = GTAPVOL.har;
+
+! GTAP installation paths
+aux files = C:\Users\jar335\Documents\GTAP\GTAPV7;
+file gtapSETS = C:\Users\jar335\Documents\GTAP\tbltarv7\sets.har;
+file gtapDATA = C:\Users\jar335\Documents\GTAP\tbltarv7\basedata.har;
+Updated file gtapDATA = gdata.upd;
+file gtapPARM = C:\Users\jar335\Documents\GTAP\tbltarv7\default.prm;
+
+! Dynamic values - replaced at runtime
+Solution file = {{SOLUTION_FILE}};
+Verbal Description =
+{{SCENARIO_NAME}};
+
+! Solver settings
+Method = Midpoint;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 2;
+
+! Standard GTAP closure
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc
+          tpreg tm tms tx txs
+          qe
+          qesf;
+Rest endogenous;
+
+! Shocks are appended below by run_gtap.R

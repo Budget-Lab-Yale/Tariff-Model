@@ -22,12 +22,12 @@ library(dplyr)
 
 # Header mappings from .sol file to GTAP variables
 GTAP_HEADERS <- list(
-  qgdp = '0042',      # GDP % change by region (9 values)
-  qo = '0001',        # Sector output % change (65 x 9)
-  qmwreg = '0030',    # Aggregate import % change by region (9 values)
-  ppa = '0058',       # Import price from all sources (65 x 9)
-  ppm = '0078',       # Import market price (65 x 9)
-  ppd = '0066'        # Domestic price (65 x 9)
+  qgdp = '0160',      # GDP % change by region (9 values)
+  qo = '0052',        # Sector output % change (65 x 9)
+  qmwreg = '0181',    # Aggregate import % change by region (9 values)
+  ppa = '0095',       # Import price from all sources (65 x 9)
+  ppm = '0022',       # Import market price (65 x 9)
+  ppd = '0021'        # Domestic price (65 x 9)
 )
 
 # Header mappings from .slc file (updated/level values)

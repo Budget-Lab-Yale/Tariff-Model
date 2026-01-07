@@ -11,9 +11,11 @@
 # -----------------------------------------------------------------------------
 
 gtap:
-  # Path to directory containing GTAP solution files (.sol, .sl4, .slc)
-  solution_dir: 'C:/Users/jar335/Documents/GTAP/tbltarv7/SaveSims'
+  # Path to GTAP executable
+  executable: 'C:/Users/jar335/Documents/GTAP/gtapv7.exe'
 
-  # File prefix to use (optional - if not specified, uses first files found)
-  # Use this when multiple simulations are in the same directory
-  file_prefix: '11-17'
+  # Working directory for GTAP (where basedata.har etc. are located)
+  work_dir: 'C:/Users/jar335/Documents/GTAP/work'
+
+  # Include retaliation shocks from config/retaliation/shocks.txt
+  include_retaliation: true
