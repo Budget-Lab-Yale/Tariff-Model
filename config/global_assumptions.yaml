@@ -26,6 +26,14 @@ import_share: 0.20570
 usd_offset: 0.174
 
 # -----------------------------------------------------------------------------
+# ETR Parameters
+# -----------------------------------------------------------------------------
+
+# Baseline effective tariff rate (goods-only concept)
+# Pre-existing tariff rate before any new 2025 tariffs
+baseline_etr: 0.02418
+
+# -----------------------------------------------------------------------------
 # Revenue Parameters
 # -----------------------------------------------------------------------------
 
@@ -33,7 +41,7 @@ usd_offset: 0.174
 # Applied as negative adjustment to gross revenue
 compliance_effect: 0.10
 
-# Income effect: reduction from lower taxable income due to tariff burden
+# Income and payroll tax offset: reduction from lower taxable income due to tariff burden
 # Applied as negative adjustment to gross revenue
 income_effect: 0.23
 
@@ -42,8 +50,16 @@ income_effect: 0.23
 # -----------------------------------------------------------------------------
 
 # Fraction of tariff effects phased in by fiscal year
-# Years not listed default to 1.0 (fully phased in)
+# All fiscal years used by the model must be listed
 phase_in:
   2025: 0.33
   2026: 0.66
   2027: 1.00
+  2028: 1.00
+  2029: 1.00
+  2030: 1.00
+  2031: 1.00
+  2032: 1.00
+  2033: 1.00
+  2034: 1.00
+  2035: 1.00

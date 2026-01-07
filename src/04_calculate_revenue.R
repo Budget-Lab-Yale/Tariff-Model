@@ -7,7 +7,7 @@
 # - GTAP qmwreg (percent change in imports from tariffs)
 # - Phase-in schedule (from global assumptions)
 # - ETR increase (calculated from GTAP postsim vs baseline)
-# - Behavioral adjustments (compliance effect, income effect)
+# - Behavioral adjustments (compliance effect, income and payroll tax offset)
 #
 # Key formula:
 #   New Imports = Baseline × (1 - phase_in) + phase_in × Baseline × (1 + qmwreg/100)
@@ -61,7 +61,7 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   phase_in_schedule <- assumptions$phase_in
 
   message(sprintf('  Using compliance effect: %.1f%%', compliance_effect * 100))
-  message(sprintf('  Using income effect: %.1f%%', income_effect * 100))
+  message(sprintf('  Using income and payroll tax offset: %.1f%%', income_effect * 100))
   message(sprintf('  Using qmwreg: %.2f%%', qmwreg))
   message(sprintf('  Using etr_increase: %.4f (%.2f%%)', etr_increase, etr_increase * 100))
   if (!is.numeric(refund_2026) || length(refund_2026) != 1) {
