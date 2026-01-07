@@ -56,71 +56,49 @@ load_maus_levels <- function(scenario_dir) {
 #' @param scenario_dir Path to scenario directory
 wait_for_maus <- function(maus_inputs, scenario_dir) {
   maus_output_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
+
+  # If MAUS output already exists, continue without pausing
+  if (file.exists(maus_output_file)) {
+    message('  MAUS output file found, continuing...')
+    return()
+  }
+
   cat('
 ===========================================================
-')
-  cat('PAUSE: MAUS INPUT REQUIRED
-')
-  cat('===========================================================
+MAUS INPUT REQUIRED
+===========================================================
 
-')
-  cat('The model has generated MAUS input shocks.
+The model has generated MAUS input shocks.
 
-')
-  cat('INPUT FILE (shocks for MAUS):
+INPUT FILE (shocks for MAUS):
   ', maus_inputs$output_file, '
 
-')
-  cat('NEXT STEPS:
-')
-  cat('  1. Open MAUS and load the shock series from the file above
-')
-  cat('  2. Run MAUS to generate quarterly GDP/employment projections
-')
-  cat('  3. Save MAUS output to:
+NEXT STEPS:
+  1. Open MAUS and load the shock series from the file above
+  2. Run MAUS to generate quarterly GDP/employment projections
+  3. Save MAUS output to:
      ', maus_output_file, '
 
-')
-  cat('REQUIRED OUTPUT FORMAT (CSV with columns):
-')
-  cat('  year, quarter, gdp_baseline, gdp_tariff,
-')
-  cat('  employment_baseline, employment_tariff,
-')
-  cat('  urate_baseline, urate_tariff
+REQUIRED OUTPUT FORMAT (CSV with columns):
+  year, quarter, gdp_baseline, gdp_tariff,
+  employment_baseline, employment_tariff,
+  urate_baseline, urate_tariff
+
+===========================================================
 
 ')
-  cat('===========================================================
 
-')
-  response <- readline(prompt = 'Press ENTER when MAUS output is ready (or type "quit" to exit): ')
-  if (tolower(trimws(response)) == 'quit') {
-    stop('Model execution stopped by user. Run again after MAUS output is ready.')
-  }
-  if (!file.exists(maus_output_file)) {
-    cat('
-WARNING: MAUS output file not found.
-')
-    response2 <- readline(prompt = 'Continue anyway? (y/n): ')
-    if (tolower(trimws(response2)) != 'y') {
-      stop('Model execution stopped. Please save MAUS output and run again.')
-    }
-  }
-  cat('
-Continuing with model execution...
-
-')
+  # Stop execution - user must run MAUS and then re-run the model
+  stop('Run MAUS and save output, then run this script again.')
 }
 
 
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
-#' @param skip_gtap If TRUE, skip running GTAP (use existing outputs)
-#' @param skip_maus_pause If TRUE, skip MAUS pause (use existing outputs)
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, skip_gtap = FALSE, skip_maus_pause = FALSE) {
+run_scenario <- function(scenario) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -143,12 +121,8 @@ run_scenario <- function(scenario, skip_gtap = FALSE, skip_maus_pause = FALSE) {
   # Step 0b: Run GTAP
   #---------------------------
 
-  if (!skip_gtap) {
-    message('\nStep 0b: Running GTAP...')
-    run_gtap(scenario)
-  } else {
-    message('\nStep 0b: Skipping GTAP (using existing outputs)')
-  }
+  message('\nStep 0b: Running GTAP...')
+  run_gtap(scenario)
 
   #---------------------------
   # Step 1: Load all inputs
@@ -214,11 +188,7 @@ Step 4a: Generating MAUS input shocks...')
   maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
   print_shock_summary(maus_inputs)
 
-  if (!skip_maus_pause) {
-    wait_for_maus(maus_inputs, scenario_dir)
-  } else {
-    message('  Skipping MAUS pause (using existing MAUS outputs)')
-  }
+  wait_for_maus(maus_inputs, scenario_dir)
 
   # Load MAUS output levels
   message('
