@@ -598,115 +598,161 @@ get_sector_outputs_full <- function(gtap_data, sector_mapping, target_region = '
 # PRICE EFFECTS (SR AND LR)
 # ============================================================================
 
-#' Calculate product price effects
+#' Calculate product price effects (normalized)
 #'
-#' Calculates short-run and long-run price effects by product.
-#' - SR: Derived from ETR matrix weighted by VIWS imports
-#' - LR: Derived from GTAP ppm (import market price) changes
-#' Calculate product-level price effects
+#' Calculates short-run and long-run price effects by product using the
+#' Excel model methodology:
+#' - SR: M = import_share * weighted_ETR, then normalized
+#' - LR: ppa, then normalized
 #'
-#' SR price = weighted ETR per sector (direct tariff impact)
-#' LR price = ppd (domestic purchase price change from GTAP)
+#' Both are normalized so consumption-weighted average equals overall effect.
 #'
-#' @param gtap_data Result from read_gtap_full() - must contain viws and ppd
+#' @param gtap_data List containing ppa matrix
 #' @param etr_matrix ETR matrix from Tariff-ETRs (gtap_sector x country)
-#' @param product_params Product parameters with is_food flag
+#' @param product_params Product parameters with is_food, weight columns
+#' @param import_shares Import share data with gtap_sector, import_share columns
+#' @param import_weights Import weights by country (from Excel) for weighted ETR calc
+#' @param overall_sr_effect Overall SR price effect for normalization (default 1.235)
+#' @param overall_lr_effect Overall LR price effect for normalization (default 0.929)
 #' @param target_region Region to extract (default 'usa')
-#' @return Data frame with gtap_sector, sr_price_effect, lr_price_effect, is_food
+#' @return Data frame with gtap_sector, sr_price_effect, lr_price_effect, is_food, weight
 get_price_effects <- function(gtap_data, etr_matrix, product_params,
+                              import_shares, import_weights,
+                              overall_sr_effect = 1.235,
+                              overall_lr_effect = 0.929,
                               target_region = 'usa') {
-  if (is.null(gtap_data$viws)) {
-    stop('viws not found in GTAP data')
-  }
-  if (is.null(gtap_data$ppd)) {
-    stop('ppd not found in GTAP data')
+  if (is.null(gtap_data$ppa)) {
+    stop('ppa not found in GTAP data')
   }
 
-  viws_full <- gtap_data$viws
-  ppd_full <- gtap_data$ppd
+  ppa_full <- gtap_data$ppa
 
-  # Get all 65 commodities from ppd (includes services)
-  all_commodities <- rownames(ppd_full)
+  # Get all 65 commodities from ppa (includes services)
+  all_commodities <- rownames(ppa_full)
   goods_sectors <- etr_matrix$gtap_code
 
-  # Get ppd (domestic purchase price) for target region - this is LR effect
-  region_idx <- which(colnames(ppd_full) == target_region)
+  # Get ppa (purchaser's price) for target region - this is raw LR effect
+  region_idx <- which(colnames(ppa_full) == target_region)
   if (length(region_idx) == 0) {
-    stop('Region not found in ppd: ', target_region)
+    stop('Region not found in ppa: ', target_region)
   }
-  lr_effects <- ppd_full[, region_idx]
+  lr_raw <- ppa_full[, region_idx]
 
-  # SR price effect: weighted ETR for goods sectors, 0 for services
-  sr_effects <- numeric(length(all_commodities))
-  names(sr_effects) <- all_commodities
+  # Country columns - must match import_weights and etr_matrix columns
+  # Excel order: china, row, canada, mexico, ftrow, japan, eu, uk
+  weight_countries <- c('china', 'row', 'canada', 'mexico', 'ftrow', 'japan', 'eu', 'uk')
 
-  # Country columns in ETR matrix
-  etr_countries <- c('china', 'canada', 'mexico', 'uk', 'japan', 'eu', 'row', 'ftrow')
+  # Calculate weighted ETR for each goods sector using exogenous import_weights
+  weighted_etrs <- numeric(length(all_commodities))
+  names(weighted_etrs) <- all_commodities
 
   for (i in seq_along(all_commodities)) {
     comm <- all_commodities[i]
 
-    # Services sectors (not in ETR matrix) have SR = 0
+    # Services sectors (not in ETR matrix) have weighted_etr = 0
     if (!comm %in% goods_sectors) {
-      sr_effects[i] <- 0
+      weighted_etrs[i] <- 0
       next
     }
 
-    # Get imports for this commodity by country from viws
-    comm_idx <- which(rownames(viws_full) == comm)
-    if (length(comm_idx) == 0) {
-      sr_effects[i] <- 0
+    # Get import weights for this commodity from exogenous data
+    weight_row <- import_weights %>% filter(gtap_sector == comm)
+    if (nrow(weight_row) == 0) {
+      weighted_etrs[i] <- 0
       next
     }
 
-    comm_imports <- viws_full[comm_idx, ]
-    total_comm_imports <- sum(comm_imports)
-
-    if (total_comm_imports == 0) {
-      sr_effects[i] <- 0
+    total_imports <- weight_row$total
+    if (is.na(total_imports) || total_imports == 0) {
+      weighted_etrs[i] <- 0
       next
     }
 
     # Get ETR row for this commodity
     etr_row_idx <- which(etr_matrix$gtap_code == comm)
+    if (length(etr_row_idx) == 0) {
+      weighted_etrs[i] <- 0
+      next
+    }
 
-    # Calculate import-weighted ETR for this sector
+    # Calculate import-weighted ETR: SUMPRODUCT(ETRs, weights) / total
     weighted_etr <- 0
-    for (country in etr_countries) {
-      if (country %in% names(comm_imports) && country %in% names(etr_matrix)) {
-        import_weight <- comm_imports[country]
+    for (country in weight_countries) {
+      if (country %in% names(weight_row) && country %in% names(etr_matrix)) {
+        import_weight <- weight_row[[country]]
         etr_value <- etr_matrix[[country]][etr_row_idx]
-        weighted_etr <- weighted_etr + (etr_value * import_weight)
+        if (!is.na(import_weight) && !is.na(etr_value)) {
+          weighted_etr <- weighted_etr + (etr_value * import_weight)
+        }
       }
     }
 
-    # SR effect is the weighted ETR (already in percentage points)
-    sr_effects[i] <- weighted_etr / total_comm_imports
+    weighted_etrs[i] <- weighted_etr / total_imports
   }
 
   # Build result data frame - all 65 sectors
   result <- data.frame(
     gtap_sector = all_commodities,
-    sr_price_effect = round(sr_effects, 2),
-    lr_price_effect = round(lr_effects, 2),
+    weighted_etr = weighted_etrs,
+    lr_raw = lr_raw,
     stringsAsFactors = FALSE
   )
 
-  # Add is_food from product_params
-  required_cols <- c('gtap_sector', 'is_food')
-  missing_cols <- setdiff(required_cols, names(product_params))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in product_params: ', paste(missing_cols, collapse = ', '))
-  }
-
+  # Add import_share from import_shares data
   result <- result %>%
     left_join(
-      product_params %>% select(gtap_sector, is_food),
+      import_shares %>% select(gtap_sector, import_share),
       by = 'gtap_sector'
     )
+  # Services have import_share = 0
+  result$import_share[is.na(result$import_share)] <- 0
 
-  # Fill NA is_food with 0 (services are not food)
+  # Add weight from product_params
+  result <- result %>%
+    left_join(
+      product_params %>% select(gtap_sector, weight, is_food),
+      by = 'gtap_sector'
+    )
+  # Fill NA weight with 0, is_food with 0
+  result$weight[is.na(result$weight)] <- 0
   result$is_food[is.na(result$is_food)] <- 0
+
+  # Calculate M = import_share * weighted_ETR (raw SR effect)
+  result$M <- result$import_share * result$weighted_etr
+
+  # Calculate consumption-weighted averages for normalization
+  # Excel SR excludes dwe (rows 12-75 = 64 sectors)
+  # Excel LR includes dwe (rows 11-75 = 65 sectors)
+  sr_sectors <- result$gtap_sector != 'dwe'
+  sr_weight <- sum(result$weight[sr_sectors])
+  avg_M <- sum(result$M[sr_sectors] * result$weight[sr_sectors]) / sr_weight
+
+  lr_weight <- sum(result$weight)
+  avg_lr <- sum(result$lr_raw * result$weight) / lr_weight
+
+  # Normalize SR: SR = overall_sr * M / avg_M
+  # This ensures consumption-weighted average of SR = overall_sr
+  if (avg_M > 0) {
+    result$sr_price_effect <- overall_sr_effect * result$M / avg_M
+  } else {
+    result$sr_price_effect <- 0
+  }
+
+  # Normalize LR: LR = overall_lr * ppa / avg_ppa
+  # Excel formula: X = B9 * J / avg(J) where J = ppa
+  if (avg_lr > 0) {
+    result$lr_price_effect <- overall_lr_effect * result$lr_raw / avg_lr
+  } else {
+    result$lr_price_effect <- result$lr_raw
+  }
+
+  # Round and select final columns
+  result <- result %>%
+    mutate(
+      sr_price_effect = round(sr_price_effect, 2),
+      lr_price_effect = round(lr_price_effect, 2)
+    ) %>%
+    select(gtap_sector, sr_price_effect, lr_price_effect, is_food, weight)
 
   return(result)
 }
@@ -787,13 +833,8 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$sector_outputs <- get_sector_outputs_full(gtap_data, sector_mapping, 'usa')
   message(sprintf('    - Sector outputs: %d sectors (with mappings)', nrow(result$sector_outputs)))
 
-  # Price effects (if ETR matrix and ppd provided)
-  if (!is.null(etr_matrix) && !is.null(product_params) && !is.null(gtap_data$ppd)) {
-    result$product_prices <- get_price_effects(
-      gtap_data, etr_matrix, product_params, 'usa'
-    )
-    message(sprintf('    - Product prices: %d products', nrow(result$product_prices)))
-  }
+  # Note: Product prices are calculated separately in run_model.R
+  # using get_price_effects() with import_shares data
 
   # Raw data for downstream calculations
   result$viws <- gtap_data$viws

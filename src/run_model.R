@@ -183,18 +183,22 @@ run_scenario <- function(scenario, skip_gtap = FALSE, skip_maus_pause = FALSE) {
   # Step 3b: Calculate product price effects (if GTAP data available)
   #---------------------------
 
-  if (is.null(inputs$etr_matrix) || is.null(inputs$viws) || is.null(inputs$ppd)) {
-    stop('Product price effects require etr_matrix, viws, and ppd inputs')
+  if (is.null(inputs$etr_matrix) || is.null(inputs$ppa) || is.null(inputs$import_weights)) {
+    stop('Product price effects require etr_matrix, ppa, and import_weights inputs')
   }
 
   message('\nStep 3b: Calculating product price effects from GTAP...')
 
-  # SR = weighted ETR per sector (direct tariff impact)
-  # LR = ppd (domestic purchase price change from GTAP)
+  # SR = import_share * weighted_ETR, normalized by consumption weights
+  # LR = ppa (purchaser's price), normalized by consumption weights
   inputs$product_prices <- get_price_effects(
-    gtap_data = list(viws = inputs$viws, ppd = inputs$ppd),
+    gtap_data = list(ppa = inputs$ppa),
     etr_matrix = inputs$etr_matrix,
     product_params = inputs$product_params,
+    import_shares = inputs$import_shares,
+    import_weights = inputs$import_weights,
+    overall_sr_effect = 1.235,  # Pre-sub price increase (%)
+    overall_lr_effect = 0.929,  # LR price effect (%)
     target_region = 'usa'
   )
 
@@ -402,8 +406,6 @@ Loading MAUS output levels...')
     }
     message(sprintf('Average per-HH cost:            $%s',
                     format(round(abs(distribution_results$pre_sub$avg_per_hh_cost)), big.mark = ',', scientific = FALSE)))
-    message(sprintf('Regressivity ratio (D1/D10):    %.2fx',
-                    distribution_results$regressivity$burden_ratio))
   }
   message('----------------------------------------------------------')
 

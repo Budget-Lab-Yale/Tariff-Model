@@ -48,21 +48,25 @@ calculate_products <- function(inputs) {
   message('  Processing ', nrow(product_data), ' products')
 
   # -------------------------------------------------------------------------
-  # Load weights for aggregation
+  # Ensure weights are available
   # -------------------------------------------------------------------------
 
-  if (is.null(inputs$product_params)) {
-    stop('product_params not found in inputs$product_params')
-  }
-  if (!all(c('gtap_sector', 'weight') %in% names(inputs$product_params))) {
-    stop('Missing required columns in product_params: gtap_sector, weight')
-  }
+  # Weight column should already be in product_data from get_price_effects
+  # If not, join from product_params
+  if (!'weight' %in% names(product_data)) {
+    if (is.null(inputs$product_params)) {
+      stop('product_params not found in inputs$product_params')
+    }
+    if (!all(c('gtap_sector', 'weight') %in% names(inputs$product_params))) {
+      stop('Missing required columns in product_params: gtap_sector, weight')
+    }
 
-  weights <- inputs$product_params %>%
-    select(gtap_sector, weight)
+    weights <- inputs$product_params %>%
+      select(gtap_sector, weight)
 
-  product_data <- product_data %>%
-    left_join(weights, by = 'gtap_sector')
+    product_data <- product_data %>%
+      left_join(weights, by = 'gtap_sector')
+  }
 
   if (any(is.na(product_data$weight))) {
     missing_weights <- product_data$gtap_sector[is.na(product_data$weight)]

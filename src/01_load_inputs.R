@@ -162,6 +162,22 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
   message('  Loaded product parameters')
 
+  # Import shares (baseline import share of consumption by sector)
+  import_shares_file <- 'resources/products/import_shares.csv'
+  if (!file.exists(import_shares_file)) {
+    stop('Import shares not found: ', import_shares_file)
+  }
+  inputs$import_shares <- read_csv(import_shares_file, show_col_types = FALSE)
+  message('  Loaded import shares')
+
+  # Import weights by country (for product-level weighted ETR calculation)
+  import_weights_file <- 'resources/products/import_weights.csv'
+  if (!file.exists(import_weights_file)) {
+    stop('Import weights not found: ', import_weights_file)
+  }
+  inputs$import_weights <- read_csv(import_weights_file, show_col_types = FALSE)
+  message('  Loaded import weights')
+
   # ============================
   # GTAP outputs (from solution files)
   # ============================
