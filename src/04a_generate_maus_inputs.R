@@ -185,6 +185,29 @@ generate_maus_inputs <- function(etr_results, inputs, scenario) {
   message(sprintf('    Computed UTFIBC shocks (starts Q%d)', shock_start_quarter))
 
   # -------------------------------------------------------------------------
+  # Apply CY2026 refund adjustment (spread evenly across Q1-Q4)
+  # -------------------------------------------------------------------------
+
+  refund_2026 <- inputs$model_params$refund_2026 %||% 0
+  if (!is.numeric(refund_2026) || length(refund_2026) != 1) {
+    stop('refund_2026 must be a single numeric value (billions)')
+  }
+  if (refund_2026 > 0) {
+    cbo <- inputs$baselines$cbo
+    fy_2026 <- cbo %>% filter(fiscal_year == 2026) %>% pull(imports_bn)
+    fy_2027 <- cbo %>% filter(fiscal_year == 2027) %>% pull(imports_bn)
+    if (length(fy_2026) != 1 || length(fy_2027) != 1) {
+      stop('CBO baseline imports not found for FY2026/FY2027')
+    }
+    cy_2026_imports <- 0.75 * fy_2026 + 0.25 * fy_2027
+    refund_pp <- refund_2026 / cy_2026_imports * 100
+    message(sprintf('    Applying CY2026 refund to UTFIBC: -%.2f pp', refund_pp))
+    quarterly_vix <- quarterly_vix %>%
+      mutate(refund_pp = if_else(year == 2026, refund_pp, 0))
+    utfibc <- utfibc - quarterly_vix$refund_pp
+  }
+
+  # -------------------------------------------------------------------------
   # Build output dataframe
   # -------------------------------------------------------------------------
 

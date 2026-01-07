@@ -39,6 +39,7 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   assumptions <- inputs$assumptions
   qmwreg <- inputs$qmwreg
   etr_increase <- inputs$etr_increase
+  refund_2026 <- inputs$model_params$refund_2026 %||% 0
 
   # Validate required inputs
   if (is.null(cbo)) {
@@ -63,6 +64,12 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   message(sprintf('  Using income effect: %.1f%%', income_effect * 100))
   message(sprintf('  Using qmwreg: %.2f%%', qmwreg))
   message(sprintf('  Using etr_increase: %.4f (%.2f%%)', etr_increase, etr_increase * 100))
+  if (!is.numeric(refund_2026) || length(refund_2026) != 1) {
+    stop('refund_2026 must be a single numeric value (billions)')
+  }
+  if (refund_2026 > 0) {
+    message(sprintf('  Applying CY2026 refund: $%.1fB', refund_2026))
+  }
 
   # -------------------------------------------------------------------------
   # Build revenue calculation table
@@ -82,6 +89,9 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
 
   # Calculate revenue for each fiscal year
   # Note: baseline_etr comes from CBO data (duties/imports) and varies by year
+  refund_fy26 <- refund_2026 * 0.75
+  refund_fy27 <- refund_2026 * 0.25
+
   revenue_data <- cbo %>%
     mutate(
       # Get phase-in for each year
@@ -106,7 +116,12 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
       income_adj = gross_revenue * -income_effect,
 
       # Step 6: Net revenue
-      net_revenue = gross_revenue + compliance_adj + income_adj
+      refund_adj = case_when(
+        fiscal_year == 2026 ~ -refund_fy26,
+        fiscal_year == 2027 ~ -refund_fy27,
+        TRUE ~ 0
+      ),
+      net_revenue = gross_revenue + compliance_adj + income_adj + refund_adj
     )
 
   # -------------------------------------------------------------------------

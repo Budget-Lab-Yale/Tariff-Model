@@ -329,11 +329,16 @@ Loading MAUS output levels...')
 
   # Use distribution results for per-HH cost if available (more accurate)
   if (!is.null(distribution_results)) {
-    message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub$avg_per_hh_cost)))
-    message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub$avg_per_hh_cost)))
+    if (!is.null(distribution_results$pre_sub)) {
+      message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub$avg_per_hh_cost)))
+      message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub$avg_per_hh_cost)))
+    } else {
+      message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$avg_per_hh_cost)))
+      message(sprintf('Post-sub per-HH cost:           $%.0f (approx)', abs(price_results$post_sub_per_hh_cost)))
+    }
   } else {
     message(sprintf('Pre-sub per-HH cost:            $%.0f (approx)', price_results$pre_sub_per_hh_cost))
-    message(sprintf('Post-sub per-HH cost:           $%.0f (approx)', price_results$post_sub_per_hh_cost))
+    message(sprintf('Post-sub per-HH cost:           $%.0f (approx)', abs(price_results$post_sub_per_hh_cost)))
   }
   message(sprintf('10-yr conventional revenue:     $%.0fB', revenue_results$conventional_10yr))
   if (!is.null(dynamic_results)) {
@@ -396,7 +401,11 @@ Loading MAUS output levels...')
     message('----------------------------------------------------------')
     message('DISTRIBUTION BY INCOME DECILE (Pre-Substitution)')
     message('----------------------------------------------------------')
-    dist <- distribution_results$pre_sub$by_decile
+    dist <- if (!is.null(distribution_results$pre_sub)) {
+      distribution_results$pre_sub$by_decile
+    } else {
+      distribution_results$by_decile
+    }
     for (i in 1:nrow(dist)) {
       message(sprintf('Decile %2d ($%s income):  $%s (%.2f%% of income)',
                       dist$decile[i],
@@ -404,8 +413,13 @@ Loading MAUS output levels...')
                       format(round(abs(dist$cost_per_hh[i])), big.mark = ',', scientific = FALSE),
                       abs(dist$pct_of_income[i])))
     }
+    avg_cost <- if (!is.null(distribution_results$pre_sub)) {
+      distribution_results$pre_sub$avg_per_hh_cost
+    } else {
+      distribution_results$avg_per_hh_cost
+    }
     message(sprintf('Average per-HH cost:            $%s',
-                    format(round(abs(distribution_results$pre_sub$avg_per_hh_cost)), big.mark = ',', scientific = FALSE)))
+                    format(round(abs(avg_cost)), big.mark = ',', scientific = FALSE)))
   }
   message('----------------------------------------------------------')
 
