@@ -113,9 +113,9 @@ compute_utfibc_shocks <- function(baseline_utfibc = 3.0,
       quarters_after_start <- q - shock_start_quarter
 
       if (quarters_after_start <= interpolation_quarters) {
-        # Linear interpolation
+        # Linear interpolation (hit post-sub at final interpolation quarter)
         shock <- pre_sub_shock + (post_sub_shock - pre_sub_shock) *
-          (quarters_after_start - 1) / interpolation_quarters
+          min(quarters_after_start / interpolation_quarters, 1)
       } else {
         # After interpolation period: stay at post-sub level
         shock <- post_sub_shock

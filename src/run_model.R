@@ -197,8 +197,8 @@ run_scenario <- function(scenario, skip_gtap = FALSE, skip_maus_pause = FALSE) {
     product_params = inputs$product_params,
     import_shares = inputs$import_shares,
     import_weights = inputs$import_weights,
-    overall_sr_effect = 1.235,  # Pre-sub price increase (%)
-    overall_lr_effect = 0.929,  # LR price effect (%)
+    overall_sr_effect = price_results$pre_sub_price_increase,
+    overall_lr_effect = price_results$post_sub_price_increase,
     target_region = 'usa'
   )
 
