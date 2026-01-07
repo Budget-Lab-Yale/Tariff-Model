@@ -54,12 +54,10 @@ calculate_foreign_gdp <- function(inputs) {
   # -------------------------------------------------------------------------
 
   vgdp_baseline_file <- 'resources/gtap_baseline/vgdp_baseline.csv'
-  if (file.exists(vgdp_baseline_file)) {
-    vgdp_baseline <- read_csv(vgdp_baseline_file, show_col_types = FALSE)
-  } else {
-    vgdp_baseline <- NULL
-    message('  Note: vgdp_baseline.csv not found, World aggregates unavailable')
+  if (!file.exists(vgdp_baseline_file)) {
+    stop('vgdp_baseline.csv not found: ', vgdp_baseline_file)
   }
+  vgdp_baseline <- read_csv(vgdp_baseline_file, show_col_types = FALSE)
 
   # -------------------------------------------------------------------------
   # Extract GDP effects by region
@@ -72,7 +70,7 @@ calculate_foreign_gdp <- function(inputs) {
       pull(gdp_pct_change)
 
     if (length(effect) == 0) {
-      return(NA_real_)
+      stop('Missing GDP effect for region: ', region_code)
     }
     return(effect[1])
   }
@@ -94,44 +92,47 @@ calculate_foreign_gdp <- function(inputs) {
   # Calculate World and World ex USA (GDP-weighted averages)
   # -------------------------------------------------------------------------
 
-  if (!is.null(vgdp_baseline)) {
-    # Map region codes to GTAP region names
-    region_map <- c(
-      usa = 'usa', chn = 'china', row = 'row', can = 'canada',
-      mex = 'mexico', fta = 'ftrow', jpn = 'japan', eu = 'eu', gbr = 'uk'
+  # Map region codes to GTAP region names
+  region_map <- c(
+    usa = 'usa', chn = 'china', row = 'row', can = 'canada',
+    mex = 'mexico', fta = 'ftrow', jpn = 'japan', eu = 'eu', gbr = 'uk'
+  )
+
+  # Join gdp_data with vgdp_baseline
+  gdp_with_levels <- gdp_data %>%
+    mutate(gtap_region = region_map[region]) %>%
+    left_join(vgdp_baseline, by = c('gtap_region' = 'region'))
+
+  if (any(is.na(gdp_with_levels$vgdp))) {
+    missing_regions <- gdp_with_levels$gtap_region[is.na(gdp_with_levels$vgdp)]
+    stop('Missing vgdp baseline for GTAP region(s): ', paste(missing_regions, collapse = ', '))
+  }
+
+  # Calculate post-sim GDP and changes
+  gdp_with_levels <- gdp_with_levels %>%
+    mutate(
+      vgdp_pre = vgdp,
+      vgdp_post = vgdp * (1 + gdp_pct_change / 100),
+      vgdp_change = vgdp_post - vgdp_pre
     )
 
-    # Join gdp_data with vgdp_baseline
-    gdp_with_levels <- gdp_data %>%
-      mutate(gtap_region = region_map[region]) %>%
-      left_join(vgdp_baseline, by = c('gtap_region' = 'region'))
+  # World Total
+  world_pre <- sum(gdp_with_levels$vgdp_pre, na.rm = TRUE)
+  world_post <- sum(gdp_with_levels$vgdp_post, na.rm = TRUE)
+  world_pct <- (world_post / world_pre - 1) * 100
 
-    # Calculate post-sim GDP and changes
-    gdp_with_levels <- gdp_with_levels %>%
-      mutate(
-        vgdp_pre = vgdp,
-        vgdp_post = vgdp * (1 + gdp_pct_change / 100),
-        vgdp_change = vgdp_post - vgdp_pre
-      )
+  # World ex USA
+  world_ex_usa <- gdp_with_levels %>% filter(region != 'usa')
+  world_ex_usa_pre <- sum(world_ex_usa$vgdp_pre, na.rm = TRUE)
+  world_ex_usa_post <- sum(world_ex_usa$vgdp_post, na.rm = TRUE)
+  world_ex_usa_pct <- (world_ex_usa_post / world_ex_usa_pre - 1) * 100
 
-    # World Total
-    world_pre <- sum(gdp_with_levels$vgdp_pre, na.rm = TRUE)
-    world_post <- sum(gdp_with_levels$vgdp_post, na.rm = TRUE)
-    world_pct <- (world_post / world_pre - 1) * 100
+  results$world <- world_pct
+  results$world_ex_usa <- world_ex_usa_pct
 
-    # World ex USA
-    world_ex_usa <- gdp_with_levels %>% filter(region != 'usa')
-    world_ex_usa_pre <- sum(world_ex_usa$vgdp_pre, na.rm = TRUE)
-    world_ex_usa_post <- sum(world_ex_usa$vgdp_post, na.rm = TRUE)
-    world_ex_usa_pct <- (world_ex_usa_post / world_ex_usa_pre - 1) * 100
-
-    results$world <- world_pct
-    results$world_ex_usa <- world_ex_usa_pct
-
-    # Store detailed GDP levels
-    results$gdp_levels <- gdp_with_levels %>%
-      select(region, gtap_region, gdp_pct_change, vgdp_pre, vgdp_post, vgdp_change)
-  }
+  # Store detailed GDP levels
+  results$gdp_levels <- gdp_with_levels %>%
+    select(region, gtap_region, gdp_pct_change, vgdp_pre, vgdp_post, vgdp_change)
 
   # Log results
   message(sprintf('  USA:     %+.2f%%', results$usa))
@@ -144,10 +145,8 @@ calculate_foreign_gdp <- function(inputs) {
   message(sprintf('  FTA:     %+.2f%%', results$fta))
   message(sprintf('  ROW:     %+.2f%%', results$row))
 
-  if (!is.null(results$world)) {
-    message(sprintf('  World:       %+.4f%%', results$world))
-    message(sprintf('  World exUSA: %+.4f%%', results$world_ex_usa))
-  }
+  message(sprintf('  World:       %+.4f%%', results$world))
+  message(sprintf('  World exUSA: %+.4f%%', results$world_ex_usa))
 
   return(results)
 }

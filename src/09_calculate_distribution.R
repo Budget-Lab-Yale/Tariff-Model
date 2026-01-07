@@ -45,6 +45,12 @@ calculate_distribution <- function(price_results, inputs) {
     stop('decile_parameters not found in inputs. Load from resources/distribution/decile_parameters.csv')
   }
 
+  required_cols <- c('decile', 'income', 'scaling_factor', 'pce_variation')
+  missing_cols <- setdiff(required_cols, names(decile_params))
+  if (length(missing_cols) > 0) {
+    stop('Missing required columns in decile_parameters: ', paste(missing_cols, collapse = ', '))
+  }
+
   # -------------------------------------------------------------------------
   # Get base price effect from actual tariff calculation
   # -------------------------------------------------------------------------
@@ -59,30 +65,19 @@ calculate_distribution <- function(price_results, inputs) {
   # Formula: PCE_d = base_pce × pce_variation_d
   #          Cost_d = PCE_d × scaling_factor_d × income_d
 
-  if ('pce_variation' %in% names(decile_params)) {
-    # Dynamic calculation using variation factors
-    distribution <- decile_params %>%
-      mutate(
-        # Per-decile PCE effect (varies by consumption basket)
-        pce_effect = base_pce * pce_variation,
+  # Dynamic calculation using variation factors
+  distribution <- decile_params %>%
+    mutate(
+      # Per-decile PCE effect (varies by consumption basket)
+      pce_effect = base_pce * pce_variation,
 
-        # Scaled effect as percentage of after-tax income
-        pct_of_income = pce_effect * scaling_factor * 100,
+      # Scaled effect as percentage of after-tax income
+      pct_of_income = pce_effect * scaling_factor * 100,
 
-        # Dollar cost per household (negative = cost to household)
-        cost_per_hh = -1 * (pct_of_income / 100) * income
-      )
-    message('  Using dynamic calculation: base_pce × pce_variation × scaling_factor')
-  } else {
-    # Fallback: use base_pce directly without variation
-    message('  Warning: pce_variation not found, using uniform distribution')
-    distribution <- decile_params %>%
-      mutate(
-        pce_effect = base_pce,
-        pct_of_income = base_pce * scaling_factor * 100,
-        cost_per_hh = -1 * (pct_of_income / 100) * income
-      )
-  }
+      # Dollar cost per household (negative = cost to household)
+      cost_per_hh = -1 * (pct_of_income / 100) * income
+    )
+  message('  Using dynamic calculation: base_pce × pce_variation × scaling_factor')
 
   # -------------------------------------------------------------------------
   # Calculate summary statistics
@@ -103,21 +98,12 @@ calculate_distribution <- function(price_results, inputs) {
 
   post_sub_pce <- price_results$post_sub_price_increase / 100
 
-  if ('pce_variation' %in% names(decile_params)) {
-    distribution_post_sub <- decile_params %>%
-      mutate(
-        pce_effect = post_sub_pce * pce_variation,
-        pct_of_income = pce_effect * scaling_factor * 100,
-        cost_per_hh = -1 * (pct_of_income / 100) * income
-      )
-  } else {
-    distribution_post_sub <- decile_params %>%
-      mutate(
-        pce_effect = post_sub_pce,
-        pct_of_income = post_sub_pce * scaling_factor * 100,
-        cost_per_hh = -1 * (pct_of_income / 100) * income
-      )
-  }
+  distribution_post_sub <- decile_params %>%
+    mutate(
+      pce_effect = post_sub_pce * pce_variation,
+      pct_of_income = pce_effect * scaling_factor * 100,
+      cost_per_hh = -1 * (pct_of_income / 100) * income
+    )
 
   avg_cost_post_sub <- mean(distribution_post_sub$cost_per_hh)
 

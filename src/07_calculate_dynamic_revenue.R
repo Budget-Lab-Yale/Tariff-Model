@@ -72,13 +72,18 @@ calculate_fy_growth_deviations <- function(maus) {
 #' @return Data frame with convolved GDP values
 apply_cbo_convolution <- function(growth_deviations, cbo_params) {
 
-  # Join growth deviations to CBO parameters
+  # Filter CBO params to fiscal years with available growth deviations
+  available_years <- growth_deviations$fiscal_year
   df <- cbo_params %>%
+    filter(fiscal_year %in% available_years) %>%
     left_join(
       growth_deviations %>% select(fiscal_year, growth_deviation),
       by = 'fiscal_year'
-    ) %>%
-    mutate(growth_deviation = coalesce(growth_deviation, 0))
+    )
+
+  if (nrow(df) == 0) {
+    stop('No matching fiscal years between growth_deviations and cbo_params')
+  }
 
   n <- nrow(df)
 
@@ -225,12 +230,23 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
     left_join(
       convolution_results %>% select(fiscal_year, fy_gdp_change, dynamic_effect),
       by = 'fiscal_year'
-    ) %>%
-    mutate(
-      # Fill NA dynamic effects with 0 (years without data)
-      dynamic_effect = coalesce(dynamic_effect, 0),
-      dynamic_revenue = net_revenue + dynamic_effect
     )
+
+  # Handle years without dynamic effects (incomplete MAUS data)
+  # Use 0 for missing years (dynamic revenue = conventional revenue)
+  if (any(is.na(dynamic_by_year$dynamic_effect))) {
+    missing_years <- dynamic_by_year$fiscal_year[is.na(dynamic_by_year$dynamic_effect)]
+    message(sprintf('  Note: Using 0 dynamic effect for FY %s (incomplete MAUS data)',
+                    paste(missing_years, collapse = ', ')))
+    dynamic_by_year <- dynamic_by_year %>%
+      mutate(
+        fy_gdp_change = if_else(is.na(fy_gdp_change), 0, fy_gdp_change),
+        dynamic_effect = if_else(is.na(dynamic_effect), 0, dynamic_effect)
+      )
+  }
+
+  dynamic_by_year <- dynamic_by_year %>%
+    mutate(dynamic_revenue = net_revenue + dynamic_effect)
 
   # -------------------------------------------------------------------------
   # Calculate 10-year totals

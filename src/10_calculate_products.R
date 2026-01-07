@@ -20,7 +20,7 @@ library(tidyverse)
 #'
 #' @param inputs List containing:
 #'   - product_prices: Product price data (gtap_sector, sr_price_effect, lr_price_effect, is_food)
-#'   - product_params: Product parameters (gtap_sector, weight) - optional, for weighted aggregates
+#'   - product_params: Product parameters (gtap_sector, weight) for weighted aggregates
 #'
 #' @return List containing:
 #'   - products: Data frame with all product-level effects
@@ -51,22 +51,25 @@ calculate_products <- function(inputs) {
   # Load weights for aggregation
   # -------------------------------------------------------------------------
 
-  if (!is.null(inputs$product_params) && 'weight' %in% names(inputs$product_params)) {
-    weights <- inputs$product_params %>%
-      select(gtap_sector, weight)
-
-    product_data <- product_data %>%
-      left_join(weights, by = 'gtap_sector')
-
-    message('  Using product weights from product_params')
-  } else if ('weight' %in% names(product_data)) {
-    message('  Using weights from product_prices')
-  } else {
-    # Equal weights if none provided
-    product_data <- product_data %>%
-      mutate(weight = 1)
-    message('  Warning: No weights provided, using equal weights')
+  if (is.null(inputs$product_params)) {
+    stop('product_params not found in inputs$product_params')
   }
+  if (!all(c('gtap_sector', 'weight') %in% names(inputs$product_params))) {
+    stop('Missing required columns in product_params: gtap_sector, weight')
+  }
+
+  weights <- inputs$product_params %>%
+    select(gtap_sector, weight)
+
+  product_data <- product_data %>%
+    left_join(weights, by = 'gtap_sector')
+
+  if (any(is.na(product_data$weight))) {
+    missing_weights <- product_data$gtap_sector[is.na(product_data$weight)]
+    stop('Missing weights for gtap_sector(s): ', paste(missing_weights, collapse = ', '))
+  }
+
+  message('  Using product weights from product_params')
 
   # -------------------------------------------------------------------------
   # Calculate food aggregates (weighted average)
@@ -75,21 +78,19 @@ calculate_products <- function(inputs) {
   food_products <- product_data %>%
     filter(is_food == 1)
 
-  if (nrow(food_products) > 0) {
-    food_sr <- sum(food_products$sr_price_effect * food_products$weight) /
-               sum(food_products$weight)
-
-    food_lr <- sum(food_products$lr_price_effect * food_products$weight) /
-               sum(food_products$weight)
-
-    message(sprintf('  Food products: %d', nrow(food_products)))
-    message(sprintf('  Food SR price effect: %.4f%%', food_sr))
-    message(sprintf('  Food LR price effect: %.4f%%', food_lr))
-  } else {
-    food_sr <- NA_real_
-    food_lr <- NA_real_
-    message('  Warning: No food products found')
+  if (nrow(food_products) == 0) {
+    stop('No food products found (is_food == 1)')
   }
+
+  food_sr <- sum(food_products$sr_price_effect * food_products$weight) /
+             sum(food_products$weight)
+
+  food_lr <- sum(food_products$lr_price_effect * food_products$weight) /
+             sum(food_products$weight)
+
+  message(sprintf('  Food products: %d', nrow(food_products)))
+  message(sprintf('  Food SR price effect: %.4f%%', food_sr))
+  message(sprintf('  Food LR price effect: %.4f%%', food_lr))
 
   # -------------------------------------------------------------------------
   # Summary statistics

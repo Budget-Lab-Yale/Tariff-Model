@@ -50,52 +50,45 @@ calculate_prices <- function(etr_results, inputs) {
   )
 
   # -------------------------------------------------------------------------
-  # Calculate post-substitution adjustments
+  # Calculate post-substitution adjustments from VIWS data
   # -------------------------------------------------------------------------
-  # From Excel:
-  #   F25 = F24 * (SUM(AG45:AG92)/AG110) / (SUM(AA45:AA92)/AA110)
-  #   H25 = H24 * (SUM(AF45:AF92)/SUM(AG45:AG92)) / (SUM(Z45:Z92)/SUM(AA45:AA92))
+  # Derived directly from GTAP solution files (viws) vs baseline (viws_baseline)
+  # Import adjustment = total_postsim / total_baseline (overall import level change)
 
-  # Use substitution adjustment data from inputs if available
-  if (!is.null(inputs$gtap_substitution)) {
-    sub_data <- inputs$gtap_substitution
+  viws <- inputs$viws
+  viws_baseline <- inputs$baselines$viws_baseline
 
-    required_cols <- c('baseline_total', 'postsim_total', 'baseline_row', 'postsim_row')
-    missing_cols <- setdiff(required_cols, names(sub_data))
-    if (length(missing_cols) > 0) {
-      stop('Missing required columns in gtap_substitution: ', paste(missing_cols, collapse = ', '))
-    }
-
-    # Sum across sectors (rows 45-92 in Excel = all rows in our CSV)
-    sum_baseline_total <- sum(sub_data$baseline_total)
-    sum_postsim_total <- sum(sub_data$postsim_total)
-    sum_baseline_row <- sum(sub_data$baseline_row)
-    sum_postsim_row <- sum(sub_data$postsim_row)
-
-    if (sum_baseline_total <= 0 || sum_postsim_total <= 0) {
-      stop('Invalid gtap_substitution totals (baseline_total/postsim_total must be > 0)')
-    }
-
-    # Adjustment factors
-    # Excel uses economy-wide grand totals (row 110) for goods_share adjustment.
-    # Our extracted `gtap_substitution.csv` does not include those grand totals,
-    # so we leave goods_share unchanged.
-    goods_adjustment <- 1
-
-    import_adjustment <- (sum_postsim_row / sum_postsim_total) /
-                         (sum_baseline_row / sum_baseline_total)
-
-    adjusted_goods_share <- goods_share * goods_adjustment
-    adjusted_import_share <- import_share * import_adjustment
-
-    message(sprintf('  Import share adjustment: %.4f', import_adjustment))
-
-  } else {
-    # No adjustment data available - use baseline values
-    message('  No substitution adjustment data found, using baseline shares')
-    adjusted_goods_share <- goods_share
-    adjusted_import_share <- import_share
+  if (is.null(viws) || is.null(viws_baseline)) {
+    stop('viws and viws_baseline required for substitution adjustment')
   }
+
+  # Sum across all sectors for total imports
+  sum_baseline_total <- sum(viws_baseline)
+  sum_postsim_total <- sum(viws)
+
+  if (sum_baseline_total <= 0 || sum_postsim_total <= 0) {
+    stop('Invalid viws totals for substitution adjustment')
+  }
+
+  # Adjustment factors from NVPP (National Value of Production and Purchases) data
+  # Calculated in read_gtap.R from GTAP solution files:
+  #   goods_adj = (goods_share_postsim) / (goods_share_baseline)
+  #   import_adj = (import_share_postsim) / (import_share_baseline)
+  # Where goods sectors are first 45 commodities (tradeable goods)
+
+  nvpp_adjustment <- inputs$nvpp_adjustment
+  if (is.null(nvpp_adjustment)) {
+    stop('nvpp_adjustment required for substitution adjustment - ensure GTAP data is loaded')
+  }
+
+  goods_adjustment <- nvpp_adjustment$goods_adjustment
+  import_adjustment <- nvpp_adjustment$import_adjustment
+
+  adjusted_goods_share <- goods_share * goods_adjustment
+  adjusted_import_share <- import_share * import_adjustment
+
+  message(sprintf('  Import share adjustment: %.4f (imports at %.1f%% of baseline)',
+                  import_adjustment, import_adjustment * 100))
 
   # Post-substitution price effect
   post_sub_etr <- etr_results$post_sub_increase / 100  # Convert from percentage

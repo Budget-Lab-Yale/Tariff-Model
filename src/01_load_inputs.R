@@ -25,13 +25,13 @@ load_global_assumptions <- function() {
 #' Load scenario-specific model parameters
 #'
 #' @param scenario_dir Path to scenario directory
-#' @return List containing model parameters (or NULL if not found)
+#' @return List containing model parameters
 load_model_params <- function(scenario_dir) {
 
   params_file <- file.path(scenario_dir, 'model_params.yaml')
 
   if (!file.exists(params_file)) {
-    return(NULL)
+    stop('Model parameters file not found: ', params_file)
   }
 
   params <- read_yaml(params_file)
@@ -76,6 +76,8 @@ load_baselines <- function() {
     baselines$viws_baseline <- as.matrix(viws_data[, -1])  # Remove commodity column
     rownames(baselines$viws_baseline) <- viws_data$commodity
     message('  Loaded VIWS baseline')
+  } else {
+    stop('VIWS baseline file not found: ', viws_baseline_file)
   }
 
   # Import baseline in dollars (for Excel-compatible ETR weighting)
@@ -86,6 +88,8 @@ load_baselines <- function() {
     baselines$import_baseline_dollars <- as.matrix(import_data[, -1])
     rownames(baselines$import_baseline_dollars) <- import_data$gtap_code
     message('  Loaded import baseline (dollars)')
+  } else {
+    stop('Import baseline (dollars) file not found: ', import_baseline_file)
   }
 
   return(baselines)
@@ -95,9 +99,10 @@ load_baselines <- function() {
 #' Load all inputs for a scenario
 #'
 #' @param scenario Name of the scenario
+#' @param skip_maus If TRUE, skip loading MAUS data (will be loaded later)
 #'
 #' @return List containing all input data
-load_inputs <- function(scenario) {
+load_inputs <- function(scenario, skip_maus = FALSE) {
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
 
@@ -132,29 +137,30 @@ load_inputs <- function(scenario) {
   tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
 
   etr_file <- file.path(tariff_etrs_dir, 'etrs_by_sector_country.csv')
-  if (file.exists(etr_file)) {
-    inputs$etr_matrix <- read_csv(etr_file, show_col_types = FALSE)
-    message(sprintf('  Loaded ETR matrix: %d sectors', nrow(inputs$etr_matrix)))
-  } else {
-    message('  No ETR matrix found (optional)')
+  if (!file.exists(etr_file)) {
+    stop('ETR matrix not found: ', etr_file)
   }
+  inputs$etr_matrix <- read_csv(etr_file, show_col_types = FALSE)
+  message(sprintf('  Loaded ETR matrix: %d sectors', nrow(inputs$etr_matrix)))
 
   # ============================
   # Mappings (load early for GTAP processing)
   # ============================
 
   gtap_mapping_file <- 'resources/mappings/gtap_sectors.csv'
-  if (file.exists(gtap_mapping_file)) {
-    inputs$gtap_sector_mapping <- read_csv(gtap_mapping_file, show_col_types = FALSE)
-    message('  Loaded GTAP sector mappings')
+  if (!file.exists(gtap_mapping_file)) {
+    stop('GTAP sector mappings not found: ', gtap_mapping_file)
   }
+  inputs$gtap_sector_mapping <- read_csv(gtap_mapping_file, show_col_types = FALSE)
+  message('  Loaded GTAP sector mappings')
 
   # Product parameters (coefficients and weights for aggregation)
   product_params_file <- 'resources/products/product_params.csv'
-  if (file.exists(product_params_file)) {
-    inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
-    message('  Loaded product parameters')
+  if (!file.exists(product_params_file)) {
+    stop('Product parameters not found: ', product_params_file)
   }
+  inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
+  message('  Loaded product parameters')
 
   # ============================
   # GTAP outputs (from solution files)
@@ -189,25 +195,35 @@ load_inputs <- function(scenario) {
   inputs$ppa <- gtap_data$ppa
 
   # ETR increase from GTAP mtax (for revenue calculations)
-  if (!is.null(gtap_data$etr_increase)) {
-    inputs$etr_increase <- gtap_data$etr_increase
-    inputs$mtax_data <- gtap_data$mtax_data
+  if (is.null(gtap_data$etr_increase)) {
+    stop('GTAP mtax-based etr_increase not found in GTAP data')
   }
+  inputs$etr_increase <- gtap_data$etr_increase
+  inputs$mtax_data <- gtap_data$mtax_data
+
+  # NVPP adjustment factors (for post-substitution price calculation)
+  if (is.null(gtap_data$nvpp_adjustment)) {
+    stop('GTAP nvpp_adjustment not found in GTAP data')
+  }
+  inputs$nvpp_adjustment <- gtap_data$nvpp_adjustment
 
   # Product prices will be calculated in 02_calculate_etr.R after ETR aggregation
 
   # ============================
-  # MAUS outputs (scenario-specific, optional)
+  # MAUS outputs (scenario-specific)
   # ============================
 
-  maus_outputs_dir <- file.path(scenario_dir, 'maus_outputs')
-
-  maus_file <- file.path(maus_outputs_dir, 'quarterly.csv')
-  if (file.exists(maus_file)) {
+  if (!skip_maus) {
+    maus_outputs_dir <- file.path(scenario_dir, 'maus_outputs')
+    maus_file <- file.path(maus_outputs_dir, 'quarterly.csv')
+    if (!file.exists(maus_file)) {
+      stop('MAUS results not found: ', maus_file)
+    }
     inputs$maus <- read_csv(maus_file, show_col_types = FALSE)
     message(sprintf('  Loaded MAUS results: %d rows', nrow(inputs$maus)))
   } else {
-    message('  No MAUS results found (optional)')
+    message('  Skipping MAUS load (will be loaded after shock generation)')
+    inputs$maus <- NULL
   }
 
   # ============================
@@ -217,24 +233,22 @@ load_inputs <- function(scenario) {
   # Load CBO revenue sensitivity (derived from CBO rules of thumb workbook)
   # Formula: sensitivity = cbo_revenue_change / cbo_gdp_change
   cbo_file <- 'resources/cbo_rules/revenue_sensitivity.csv'
-  if (file.exists(cbo_file)) {
-    inputs$cbo_sensitivity <- read_csv(cbo_file, show_col_types = FALSE)
-    message('  Loaded CBO revenue sensitivity parameters')
-  } else {
-    message('  No CBO revenue sensitivity parameters found (optional)')
+  if (!file.exists(cbo_file)) {
+    stop('CBO revenue sensitivity parameters not found: ', cbo_file)
   }
+  inputs$cbo_sensitivity <- read_csv(cbo_file, show_col_types = FALSE)
+  message('  Loaded CBO revenue sensitivity parameters')
 
   # ============================
   # Distribution parameters
   # ============================
 
   dist_file <- 'resources/distribution/decile_parameters.csv'
-  if (file.exists(dist_file)) {
-    inputs$decile_parameters <- read_csv(dist_file, show_col_types = FALSE)
-    message('  Loaded distribution parameters (10 deciles)')
-  } else {
-    message('  No distribution parameters found (optional)')
+  if (!file.exists(dist_file)) {
+    stop('Distribution parameters not found: ', dist_file)
   }
+  inputs$decile_parameters <- read_csv(dist_file, show_col_types = FALSE)
+  message('  Loaded distribution parameters (10 deciles)')
 
   return(inputs)
 }

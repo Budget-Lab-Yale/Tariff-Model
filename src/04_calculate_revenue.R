@@ -68,7 +68,7 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   # Build revenue calculation table
   # -------------------------------------------------------------------------
 
-  # Create phase-in lookup (default to 1.0 for years not specified)
+  # Create phase-in lookup (all years must be specified)
   get_phase_in <- function(fy) {
     # Handle both integer and character keys in the YAML
     if (fy %in% names(phase_in_schedule)) {
@@ -77,7 +77,7 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
     if (as.character(fy) %in% names(phase_in_schedule)) {
       return(phase_in_schedule[[as.character(fy)]])
     }
-    return(1.0)  # Fully phased in by default
+    stop('Missing phase_in value for fiscal year: ', fy)
   }
 
   # Calculate revenue for each fiscal year

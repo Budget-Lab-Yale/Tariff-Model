@@ -26,7 +26,6 @@ library(tidyverse)
 #'
 #' @param inputs List containing:
 #'   - sector_outputs: GTAP sector output data (gtap_sector, output_baseline, output_pct_change, etc.)
-#'   - gtap_sector_mapping: Sector mapping with flags (optional, used if sector_outputs lacks flags)
 #'
 #' @return List containing sector output effects (percentage changes)
 calculate_sectors <- function(inputs) {
@@ -56,8 +55,11 @@ calculate_sectors <- function(inputs) {
 
   # Helper function for weighted average
   weighted_avg <- function(data) {
-    if (nrow(data) == 0 || sum(data$output_baseline) == 0) {
-      return(NA_real_)
+    if (nrow(data) == 0) {
+      stop('No rows available to calculate sector weighted average')
+    }
+    if (sum(data$output_baseline) == 0) {
+      stop('output_baseline sums to 0 for sector weighted average')
     }
     sum(data$output_baseline * data$output_pct_change) / sum(data$output_baseline)
   }
@@ -91,59 +93,34 @@ calculate_sectors <- function(inputs) {
   # Manufacturing subcategories
   # -------------------------------------------------------------------------
 
-  # Check if manufacturing flags exist in data
-  has_flags <- all(c('is_durable', 'is_nondurable', 'is_advanced') %in% names(sector_data))
-
-  if (has_flags) {
-    # Use flags from sector_outputs
-    mfg_data <- sector_data %>%
-      filter(aggregate_sector == 'Manufacturing')
-
-    durable <- mfg_data %>%
-      filter(is_durable == 1) %>%
-      weighted_avg()
-
-    nondurable <- mfg_data %>%
-      filter(is_nondurable == 1) %>%
-      weighted_avg()
-
-    # Advanced manufacturing is just electronics (ele)
-    advanced <- mfg_data %>%
-      filter(is_advanced == 1) %>%
-      pull(output_pct_change) %>%
-      first()
-
-  } else if (!is.null(inputs$gtap_sector_mapping)) {
-    # Fall back to mapping file for flags
-    mapping <- inputs$gtap_sector_mapping
-
-    mfg_data <- sector_data %>%
-      filter(aggregate_sector == 'Manufacturing') %>%
-      left_join(
-        mapping %>% select(gtap_code, is_durable, is_nondurable, is_advanced),
-        by = c('gtap_sector' = 'gtap_code')
-      )
-
-    durable <- mfg_data %>%
-      filter(is_durable == 1) %>%
-      weighted_avg()
-
-    nondurable <- mfg_data %>%
-      filter(is_nondurable == 1) %>%
-      weighted_avg()
-
-    advanced <- mfg_data %>%
-      filter(is_advanced == 1) %>%
-      pull(output_pct_change) %>%
-      first()
-
-  } else {
-    # No flags available
-    message('  Warning: Manufacturing subcategory flags not available')
-    durable <- NA_real_
-    nondurable <- NA_real_
-    advanced <- NA_real_
+  required_flags <- c('is_durable', 'is_nondurable', 'is_advanced')
+  missing_flags <- setdiff(required_flags, names(sector_data))
+  if (length(missing_flags) > 0) {
+    stop('Missing required manufacturing flag columns in sector_outputs: ',
+         paste(missing_flags, collapse = ', '))
   }
+  if (any(is.na(sector_data$is_durable)) ||
+      any(is.na(sector_data$is_nondurable)) ||
+      any(is.na(sector_data$is_advanced))) {
+    stop('Manufacturing flag columns contain NA values in sector_outputs')
+  }
+
+  mfg_data <- sector_data %>%
+    filter(aggregate_sector == 'Manufacturing')
+
+  durable <- mfg_data %>%
+    filter(is_durable == 1) %>%
+    weighted_avg()
+
+  nondurable <- mfg_data %>%
+    filter(is_nondurable == 1) %>%
+    weighted_avg()
+
+  # Advanced manufacturing is just electronics (ele)
+  advanced <- mfg_data %>%
+    filter(is_advanced == 1) %>%
+    pull(output_pct_change) %>%
+    first()
 
   # -------------------------------------------------------------------------
   # Calculate overall GDP effect

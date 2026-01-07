@@ -18,6 +18,7 @@ source('src/00_run_tariff_etrs.R')
 source('src/01_load_inputs.R')
 source('src/02_calculate_etr.R')
 source('src/03_calculate_prices.R')
+source('src/04a_generate_maus_inputs.R')
 source('src/04_calculate_revenue.R')
 source('src/05_calculate_macro.R')
 source('src/06_calculate_sectors.R')
@@ -28,13 +29,96 @@ source('src/10_calculate_products.R')
 source('src/11_write_outputs.R')
 
 
+#' Load MAUS output levels after user runs MAUS
+#' @param scenario_dir Path to scenario directory
+#' @return Tibble with MAUS quarterly data
+load_maus_levels <- function(scenario_dir) {
+  maus_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
+  if (!file.exists(maus_file)) {
+    stop('MAUS output file not found: ', maus_file)
+  }
+  maus <- read_csv(maus_file, show_col_types = FALSE)
+  required_cols <- c('year', 'quarter', 'gdp_baseline', 'gdp_tariff',
+                     'employment_baseline', 'employment_tariff',
+                     'urate_baseline', 'urate_tariff')
+  missing_cols <- setdiff(required_cols, names(maus))
+  if (length(missing_cols) > 0) {
+    stop('Missing required columns in MAUS output: ', paste(missing_cols, collapse = ', '))
+  }
+  message(sprintf('  Loaded MAUS output: %d quarters', nrow(maus)))
+  return(maus)
+}
+
+
+#' Pause and wait for user to run MAUS
+#' @param maus_inputs Results from generate_maus_inputs()
+#' @param scenario_dir Path to scenario directory
+wait_for_maus <- function(maus_inputs, scenario_dir) {
+  maus_output_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
+  cat('
+===========================================================
+')
+  cat('PAUSE: MAUS INPUT REQUIRED
+')
+  cat('===========================================================
+
+')
+  cat('The model has generated MAUS input shocks.
+
+')
+  cat('INPUT FILE (shocks for MAUS):
+  ', maus_inputs$output_file, '
+
+')
+  cat('NEXT STEPS:
+')
+  cat('  1. Open MAUS and load the shock series from the file above
+')
+  cat('  2. Run MAUS to generate quarterly GDP/employment projections
+')
+  cat('  3. Save MAUS output to:
+     ', maus_output_file, '
+
+')
+  cat('REQUIRED OUTPUT FORMAT (CSV with columns):
+')
+  cat('  year, quarter, gdp_baseline, gdp_tariff,
+')
+  cat('  employment_baseline, employment_tariff,
+')
+  cat('  urate_baseline, urate_tariff
+
+')
+  cat('===========================================================
+
+')
+  response <- readline(prompt = 'Press ENTER when MAUS output is ready (or type "quit" to exit): ')
+  if (tolower(trimws(response)) == 'quit') {
+    stop('Model execution stopped by user. Run again after MAUS output is ready.')
+  }
+  if (!file.exists(maus_output_file)) {
+    cat('
+WARNING: MAUS output file not found.
+')
+    response2 <- readline(prompt = 'Continue anyway? (y/n): ')
+    if (tolower(trimws(response2)) != 'y') {
+      stop('Model execution stopped. Please save MAUS output and run again.')
+    }
+  }
+  cat('
+Continuing with model execution...
+
+')
+}
+
+
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
 #' @param skip_tariff_etrs If TRUE, skip running Tariff-ETRs (use existing outputs)
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
+run_scenario <- function(scenario, skip_tariff_etrs = FALSE, skip_maus_pause = FALSE) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -62,7 +146,7 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
   #---------------------------
 
   message('\nStep 1: Loading inputs...')
-  inputs <- load_inputs(scenario)
+  inputs <- load_inputs(scenario, skip_maus = TRUE)
 
   #---------------------------
   # Step 2: Calculate ETRs
@@ -114,6 +198,26 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
   }
 
   #---------------------------
+  #---------------------------
+  # Step 4a: Generate MAUS inputs and pause
+  #---------------------------
+
+  message('
+Step 4a: Generating MAUS input shocks...')
+  maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
+  print_shock_summary(maus_inputs)
+
+  if (!skip_maus_pause) {
+    wait_for_maus(maus_inputs, scenario_dir)
+  } else {
+    message('  Skipping MAUS pause (using existing MAUS outputs)')
+  }
+
+  # Load MAUS output levels
+  message('
+Loading MAUS output levels...')
+  inputs$maus <- load_maus_levels(scenario_dir)
+
   # Step 4: Calculate revenue
   #---------------------------
 
