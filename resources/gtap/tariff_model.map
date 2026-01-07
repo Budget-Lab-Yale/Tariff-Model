@@ -4,9 +4,11 @@
 ! Format: header_number variable_name
 ! Header numbers must match GTAP_HEADERS in src/read_gtap.R
 
-0001 qo
-0030 qmwreg
-0042 qgdp
-0058 ppa
-0066 ppd
-0078 ppm
+0001 qva
+0052 qo
+0078 vom
+0160 qgdp
+0181 qmwreg
+0095 ppa
+0022 ppm
+0021 ppd

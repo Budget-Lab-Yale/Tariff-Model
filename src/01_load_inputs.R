@@ -194,7 +194,9 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   inputs$viws <- gtap_data$viws
   inputs$vgdp <- gtap_data$vgdp
   inputs$ppm <- gtap_data$ppm
+  inputs$ppd <- gtap_data$ppd
   inputs$ppa <- gtap_data$ppa
+  inputs$qgdp <- gtap_data$qgdp
 
   # ETR increase from GTAP mtax (for revenue calculations)
   if (is.null(gtap_data$etr_increase)) {

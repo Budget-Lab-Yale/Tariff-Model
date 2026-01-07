@@ -126,8 +126,13 @@ calculate_sectors <- function(inputs) {
   # Calculate overall GDP effect
   # -------------------------------------------------------------------------
 
-  # Overall GDP is weighted average across all sectors
-  overall_gdp <- weighted_avg(sector_data)
+  # Overall GDP comes from GTAP qgdp variable directly, not weighted sector average
+  if (!is.null(inputs$qgdp) && 'usa' %in% names(inputs$qgdp)) {
+    overall_gdp <- inputs$qgdp['usa']
+  } else {
+    # Fallback to weighted average if qgdp not available
+    overall_gdp <- weighted_avg(sector_data)
+  }
 
   # -------------------------------------------------------------------------
   # Build results

@@ -21,9 +21,11 @@ library(dplyr)
 # ============================================================================
 
 # Header mappings from .sol file to GTAP variables
+# Note: These headers are for sltoht-extracted .sol files
 GTAP_HEADERS <- list(
   qgdp = '0160',      # GDP % change by region (9 values)
   qo = '0052',        # Sector output % change (65 x 9)
+  qva = '0052',       # Value-added % change (65 x 9) - for sector GDP aggregation
   qmwreg = '0181',    # Aggregate import % change by region (9 values)
   ppa = '0095',       # Import price from all sources (65 x 9)
   ppm = '0022',       # Import market price (65 x 9)
@@ -37,6 +39,7 @@ GTAP_SLC_HEADERS <- list(
   mtax = 'u063',           # MTAX - tariff revenue by [comm, src, dst] (65 x 9 x 9)
   mtax_baseline = '0063',  # Baseline MTAX (pre-simulation)
   vgdp = '0161',           # GDP levels by region ($millions, 9 values)
+  vom = '0078',            # VOM - Value of Output at Market prices (65 x 9) - postsim
   nvpp_domestic = '0016',  # NVPP domestic baseline (65 x 9)
   nvpp_imported = '0017',  # NVPP imported baseline (65 x 9)
   nvpp_domestic_post = 'u016',  # NVPP domestic postsim (65 x 9)
@@ -89,6 +92,16 @@ read_gtap_solution <- function(sol_path, sl4_path) {
     }
     colnames(qo) <- regions
     result$qo <- qo
+  }
+
+  # Extract qva (value-added % change) - used for sector GDP aggregation
+  if (!is.null(sol[[GTAP_HEADERS$qva]])) {
+    qva <- sol[[GTAP_HEADERS$qva]]
+    if (!is.null(commodities)) {
+      rownames(qva) <- commodities
+    }
+    colnames(qva) <- regions
+    result$qva <- qva
   }
 
   # Extract qmwreg (aggregate imports)
@@ -468,6 +481,20 @@ read_gtap_full <- function(sol_path, slc_path, sl4_path) {
   nvpp_adjustment <- read_nvpp_adjustment(slc_path, goods_indices = 1:45, target_region = 1)
   result$nvpp_adjustment <- nvpp_adjustment
 
+  # Read VOM (Value of Output at Market prices) for sector weighting
+  slc <- read_har(slc_path)
+  sl4 <- read_har(sl4_path)
+  stel <- sl4[['stel']]
+  regions <- stel[1:9]
+  commodities <- stel[10:74]
+
+  if (!is.null(slc[[GTAP_SLC_HEADERS$vom]])) {
+    vom <- slc[[GTAP_SLC_HEADERS$vom]]
+    rownames(vom) <- commodities
+    colnames(vom) <- regions
+    result$vom <- vom
+  }
+
   return(result)
 }
 
@@ -514,27 +541,46 @@ get_imports_by_country <- function(gtap_data) {
 
 #' Get sector outputs with full mapping metadata
 #'
-#' Joins GTAP sector output changes with static mapping file to include
-#' aggregate sector and classification flags. Uses VIWS import totals
-#' as a proxy for output_baseline (for weighting in aggregate calculations).
+#' Joins GTAP sector value-added changes (qva) with static mapping file.
+#' Uses VOM (Value of Output) to calculate baseline for weighting.
+#' Formula: baseline = VOM_postsim / (1 + qva/100)
 #'
-#' @param gtap_data Result from read_gtap_full() (must contain viws matrix)
+#' @param gtap_data Result from read_gtap_full() (must contain qva and vom)
 #' @param sector_mapping Data frame with gtap_code and sector flags
 #' @param target_region Region to extract (default 'usa')
 #' @return Data frame matching sector_outputs.csv structure
 get_sector_outputs_full <- function(gtap_data, sector_mapping, target_region = 'usa') {
-  # Get base outputs
-  outputs <- get_sector_outputs(gtap_data, target_region)
+  # Use qva (value-added % change) instead of qo for sector aggregation
+  if (is.null(gtap_data$qva)) {
+    stop('qva not found in GTAP data')
+  }
+  if (is.null(gtap_data$vom)) {
+    stop('vom not found in GTAP data')
+  }
 
-  # Add output_baseline from VIWS (import totals by sector as proxy for weighting)
-  if (is.null(gtap_data$viws)) {
-    stop('viws not found in GTAP data')
+  qva <- gtap_data$qva
+  vom <- gtap_data$vom
+
+  region_idx <- which(colnames(qva) == target_region)
+  if (length(region_idx) == 0) {
+    stop(paste('Region not found:', target_region))
   }
-  viws_totals <- rowSums(gtap_data$viws)
-  outputs$output_baseline <- viws_totals[match(outputs$gtap_sector, names(viws_totals))]
-  if (any(is.na(outputs$output_baseline))) {
-    stop('Missing VIWS totals for some sectors in GTAP data')
-  }
+
+  # Get qva and VOM for target region
+  qva_values <- qva[, region_idx]
+  vom_postsim <- vom[, region_idx]
+
+  # Calculate baseline output: baseline = postsim / (1 + pct_change/100)
+  output_baseline <- vom_postsim / (1 + qva_values / 100)
+
+  # Build outputs data frame
+  outputs <- data.frame(
+    gtap_sector = rownames(qva),
+    output_pct_change = round(qva_values, 2),
+    output_baseline = output_baseline,
+    stringsAsFactors = FALSE
+  )
+  rownames(outputs) <- NULL
 
   # Join with mapping
   result <- outputs %>%
@@ -753,7 +799,11 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$viws <- gtap_data$viws
   result$vgdp <- gtap_data$vgdp
   result$ppm <- gtap_data$ppm
+  result$ppd <- gtap_data$ppd
   result$ppa <- gtap_data$ppa
+  result$qva <- gtap_data$qva
+  result$vom <- gtap_data$vom
+  result$qgdp <- gtap_data$qgdp
 
   # ETR increase from mtax (for revenue calculations)
   if (is.null(gtap_data$etr_increase)) {
