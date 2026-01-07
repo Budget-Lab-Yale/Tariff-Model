@@ -1,0 +1,19 @@
+# =============================================================================
+# Model Parameters for Scenario: example
+# =============================================================================
+#
+# Scenario-specific parameters and paths
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GTAP Configuration
+# -----------------------------------------------------------------------------
+
+gtap:
+  # Path to directory containing GTAP solution files (.sol, .sl4, .slc)
+  solution_dir: 'C:/Users/jar335/Documents/GTAP/tbltarv7/SaveSims'
+
+  # File prefix to use (optional - if not specified, uses first files found)
+  # Use this when multiple simulations are in the same directory
+  file_prefix: '11-17'

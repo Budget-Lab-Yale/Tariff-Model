@@ -4,14 +4,145 @@
 # Calculates pre-substitution and post-substitution weighted ETRs based on
 # country-level tariff rates and import weights from GTAP.
 #
-# Source: ricco_price_effects_and_etr sheet in Excel model
-# Key formulas:
-#   BW55 = SUMPRODUCT(BO55:BV55, BE55:BL55) / SUM(BE55:BL55)  [post-sim]
-#   BW125 = SUMPRODUCT(BO125:BV125, BE125:BL125) / SUM(BE125:BL125)  [baseline]
+# This module now calculates ETRs from:
+# - etr_matrix: Tariff-ETRs output (sector x country ETR matrix)
+# - viws: GTAP post-simulation imports by commodity x country
+# - baselines$viws_baseline: GTAP baseline imports
 #
 # Country columns: China, Canada, Mexico, UK, Japan, EU, ROW, FTA
 
 library(tidyverse)
+
+# =============================================================================
+# Country-level ETR calculation from etr_matrix + VIWS
+# =============================================================================
+
+#' Calculate country-level ETRs from sector ETR matrix and VIWS imports
+#'
+#' Uses Excel-compatible formula for derived imports:
+#'   derived_import = (postsim_VIWS / baseline_VIWS) × baseline_import_dollars
+#'
+#' For each country: weighted_etr = sum(sector_etr * derived_imports) / sum(derived_imports)
+#'
+#' @param etr_matrix Data frame with gtap_code and country columns (china, canada, etc.)
+#' @param viws Matrix of imports by commodity x source country (from GTAP post-sim)
+#' @param viws_baseline Matrix of baseline imports by commodity x source country (optional)
+#' @param import_baseline_dollars Matrix of baseline imports in dollars (optional)
+#' @return Data frame with imports_* and etr_* columns (same format as aggregates.csv)
+calculate_country_etrs <- function(etr_matrix, viws, viws_baseline = NULL,
+                                   import_baseline_dollars = NULL) {
+
+  # Country mapping: VIWS column names -> ETR column names -> output suffix
+  # VIWS uses: china, canada, mexico, uk, japan, eu, row, ftrow
+  # ETR matrix uses same names as VIWS
+  # Output uses: chn, ca, mx, uk, jp, eu, row, fta (matching aggregates.csv format)
+  country_config <- list(
+    list(viws = 'china', etr = 'china', suffix = 'chn'),
+    list(viws = 'canada', etr = 'canada', suffix = 'ca'),
+    list(viws = 'mexico', etr = 'mexico', suffix = 'mx'),
+    list(viws = 'uk', etr = 'uk', suffix = 'uk'),
+    list(viws = 'japan', etr = 'japan', suffix = 'jp'),
+    list(viws = 'eu', etr = 'eu', suffix = 'eu'),
+    list(viws = 'row', etr = 'row', suffix = 'row'),
+    list(viws = 'ftrow', etr = 'ftrow', suffix = 'fta')
+  )
+
+  # Check if we can use Excel-compatible derived imports
+  use_derived_imports <- !is.null(viws_baseline) && !is.null(import_baseline_dollars)
+
+  result <- list()
+
+  for (cfg in country_config) {
+    viws_col <- cfg$viws
+    etr_col <- cfg$etr
+    output_suffix <- cfg$suffix
+
+    # Get raw imports for this country from VIWS
+    if (viws_col %in% colnames(viws)) {
+      raw_imports <- viws[, viws_col]
+    } else {
+      raw_imports <- rep(0, nrow(viws))
+    }
+
+    sectors <- rownames(viws)
+
+    # Calculate derived imports if baseline data is available
+    if (use_derived_imports && viws_col %in% colnames(viws_baseline) &&
+        viws_col %in% colnames(import_baseline_dollars)) {
+      baseline_viws <- viws_baseline[, viws_col]
+      baseline_dollars <- import_baseline_dollars[, viws_col]
+
+      # derived_import = (postsim / baseline) * baseline_dollars
+      # Handle division by zero: if baseline is 0, use 0
+      derived_imports <- numeric(length(sectors))
+      for (i in seq_along(sectors)) {
+        sector <- sectors[i]
+        baseline_idx <- which(rownames(viws_baseline) == sector)
+        dollars_idx <- which(rownames(import_baseline_dollars) == sector)
+
+        if (length(baseline_idx) > 0 && length(dollars_idx) > 0 &&
+            baseline_viws[baseline_idx] > 0) {
+          ratio <- raw_imports[i] / baseline_viws[baseline_idx]
+          derived_imports[i] <- ratio * baseline_dollars[dollars_idx]
+        } else {
+          derived_imports[i] <- 0
+        }
+      }
+      country_imports <- derived_imports
+    } else {
+      # Fall back to raw VIWS imports
+      country_imports <- raw_imports
+    }
+
+    total_imports <- sum(country_imports)
+    result[[paste0('imports_', output_suffix)]] <- total_imports
+
+    # Calculate weighted ETR if column exists and has imports
+    # IMPORTANT: Only include sectors with ETR values in the weighted average
+    # (services sectors without tariffs should not dilute the average)
+    if (etr_col %in% names(etr_matrix) && total_imports > 0) {
+
+      weighted_etr <- 0
+      matched_imports <- 0  # Only count imports from sectors with ETR values
+
+      for (i in seq_along(sectors)) {
+        sector <- sectors[i]
+        # etr_matrix uses gtap_code column
+        etr_row <- which(etr_matrix$gtap_code == sector)
+
+        if (length(etr_row) > 0) {
+          sector_etr <- etr_matrix[[etr_col]][etr_row]
+          sector_imports <- country_imports[i]
+          weighted_etr <- weighted_etr + (sector_etr * sector_imports)
+          matched_imports <- matched_imports + sector_imports
+        }
+      }
+
+      # Use matched imports as denominator (excludes services without tariffs)
+      if (matched_imports > 0) {
+        result[[paste0('etr_', output_suffix)]] <- weighted_etr / matched_imports
+      } else {
+        result[[paste0('etr_', output_suffix)]] <- 0
+      }
+    } else {
+      result[[paste0('etr_', output_suffix)]] <- 0
+    }
+  }
+
+  return(as.data.frame(result))
+}
+
+
+#' Calculate etr_increase from post-sim and baseline weighted ETRs
+#'
+#' @param post_sub_etr Post-substitution weighted ETR (percentage)
+#' @param baseline_etr Baseline weighted ETR (percentage)
+#' @return etr_increase value (as decimal, matching aggregates.csv format)
+calculate_etr_increase <- function(post_sub_etr, baseline_etr) {
+  # etr_increase is the difference in weighted average ETRs
+  return((post_sub_etr - baseline_etr) / 100)
+}
+
 
 # =============================================================================
 # Main calculation function
@@ -20,26 +151,95 @@ library(tidyverse)
 #' Calculate weighted effective tariff rates
 #'
 #' @param inputs List containing:
-#'   - gtap_postsim: Post-simulation imports and ETRs by country
-#'   - baselines$gtap: Baseline imports and ETRs by country
+#'   - etr_matrix: Tariff-ETRs output (optional, for VIWS-based calculation)
+#'   - viws: GTAP post-simulation imports matrix
+#'   - baselines$gtap: Baseline imports and ETRs
 #'   - assumptions: Global assumptions including baseline_etr
 #'
 #' @return List with pre/post substitution ETR results
 calculate_etr <- function(inputs) {
 
   # -------------------------------------------------------------------------
-  # Calculate weighted ETRs using aggregate country data
+  # Get etr_increase from GTAP mtax (primary source for revenue calculations)
   # -------------------------------------------------------------------------
-  # This matches the Excel BW55/BW125 SUMPRODUCT formula directly
 
-  post_sub_etr <- calculate_weighted_etr(inputs$gtap_postsim)
-  pre_sub_etr <- calculate_weighted_etr(inputs$baselines$gtap)
+  if (!is.null(inputs$etr_increase)) {
+    # etr_increase already calculated from mtax in read_gtap.R
+    etr_increase <- inputs$etr_increase
+    message(sprintf('  Using etr_increase from GTAP mtax: %.4f (%.2f%%)',
+                    etr_increase, etr_increase * 100))
+
+    # Also report mtax details if available
+    if (!is.null(inputs$mtax_data)) {
+      mtax <- inputs$mtax_data
+      message(sprintf('    Scenario: mtax=%.0f, imports=%.0f, rate=%.2f%%',
+                      mtax$mtax_scenario, mtax$imports_scenario, mtax$etr_scenario * 100))
+      message(sprintf('    Baseline: mtax=%.0f, imports=%.0f, rate=%.2f%%',
+                      mtax$mtax_baseline, mtax$imports_baseline, mtax$etr_baseline * 100))
+    }
+  } else {
+    # Fall back to calculating from ETR matrix (less accurate)
+    etr_increase <- NULL
+    message('  Warning: No mtax-based etr_increase available')
+  }
+
+  # -------------------------------------------------------------------------
+  # Calculate weighted ETRs from etr_matrix + VIWS (for display purposes)
+  # These are the traditional goods-only-concept ETRs
+  # -------------------------------------------------------------------------
+
+  # Initialize country-level data to NULL (will be set if available)
+  postsim_country_etrs <- NULL
+  presim_country_etrs <- NULL
+
+  if (!is.null(inputs$etr_matrix) && !is.null(inputs$viws)) {
+    message('  Calculating goods-weighted ETRs from etr_matrix + VIWS...')
+
+    # Get baseline data for Excel-compatible derived imports
+    viws_baseline <- inputs$baselines$viws_baseline
+    import_baseline_dollars <- inputs$baselines$import_baseline_dollars
+
+    # Post-substitution (using post-sim VIWS with derived import formula)
+    postsim_country_etrs <- calculate_country_etrs(
+      inputs$etr_matrix, inputs$viws,
+      viws_baseline, import_baseline_dollars
+    )
+    post_sub_etr <- calculate_weighted_etr(postsim_country_etrs)
+
+    # Store the calculated aggregates for downstream use
+    inputs$gtap_postsim <- postsim_country_etrs
+
+    # Pre-substitution (using baseline - ratio is 1, so just baseline_dollars)
+    if (!is.null(viws_baseline) && !is.null(import_baseline_dollars)) {
+      # For pre-sub, ratio = baseline/baseline = 1, so imports = baseline_dollars
+      presim_country_etrs <- calculate_country_etrs(
+        inputs$etr_matrix, viws_baseline,
+        viws_baseline, import_baseline_dollars
+      )
+      pre_sub_etr <- calculate_weighted_etr(presim_country_etrs)
+    } else if (!is.null(viws_baseline)) {
+      presim_country_etrs <- calculate_country_etrs(inputs$etr_matrix, viws_baseline)
+      pre_sub_etr <- calculate_weighted_etr(presim_country_etrs)
+    } else {
+      # Fall back to baseline gtap data
+      pre_sub_etr <- calculate_weighted_etr(inputs$baselines$gtap)
+    }
+
+  } else {
+    # Legacy method: use pre-calculated aggregates
+    post_sub_etr <- calculate_weighted_etr(inputs$gtap_postsim)
+    pre_sub_etr <- calculate_weighted_etr(inputs$baselines$gtap)
+  }
 
   # -------------------------------------------------------------------------
   # Calculate all-in ETRs (baseline + increase)
   # -------------------------------------------------------------------------
 
   baseline_etr <- inputs$assumptions$baseline_etr
+  if (is.null(baseline_etr)) {
+    baseline_etr <- NA_real_
+    message('  Note: assumptions$baseline_etr missing; all-in ETR results set to NA')
+  }
 
   pre_sub_all_in <- baseline_etr + (pre_sub_etr / 100)
   post_sub_all_in <- baseline_etr + (post_sub_etr / 100)
@@ -49,15 +249,20 @@ calculate_etr <- function(inputs) {
   # -------------------------------------------------------------------------
 
   results <- list(
-    # Main ETR results (as percentages)
+    # Main ETR results (as percentages) - goods-weighted for display
     pre_sub_increase = pre_sub_etr,
     pre_sub_all_in = pre_sub_all_in * 100,
     post_sub_increase = post_sub_etr,
-    post_sub_all_in = post_sub_all_in * 100
+    post_sub_all_in = post_sub_all_in * 100,
+    # etr_increase for revenue calculations (from mtax, includes all imports)
+    etr_increase = etr_increase,
+    # Country-level data for output
+    postsim_country = postsim_country_etrs,
+    presim_country = presim_country_etrs
   )
 
-  message(sprintf('  Pre-substitution ETR increase: %.2f%%', pre_sub_etr))
-  message(sprintf('  Post-substitution ETR increase: %.2f%%', post_sub_etr))
+  message(sprintf('  Goods-weighted pre-sub ETR: %.2f%%', pre_sub_etr))
+  message(sprintf('  Goods-weighted post-sub ETR: %.2f%%', post_sub_etr))
 
   return(results)
 }

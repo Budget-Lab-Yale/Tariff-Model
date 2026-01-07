@@ -181,6 +181,87 @@ write_outputs <- function(results, scenario) {
     message(sprintf('    product_prices.csv (%d products)', nrow(results$products$products)))
   }
 
+  # ============================
+  # Goods-Weighted ETRs by Country
+  # ============================
+
+  if (!is.null(results$etr$postsim_country)) {
+    # Create output with pre-sub and post-sub ETRs by country
+    country_codes <- c('chn', 'ca', 'mx', 'uk', 'jp', 'eu', 'row', 'fta')
+    country_names <- c('China', 'Canada', 'Mexico', 'UK', 'Japan', 'EU', 'ROW', 'FTA')
+
+    etr_output <- tibble(
+      country = country_names,
+      country_code = country_codes
+    )
+
+    # Add post-sub data
+    for (code in country_codes) {
+      imports_col <- paste0('imports_', code)
+      etr_col <- paste0('etr_', code)
+
+      if (imports_col %in% names(results$etr$postsim_country)) {
+        etr_output[[paste0('postsub_imports_', code)]] <- results$etr$postsim_country[[imports_col]]
+        etr_output[[paste0('postsub_etr_', code)]] <- results$etr$postsim_country[[etr_col]]
+      }
+    }
+
+    # Add pre-sub data if available
+    if (!is.null(results$etr$presim_country)) {
+      for (code in country_codes) {
+        imports_col <- paste0('imports_', code)
+        etr_col <- paste0('etr_', code)
+
+        if (imports_col %in% names(results$etr$presim_country)) {
+          etr_output[[paste0('presub_imports_', code)]] <- results$etr$presim_country[[imports_col]]
+          etr_output[[paste0('presub_etr_', code)]] <- results$etr$presim_country[[etr_col]]
+        }
+      }
+    }
+
+    # Add weighted averages
+    etr_output <- etr_output %>%
+      add_row(
+        country = 'Weighted Average',
+        country_code = 'total'
+      )
+
+    # Actually, create a simpler format - one row per country with columns for pre/post
+    goods_etrs <- tibble(
+      country = country_names,
+      country_code = country_codes,
+      postsub_imports = sapply(country_codes, function(c)
+        results$etr$postsim_country[[paste0('imports_', c)]]),
+      postsub_etr = sapply(country_codes, function(c)
+        results$etr$postsim_country[[paste0('etr_', c)]])
+    )
+
+    # Add pre-sub if available
+    if (!is.null(results$etr$presim_country)) {
+      goods_etrs$presub_imports <- sapply(country_codes, function(c)
+        results$etr$presim_country[[paste0('imports_', c)]])
+      goods_etrs$presub_etr <- sapply(country_codes, function(c)
+        results$etr$presim_country[[paste0('etr_', c)]])
+    }
+
+    # Add totals row
+    total_row <- tibble(
+      country = 'TOTAL',
+      country_code = 'all',
+      postsub_imports = sum(goods_etrs$postsub_imports),
+      postsub_etr = results$etr$post_sub_increase
+    )
+    if ('presub_imports' %in% names(goods_etrs)) {
+      total_row$presub_imports <- sum(goods_etrs$presub_imports)
+      total_row$presub_etr <- results$etr$pre_sub_increase
+    }
+
+    goods_etrs <- bind_rows(goods_etrs, total_row)
+
+    write_csv(goods_etrs, file.path(output_dir, 'goods_weighted_etrs.csv'))
+    message('    goods_weighted_etrs.csv (8 countries + total)')
+  }
+
   message(sprintf('  Done. All outputs written to %s/', output_dir))
 
   invisible(output_dir)

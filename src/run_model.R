@@ -71,12 +71,47 @@ run_scenario <- function(scenario, skip_tariff_etrs = FALSE) {
   message('\nStep 2: Calculating effective tariff rates...')
   etr_results <- calculate_etr(inputs)
 
+  # Update inputs with calculated values from ETR step
+  if (!is.null(etr_results$etr_increase)) {
+    inputs$etr_increase <- etr_results$etr_increase
+  }
+  if (!is.null(etr_results$gtap_postsim)) {
+    inputs$gtap_postsim <- etr_results$gtap_postsim
+  }
+
   #---------------------------
   # Step 3: Calculate price effects
   #---------------------------
 
   message('\nStep 3: Calculating price effects...')
   price_results <- calculate_prices(etr_results, inputs)
+
+  #---------------------------
+  # Step 3b: Calculate product price effects (if GTAP data available)
+  #---------------------------
+
+  if (!is.null(inputs$etr_matrix) && !is.null(inputs$viws) && !is.null(inputs$ppm)) {
+    message('\nStep 3b: Calculating product price effects from GTAP...')
+
+    # Use post-substitution price effect as overall SR effect
+    overall_sr_effect <- price_results$post_sub_price_increase / 100
+
+    # Calculate overall LR effect as weighted average of ppm
+    ppm_usa <- inputs$ppm[, 'usa']
+    viws_total <- rowSums(inputs$viws)
+    overall_lr_effect <- sum(ppm_usa * viws_total) / sum(viws_total)
+
+    inputs$product_prices <- get_price_effects(
+      gtap_data = list(viws = inputs$viws, ppm = inputs$ppm),
+      etr_matrix = inputs$etr_matrix,
+      product_params = inputs$product_params,
+      overall_sr_effect = overall_sr_effect,
+      overall_lr_effect = overall_lr_effect,
+      target_region = 'usa'
+    )
+
+    message(sprintf('  Calculated price effects for %d products', nrow(inputs$product_prices)))
+  }
 
   #---------------------------
   # Step 4: Calculate revenue

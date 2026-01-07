@@ -5,7 +5,8 @@
 # This module calculates macro effects from MAUS quarterly data.
 #
 # Key calculations:
-#   GDP Q4-Q4: 100 * ((maus_gdp_q4 / maus_gdp_q4_prior) - (base_gdp_q4 / base_gdp_q4_prior))
+#   GDP Q4-Q4: 100 * ((tariff_gdp_q4 / tariff_gdp_q4_prior) /
+#                     (baseline_gdp_q4 / baseline_gdp_q4_prior) - 1)
 #   U rate change: maus_urate - baseline_urate (at Q4)
 #   Payroll change: 1000 * (maus_employment - baseline_employment) (at Q4, in thousands)
 #
@@ -61,8 +62,8 @@ calculate_macro <- function(inputs) {
   # Calculate GDP Q4-Q4 growth differential
   # -------------------------------------------------------------------------
   #
-  # Formula: 100 * ((tariff_q4/tariff_q4_prior) - (base_q4/base_q4_prior))
-  # This measures the difference in Q4-to-Q4 GDP growth rates
+  # Formula: 100 * ((tariff_q4/tariff_q4_prior) / (base_q4/base_q4_prior) - 1)
+  # This measures the percent difference in Q4-to-Q4 GDP growth rates
 
   calc_gdp_q4q4 <- function(yr) {
     q4_current <- get_q4(maus, yr)
@@ -75,7 +76,7 @@ calculate_macro <- function(inputs) {
     tariff_growth <- q4_current$gdp_tariff / q4_prior$gdp_tariff
     base_growth <- q4_current$gdp_baseline / q4_prior$gdp_baseline
 
-    100 * (tariff_growth - base_growth)
+    100 * (tariff_growth / base_growth - 1)
   }
 
   gdp_2025 <- calc_gdp_q4q4(2025)

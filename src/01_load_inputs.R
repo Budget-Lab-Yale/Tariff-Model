@@ -2,6 +2,9 @@
 # 01_load_inputs.R - Load all inputs for the tariff model
 # =============================================================================
 
+# Source GTAP file reader
+source('src/read_gtap.R')
+
 #' Load global assumptions (applies to all scenarios)
 #'
 #' @return List containing global assumption parameters
@@ -17,6 +20,24 @@ load_global_assumptions <- function() {
   message('  Loaded global assumptions')
 
   return(assumptions)
+}
+
+#' Load scenario-specific model parameters
+#'
+#' @param scenario_dir Path to scenario directory
+#' @return List containing model parameters (or NULL if not found)
+load_model_params <- function(scenario_dir) {
+
+  params_file <- file.path(scenario_dir, 'model_params.yaml')
+
+  if (!file.exists(params_file)) {
+    return(NULL)
+  }
+
+  params <- read_yaml(params_file)
+  message('  Loaded model parameters')
+
+  return(params)
 }
 
 
@@ -45,6 +66,26 @@ load_baselines <- function() {
     message('  Loaded GTAP baseline')
   } else {
     stop('GTAP baseline file not found: ', gtap_file)
+  }
+
+  # VIWS baseline (baseline imports matrix for pre-substitution calculations)
+  viws_baseline_file <- 'resources/gtap_baseline/viws_baseline.csv'
+  if (file.exists(viws_baseline_file)) {
+    viws_data <- read_csv(viws_baseline_file, show_col_types = FALSE)
+    # Convert to matrix format matching GTAP output
+    baselines$viws_baseline <- as.matrix(viws_data[, -1])  # Remove commodity column
+    rownames(baselines$viws_baseline) <- viws_data$commodity
+    message('  Loaded VIWS baseline')
+  }
+
+  # Import baseline in dollars (for Excel-compatible ETR weighting)
+  import_baseline_file <- 'resources/gtap_baseline/import_baseline_dollars.csv'
+  if (file.exists(import_baseline_file)) {
+    import_data <- read_csv(import_baseline_file, show_col_types = FALSE)
+    # Convert to matrix format
+    baselines$import_baseline_dollars <- as.matrix(import_data[, -1])
+    rownames(baselines$import_baseline_dollars) <- import_data$gtap_code
+    message('  Loaded import baseline (dollars)')
   }
 
   return(baselines)
@@ -79,6 +120,12 @@ load_inputs <- function(scenario) {
   inputs$baselines <- load_baselines()
 
   # ============================
+  # Model parameters (scenario-specific)
+  # ============================
+
+  inputs$model_params <- load_model_params(scenario_dir)
+
+  # ============================
   # Tariff-ETRs outputs
   # ============================
 
@@ -93,65 +140,13 @@ load_inputs <- function(scenario) {
   }
 
   # ============================
-  # GTAP outputs (scenario-specific)
+  # Mappings (load early for GTAP processing)
   # ============================
 
-  gtap_outputs_dir <- file.path(scenario_dir, 'gtap_outputs')
-
-  # GTAP aggregates (postsim country-level data)
-  gtap_agg_file <- file.path(gtap_outputs_dir, 'aggregates.csv')
-  if (file.exists(gtap_agg_file)) {
-    inputs$gtap_postsim <- read_csv(gtap_agg_file, show_col_types = FALSE)
-    message('  Loaded GTAP postsim aggregates')
-  } else {
-    stop('GTAP aggregates not found: ', gtap_agg_file)
-  }
-
-  # GTAP qmwreg (percent change in imports)
-  qmwreg_file <- file.path(gtap_outputs_dir, 'qmwreg.csv')
-  if (file.exists(qmwreg_file)) {
-    qmwreg_data <- read_csv(qmwreg_file, show_col_types = FALSE)
-    inputs$qmwreg <- qmwreg_data$qmwreg[1]
-    message(sprintf('  Loaded GTAP qmwreg: %.2f%%', inputs$qmwreg))
-  } else {
-    stop('GTAP qmwreg not found: ', qmwreg_file)
-  }
-
-  # GTAP etr_increase (tariff rate increase from policy)
-  etr_increase_file <- file.path(gtap_outputs_dir, 'etr_increase.csv')
-  if (file.exists(etr_increase_file)) {
-    etr_data <- read_csv(etr_increase_file, show_col_types = FALSE)
-    inputs$etr_increase <- etr_data$etr_increase[1]
-    message(sprintf('  Loaded GTAP etr_increase: %.2f%%', inputs$etr_increase * 100))
-  } else {
-    stop('GTAP etr_increase not found: ', etr_increase_file)
-  }
-
-  # GTAP sector outputs (for sector effect calculations)
-  sector_outputs_file <- file.path(gtap_outputs_dir, 'sector_outputs.csv')
-  if (file.exists(sector_outputs_file)) {
-    inputs$sector_outputs <- read_csv(sector_outputs_file, show_col_types = FALSE)
-    message(sprintf('  Loaded GTAP sector outputs: %d sectors', nrow(inputs$sector_outputs)))
-  } else {
-    message('  No sector outputs found (optional)')
-  }
-
-  # GTAP foreign GDP effects (qgdp by region)
-  foreign_gdp_file <- file.path(gtap_outputs_dir, 'foreign_gdp.csv')
-  if (file.exists(foreign_gdp_file)) {
-    inputs$foreign_gdp <- read_csv(foreign_gdp_file, show_col_types = FALSE)
-    message(sprintf('  Loaded GTAP foreign GDP: %d regions', nrow(inputs$foreign_gdp)))
-  } else {
-    message('  No foreign GDP data found (optional)')
-  }
-
-  # GTAP product prices (commodity-level price effects)
-  product_prices_file <- file.path(gtap_outputs_dir, 'product_prices.csv')
-  if (file.exists(product_prices_file)) {
-    inputs$product_prices <- read_csv(product_prices_file, show_col_types = FALSE)
-    message(sprintf('  Loaded GTAP product prices: %d products', nrow(inputs$product_prices)))
-  } else {
-    message('  No product prices found (optional)')
+  gtap_mapping_file <- 'resources/mappings/gtap_sectors.csv'
+  if (file.exists(gtap_mapping_file)) {
+    inputs$gtap_sector_mapping <- read_csv(gtap_mapping_file, show_col_types = FALSE)
+    message('  Loaded GTAP sector mappings')
   }
 
   # Product parameters (coefficients and weights for aggregation)
@@ -160,6 +155,46 @@ load_inputs <- function(scenario) {
     inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
     message('  Loaded product parameters')
   }
+
+  # ============================
+  # GTAP outputs (from solution files)
+  # ============================
+
+  gtap_solution_dir <- inputs$model_params$gtap$solution_dir
+  gtap_file_prefix <- inputs$model_params$gtap$file_prefix
+
+  if (is.null(gtap_solution_dir) || !dir.exists(gtap_solution_dir)) {
+    stop('GTAP solution directory not found. Check model_params.yaml gtap.solution_dir: ', gtap_solution_dir)
+  }
+
+  message('  Loading GTAP from solution files...')
+
+  gtap_data <- load_gtap_from_files(
+    solution_dir = gtap_solution_dir,
+    file_prefix = gtap_file_prefix,
+    sector_mapping = inputs$gtap_sector_mapping,
+    product_params = inputs$product_params,
+    etr_matrix = inputs$etr_matrix
+    # Note: overall price effects will be calculated after ETR aggregation
+  )
+
+  # Transfer GTAP data to inputs
+  inputs$foreign_gdp <- gtap_data$foreign_gdp
+  inputs$qmwreg <- gtap_data$qmwreg
+  inputs$sector_outputs <- gtap_data$sector_outputs
+  inputs$imports_by_country <- gtap_data$imports_by_country
+  inputs$viws <- gtap_data$viws
+  inputs$vgdp <- gtap_data$vgdp
+  inputs$ppm <- gtap_data$ppm
+  inputs$ppa <- gtap_data$ppa
+
+  # ETR increase from GTAP mtax (for revenue calculations)
+  if (!is.null(gtap_data$etr_increase)) {
+    inputs$etr_increase <- gtap_data$etr_increase
+    inputs$mtax_data <- gtap_data$mtax_data
+  }
+
+  # Product prices will be calculated in 02_calculate_etr.R after ETR aggregation
 
   # ============================
   # MAUS outputs (scenario-specific, optional)
@@ -173,53 +208,6 @@ load_inputs <- function(scenario) {
     message(sprintf('  Loaded MAUS results: %d rows', nrow(inputs$maus)))
   } else {
     message('  No MAUS results found (optional)')
-  }
-
-  # ============================
-  # Legacy: other_models directory (for backward compatibility)
-  # ============================
-
-  other_models_dir <- file.path(scenario_dir, 'other_models')
-
-  # GTAP substitution adjustment data (optional; used for post-sub price effects)
-  gtap_substitution_file <- file.path(other_models_dir, 'gtap_substitution.csv')
-  if (file.exists(gtap_substitution_file)) {
-    inputs$gtap_substitution <- read_csv(gtap_substitution_file, show_col_types = FALSE)
-    message(sprintf('  Loaded GTAP substitution data: %d rows', nrow(inputs$gtap_substitution)))
-  }
-
-  # GTAP sector-level results (optional)
-  gtap_sectors_file <- file.path(other_models_dir, 'gtap_results.csv')
-  if (file.exists(gtap_sectors_file)) {
-    inputs$gtap_sectors <- read_csv(gtap_sectors_file, show_col_types = FALSE)
-    message(sprintf('  Loaded GTAP sector results: %d rows', nrow(inputs$gtap_sectors)))
-  }
-
-  # VIWS postsim - raw post-simulation import values from GTAP
-  viws_postsim_file <- file.path(other_models_dir, 'viws_postsim.csv')
-  if (file.exists(viws_postsim_file)) {
-    inputs$viws_postsim <- read_csv(viws_postsim_file, show_col_types = FALSE)
-    message(sprintf('  Loaded VIWS postsim: %d commodities', nrow(inputs$viws_postsim)))
-  }
-
-  # Legacy gtap_aggregates.csv (if new structure not yet in place)
-  if (is.null(inputs$gtap_postsim)) {
-    legacy_agg_file <- file.path(other_models_dir, 'gtap_aggregates.csv')
-    if (file.exists(legacy_agg_file)) {
-      legacy_data <- read_csv(legacy_agg_file, show_col_types = FALSE)
-      inputs$gtap_postsim <- legacy_data %>% filter(scenario == 'postsim')
-      message('  Loaded GTAP aggregates (legacy format)')
-    }
-  }
-
-  # ============================
-  # Mappings
-  # ============================
-
-  gtap_mapping_file <- 'resources/mappings/gtap_sectors.csv'
-  if (file.exists(gtap_mapping_file)) {
-    inputs$gtap_sector_mapping <- read_csv(gtap_mapping_file, show_col_types = FALSE)
-    message('  Loaded GTAP sector mappings')
   }
 
   # ============================

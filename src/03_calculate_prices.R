@@ -60,20 +60,27 @@ calculate_prices <- function(etr_results, inputs) {
   if (!is.null(inputs$gtap_substitution)) {
     sub_data <- inputs$gtap_substitution
 
+    required_cols <- c('baseline_total', 'postsim_total', 'baseline_row', 'postsim_row')
+    missing_cols <- setdiff(required_cols, names(sub_data))
+    if (length(missing_cols) > 0) {
+      stop('Missing required columns in gtap_substitution: ', paste(missing_cols, collapse = ', '))
+    }
+
     # Sum across sectors (rows 45-92 in Excel = all rows in our CSV)
     sum_baseline_total <- sum(sub_data$baseline_total)
     sum_postsim_total <- sum(sub_data$postsim_total)
     sum_baseline_row <- sum(sub_data$baseline_row)
     sum_postsim_row <- sum(sub_data$postsim_row)
 
-    # Need the totals from row 110 in Excel (grand totals)
-    # For now, use the sums as approximation
-    # In practice, these should be the economy-wide totals
+    if (sum_baseline_total <= 0 || sum_postsim_total <= 0) {
+      stop('Invalid gtap_substitution totals (baseline_total/postsim_total must be > 0)')
+    }
 
     # Adjustment factors
-    goods_adjustment <- (sum_postsim_total / sum_postsim_total) /
-                        (sum_baseline_total / sum_baseline_total)
-    # Simplifies to 1 with this approximation
+    # Excel uses economy-wide grand totals (row 110) for goods_share adjustment.
+    # Our extracted `gtap_substitution.csv` does not include those grand totals,
+    # so we leave goods_share unchanged.
+    goods_adjustment <- 1
 
     import_adjustment <- (sum_postsim_row / sum_postsim_total) /
                          (sum_baseline_row / sum_baseline_total)

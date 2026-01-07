@@ -14,6 +14,7 @@
 #' - Header 0030 = qmwreg (aggregate import % change by region)
 
 library(HARr)
+library(dplyr)
 
 # ============================================================================
 # CONSTANTS
@@ -31,8 +32,11 @@ GTAP_HEADERS <- list(
 
 # Header mappings from .slc file (updated/level values)
 GTAP_SLC_HEADERS <- list(
-  viws = 'u028',      # VALIMPORTS - imports by [comm, src, dst] (65 x 9 x 9)
-  vgdp = '0161'       # GDP levels by region ($millions, 9 values)
+  viws = 'u028',           # VALIMPORTS - imports by [comm, src, dst] (65 x 9 x 9)
+  viws_baseline = '0028',  # Baseline VALIMPORTS (pre-simulation)
+  mtax = 'u063',           # MTAX - tariff revenue by [comm, src, dst] (65 x 9 x 9)
+  mtax_baseline = '0063',  # Baseline MTAX (pre-simulation)
+  vgdp = '0161'            # GDP levels by region ($millions, 9 values)
 )
 
 # Region codes in GTAP model order
@@ -299,6 +303,51 @@ read_vgdp <- function(slc_path, sl4_path = NULL) {
   return(vgdp)
 }
 
+#' Read MTAX (tariff revenue) and calculate etr_increase
+#'
+#' Calculates etr_increase = (scenario_mtax / scenario_imports) - (baseline_mtax / baseline_imports)
+#' This uses total imports (including services) as the denominator.
+#'
+#' @param slc_path Path to .slc file
+#' @param target_region Index of destination region (default 1 = USA)
+#' @return List with mtax_scenario, mtax_baseline, imports_scenario, imports_baseline, etr_increase
+read_mtax_etr_increase <- function(slc_path, target_region = 1) {
+  slc <- read_har(slc_path)
+
+  # Get scenario mtax (tariff revenue)
+  mtax_scenario_full <- slc[[GTAP_SLC_HEADERS$mtax]]
+  mtax_scenario <- sum(mtax_scenario_full[, , target_region])
+
+  # Get baseline mtax
+  mtax_baseline_full <- slc[[GTAP_SLC_HEADERS$mtax_baseline]]
+  mtax_baseline <- sum(mtax_baseline_full[, , target_region])
+
+  # Get scenario imports (VIWS)
+  viws_scenario_full <- slc[[GTAP_SLC_HEADERS$viws]]
+  imports_scenario <- sum(viws_scenario_full[, , target_region])
+
+  # Get baseline imports
+  viws_baseline_full <- slc[[GTAP_SLC_HEADERS$viws_baseline]]
+  imports_baseline <- sum(viws_baseline_full[, , target_region])
+
+  # Calculate ETRs
+  etr_scenario <- mtax_scenario / imports_scenario
+  etr_baseline <- mtax_baseline / imports_baseline
+
+  # Calculate etr_increase
+  etr_increase <- etr_scenario - etr_baseline
+
+  return(list(
+    mtax_scenario = mtax_scenario,
+    mtax_baseline = mtax_baseline,
+    imports_scenario = imports_scenario,
+    imports_baseline = imports_baseline,
+    etr_scenario = etr_scenario,
+    etr_baseline = etr_baseline,
+    etr_increase = etr_increase
+  ))
+}
+
 #' Read GTAP solution with VIWS and VGDP
 #'
 #' Extended version that also reads .slc file for level values.
@@ -315,20 +364,319 @@ read_gtap_full <- function(sol_path, slc_path, sl4_path = NULL) {
   if (file.exists(slc_path)) {
     result$viws <- read_viws(slc_path, sl4_path, target_region = 1)
     result$vgdp <- read_vgdp(slc_path, sl4_path)
+
+    # Calculate etr_increase from mtax
+    mtax_data <- read_mtax_etr_increase(slc_path, target_region = 1)
+    result$etr_increase <- mtax_data$etr_increase
+    result$mtax_data <- mtax_data
   }
 
   return(result)
 }
 
 # ============================================================================
-# CONVENIENCE FUNCTION
+# IMPORTS BY COUNTRY
 # ============================================================================
 
-#' Load all GTAP outputs for a scenario
+#' Get total imports by source country
+#'
+#' Aggregates the VIWS (imports) matrix across commodities to get
+#' total imports by source country.
+#'
+#' @param gtap_data Result from read_gtap_full() containing viws matrix
+#' @return Named vector of imports by country (in $millions)
+get_imports_by_country <- function(gtap_data) {
+  if (is.null(gtap_data$viws)) {
+    stop('viws not found in GTAP data - need to use read_gtap_full()')
+  }
+
+  # Sum across commodities (rows) for each source country (columns)
+  country_totals <- colSums(gtap_data$viws)
+
+  # Map GTAP region names to standard abbreviations
+  region_map <- c(
+    usa = 'usa',
+    china = 'chn',
+    row = 'row',
+    canada = 'can',
+    mexico = 'mex',
+    ftrow = 'fta',
+    japan = 'jpn',
+    eu = 'eu',
+    uk = 'gbr'
+  )
+
+  names(country_totals) <- region_map[names(country_totals)]
+
+  return(country_totals)
+}
+
+# ============================================================================
+# SECTOR OUTPUTS WITH MAPPINGS
+# ============================================================================
+
+#' Get sector outputs with full mapping metadata
+#'
+#' Joins GTAP sector output changes with static mapping file to include
+#' aggregate sector and classification flags. Uses VIWS import totals
+#' as a proxy for output_baseline (for weighting in aggregate calculations).
+#'
+#' @param gtap_data Result from read_gtap_full() (must contain viws matrix)
+#' @param sector_mapping Data frame with gtap_code and sector flags
+#' @param target_region Region to extract (default 'usa')
+#' @return Data frame matching sector_outputs.csv structure
+get_sector_outputs_full <- function(gtap_data, sector_mapping, target_region = 'usa') {
+  # Get base outputs
+  outputs <- get_sector_outputs(gtap_data, target_region)
+
+  # Add output_baseline from VIWS (import totals by sector as proxy for weighting)
+  if (!is.null(gtap_data$viws)) {
+    viws_totals <- rowSums(gtap_data$viws)
+    outputs$output_baseline <- viws_totals[match(outputs$gtap_sector, names(viws_totals))]
+    # Replace any NAs with 0
+    outputs$output_baseline[is.na(outputs$output_baseline)] <- 0
+  } else {
+    # If no VIWS, use equal weighting
+    outputs$output_baseline <- 1
+  }
+
+  # Join with mapping
+  result <- outputs %>%
+    left_join(
+      sector_mapping %>%
+        select(gtap_code, aggregate_sector, is_manufacturing,
+               is_durable, is_nondurable, is_advanced),
+      by = c('gtap_sector' = 'gtap_code')
+    )
+
+  return(result)
+}
+
+# ============================================================================
+# PRICE EFFECTS (SR AND LR)
+# ============================================================================
+
+#' Calculate product price effects
+#'
+#' Calculates short-run and long-run price effects by product.
+#' - SR: Derived from ETR matrix weighted by VIWS imports
+#' - LR: Derived from GTAP ppm (import market price) changes
+#'
+#' @param gtap_data Result from read_gtap_full()
+#' @param etr_matrix ETR matrix from Tariff-ETRs (gtap_sector x country)
+#' @param product_params Product parameters with is_food flag
+#' @param overall_sr_effect Overall short-run price effect (scalar)
+#' @param overall_lr_effect Overall long-run price effect (scalar)
+#' @param target_region Region to extract (default 'usa')
+#' @return Data frame with gtap_sector, sr_price_effect, lr_price_effect, is_food
+get_price_effects <- function(gtap_data, etr_matrix, product_params,
+                              overall_sr_effect, overall_lr_effect,
+                              target_region = 'usa') {
+  if (is.null(gtap_data$viws)) {
+    stop('viws not found in GTAP data')
+  }
+  if (is.null(gtap_data$ppm)) {
+    stop('ppm not found in GTAP data')
+  }
+
+  viws <- gtap_data$viws
+  ppm <- gtap_data$ppm
+  commodities <- rownames(viws)
+
+  # Get ppm for target region
+  region_idx <- which(colnames(ppm) == target_region)
+  ppm_values <- ppm[, region_idx]
+
+  # Calculate weighted average ppm
+  total_imports_by_product <- rowSums(viws)
+  weighted_avg_ppm <- sum(ppm_values * total_imports_by_product) / sum(total_imports_by_product)
+
+  # LR price effect: scale each product's ppm by overall effect
+  lr_effects <- overall_lr_effect * ppm_values / weighted_avg_ppm
+
+  # SR price effect: ETR-weighted calculation
+  # Need to match ETR matrix columns to VIWS columns
+  sr_effects <- numeric(length(commodities))
+  names(sr_effects) <- commodities
+
+  # Country columns in ETR matrix (same names as VIWS columns)
+  # ETR matrix has: china, canada, mexico, uk, japan, eu, row, ftrow
+  etr_countries <- c('china', 'canada', 'mexico', 'uk', 'japan', 'eu', 'row', 'ftrow')
+
+  for (i in seq_along(commodities)) {
+    comm <- commodities[i]
+
+    # Get imports for this commodity by country
+    comm_imports <- viws[i, ]
+    total_comm_imports <- sum(comm_imports)
+
+    if (total_comm_imports == 0) {
+      sr_effects[i] <- 0
+      next
+    }
+
+    # Get ETR row for this commodity (if exists in etr_matrix)
+    # Note: etr_matrix uses gtap_code column
+    etr_row_idx <- which(etr_matrix$gtap_code == comm)
+    if (length(etr_row_idx) == 0) {
+      sr_effects[i] <- 0
+      next
+    }
+
+    # Calculate weighted ETR for this product
+    weighted_etr <- 0
+    for (country in etr_countries) {
+      if (country %in% names(etr_matrix) && country %in% names(comm_imports)) {
+        import_weight <- comm_imports[country]
+        etr_value <- etr_matrix[[country]][etr_row_idx]
+        weighted_etr <- weighted_etr + (etr_value * import_weight)
+      }
+    }
+
+    sr_effects[i] <- weighted_etr / total_comm_imports
+  }
+
+  # Scale SR effects by overall effect ratio
+  avg_sr <- sum(sr_effects * total_imports_by_product) / sum(total_imports_by_product)
+  if (avg_sr > 0) {
+    sr_effects <- overall_sr_effect * sr_effects / avg_sr
+  }
+
+  # Build result data frame
+  result <- data.frame(
+    gtap_sector = commodities,
+    sr_price_effect = round(sr_effects * 100, 2),  # Convert to percentage
+    lr_price_effect = round(lr_effects, 2),
+    stringsAsFactors = FALSE
+  )
+
+  # Add is_food from product_params
+  result <- result %>%
+    left_join(
+      product_params %>% select(gtap_sector, is_food),
+      by = 'gtap_sector'
+    ) %>%
+    mutate(is_food = coalesce(is_food, 0L))
+
+  return(result)
+}
+
+# ============================================================================
+# MASTER LOADING FUNCTION
+# ============================================================================
+
+#' Load all GTAP outputs from solution files
+#'
+#' Main entry point for loading GTAP data from .sol/.sl4/.slc files.
+#' Returns all data needed by the pipeline in a standardized format.
+#'
+#' @param solution_dir Directory containing GTAP solution files
+#' @param file_prefix Optional file prefix to filter files (e.g., '11-17')
+#' @param sector_mapping Data frame with sector classifications
+#' @param product_params Data frame with product parameters (is_food)
+#' @param etr_matrix ETR matrix from Tariff-ETRs (optional, for price effects)
+#' @param overall_sr_effect Overall SR price effect (optional)
+#' @param overall_lr_effect Overall LR price effect (optional)
+#' @return List containing all GTAP outputs
+load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
+                                 sector_mapping = NULL,
+                                 product_params = NULL, etr_matrix = NULL,
+                                 overall_sr_effect = NULL, overall_lr_effect = NULL) {
+  # Build file pattern based on prefix
+  if (!is.null(file_prefix)) {
+    sol_pattern <- paste0('^', file_prefix, '\\.sol$')
+    sl4_pattern <- paste0('^', file_prefix, '\\.sl4$')
+    slc_pattern <- paste0('^', file_prefix, '\\.slc$')
+  } else {
+    sol_pattern <- '\\.sol$'
+    sl4_pattern <- '\\.sl4$'
+    slc_pattern <- '\\.slc$'
+  }
+
+  # Find files
+  sol_files <- list.files(solution_dir, pattern = sol_pattern, full.names = TRUE)
+  sl4_files <- list.files(solution_dir, pattern = sl4_pattern, full.names = TRUE)
+  slc_files <- list.files(solution_dir, pattern = slc_pattern, full.names = TRUE)
+
+  if (length(sol_files) == 0) {
+    stop(paste('No .sol files found in:', solution_dir,
+               if (!is.null(file_prefix)) paste('with prefix:', file_prefix) else ''))
+  }
+  if (length(slc_files) == 0) {
+    stop(paste('No .slc files found in:', solution_dir,
+               if (!is.null(file_prefix)) paste('with prefix:', file_prefix) else ''))
+  }
+
+  sol_path <- sol_files[1]
+  sl4_path <- if (length(sl4_files) > 0) sl4_files[1] else NULL
+  slc_path <- slc_files[1]
+
+  message(sprintf('  Reading GTAP solution: %s', basename(sol_path)))
+
+  # Read full GTAP data
+  gtap_data <- read_gtap_full(sol_path, slc_path, sl4_path)
+
+  result <- list()
+
+  # Foreign GDP
+  result$foreign_gdp <- get_foreign_gdp(gtap_data)
+  message(sprintf('    - Foreign GDP: %d regions', nrow(result$foreign_gdp)))
+
+  # Import change (qmwreg)
+  result$qmwreg <- get_import_change(gtap_data, 'usa')
+  message(sprintf('    - Import change (qmwreg): %.2f%%', result$qmwreg))
+
+  # Imports by country
+  result$imports_by_country <- get_imports_by_country(gtap_data)
+  message(sprintf('    - Imports by country: %d countries', length(result$imports_by_country)))
+
+  # Sector outputs
+  if (!is.null(sector_mapping)) {
+    result$sector_outputs <- get_sector_outputs_full(gtap_data, sector_mapping, 'usa')
+    message(sprintf('    - Sector outputs: %d sectors (with mappings)', nrow(result$sector_outputs)))
+  } else {
+    result$sector_outputs <- get_sector_outputs(gtap_data, 'usa')
+    message(sprintf('    - Sector outputs: %d sectors (basic)', nrow(result$sector_outputs)))
+  }
+
+  # Price effects (if ETR matrix provided)
+  if (!is.null(etr_matrix) && !is.null(product_params) &&
+      !is.null(overall_sr_effect) && !is.null(overall_lr_effect)) {
+    result$product_prices <- get_price_effects(
+      gtap_data, etr_matrix, product_params,
+      overall_sr_effect, overall_lr_effect, 'usa'
+    )
+    message(sprintf('    - Product prices: %d products', nrow(result$product_prices)))
+  }
+
+  # Raw data for downstream calculations
+  result$viws <- gtap_data$viws
+  result$vgdp <- gtap_data$vgdp
+  result$ppm <- gtap_data$ppm
+  result$ppa <- gtap_data$ppa
+
+  # ETR increase from mtax (for revenue calculations)
+  if (!is.null(gtap_data$etr_increase)) {
+    result$etr_increase <- gtap_data$etr_increase
+    result$mtax_data <- gtap_data$mtax_data
+    message(sprintf('    - ETR increase (from mtax): %.4f (%.2f%%)',
+                    result$etr_increase, result$etr_increase * 100))
+  }
+
+  return(result)
+}
+
+# ============================================================================
+# LEGACY CONVENIENCE FUNCTION
+# ============================================================================
+
+#' Load all GTAP outputs for a scenario (DEPRECATED)
 #'
 #' @param scenario_dir Directory containing GTAP output files
 #' @return List with foreign_gdp, sector_outputs, import_change
 load_gtap_outputs <- function(scenario_dir) {
+  warning('load_gtap_outputs() is deprecated. Use load_gtap_from_files() instead.')
+
   # Look for .sol and .sl4 files
   sol_files <- list.files(scenario_dir, pattern = '\\.sol$', full.names = TRUE)
   sl4_files <- list.files(scenario_dir, pattern = '\\.sl4$', full.names = TRUE)
