@@ -181,11 +181,25 @@ load_inputs <- function(scenario) {
 
   other_models_dir <- file.path(scenario_dir, 'other_models')
 
+  # GTAP substitution adjustment data (optional; used for post-sub price effects)
+  gtap_substitution_file <- file.path(other_models_dir, 'gtap_substitution.csv')
+  if (file.exists(gtap_substitution_file)) {
+    inputs$gtap_substitution <- read_csv(gtap_substitution_file, show_col_types = FALSE)
+    message(sprintf('  Loaded GTAP substitution data: %d rows', nrow(inputs$gtap_substitution)))
+  }
+
   # GTAP sector-level results (optional)
   gtap_sectors_file <- file.path(other_models_dir, 'gtap_results.csv')
   if (file.exists(gtap_sectors_file)) {
     inputs$gtap_sectors <- read_csv(gtap_sectors_file, show_col_types = FALSE)
     message(sprintf('  Loaded GTAP sector results: %d rows', nrow(inputs$gtap_sectors)))
+  }
+
+  # VIWS postsim - raw post-simulation import values from GTAP
+  viws_postsim_file <- file.path(other_models_dir, 'viws_postsim.csv')
+  if (file.exists(viws_postsim_file)) {
+    inputs$viws_postsim <- read_csv(viws_postsim_file, show_col_types = FALSE)
+    message(sprintf('  Loaded VIWS postsim: %d commodities', nrow(inputs$viws_postsim)))
   }
 
   # Legacy gtap_aggregates.csv (if new structure not yet in place)
