@@ -9,9 +9,10 @@
 #' - .sol files: Solution arrays organized by numbered headers
 #'
 #' Key header mappings (discovered through validation):
-#' - Header 0042 = qgdp (GDP % change by region)
-#' - Header 0001 = qo (sector output % change, 65 commodities x 9 regions)
-#' - Header 0030 = qmwreg (aggregate import % change by region)
+#' - Header 0160 = qgdp (GDP % change by region)
+#' - Header 0052 = qo (sector output % change, 65 commodities x 9 regions)
+#' - Header 0058 = qva (value-added % change, 65 commodities x 9 regions)
+#' - Header 0181 = qmwreg (aggregate import % change by region)
 
 library(HARr)
 library(dplyr)
@@ -25,7 +26,7 @@ library(dplyr)
 GTAP_HEADERS <- list(
   qgdp = '0160',      # GDP % change by region (9 values)
   qo = '0052',        # Sector output % change (65 x 9)
-  qva = '0052',       # Value-added % change (65 x 9) - for sector GDP aggregation
+  qva = '0058',       # Value-added % change (65 x 9) - for sector GDP aggregation
   qmwreg = '0181',    # Aggregate import % change by region (9 values)
   ppa = '0095',       # Import price from all sources (65 x 9)
   ppm = '0022',       # Import market price (65 x 9)
