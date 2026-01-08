@@ -50,9 +50,42 @@ load_quarterly_vix <- function(vix_file, start_date, n_quarters = 44) {
 }
 
 
+#' Load baseline UTFIBC from config file
+#'
+#' @param utfibc_file Path to baseline UTFIBC CSV file
+#' @param start_date Start date for shock period
+#' @param n_quarters Number of quarters to generate
+#'
+#' @return Tibble with quarter dates and baseline UTFIBC values
+load_baseline_utfibc <- function(utfibc_file, start_date, n_quarters = 46) {
+
+  if (!file.exists(utfibc_file)) {
+    stop('Baseline UTFIBC file not found: ', utfibc_file)
+  }
+
+  # Load baseline UTFIBC values
+  utfibc_data <- read_csv(utfibc_file, show_col_types = FALSE)
+
+  # Generate quarterly date sequence
+  quarters <- tibble(
+    quarter_start = seq(as.Date(start_date), by = 'quarter', length.out = n_quarters)
+  ) %>%
+    mutate(
+      year = year(quarter_start),
+      quarter = quarter(quarter_start)
+    )
+
+  # Join with UTFIBC data
+  quarterly_utfibc <- quarters %>%
+    left_join(utfibc_data, by = c('year', 'quarter'))
+
+  return(quarterly_utfibc)
+}
+
+
 #' Compute UTFIBC shock series from ETR
 #'
-#' @param baseline_utfibc Baseline UTFIBC rate (typically ~3%)
+#' @param baseline_utfibc Vector of baseline UTFIBC rates by quarter
 #' @param pre_sub_etr Pre-substitution ETR increase (as decimal, e.g., 0.1439)
 #' @param post_sub_etr Post-substitution ETR increase (as decimal, e.g., 0.1194)
 #' @param shock_start_quarter Which quarter (1-indexed) the shock begins
@@ -61,13 +94,13 @@ load_quarterly_vix <- function(vix_file, start_date, n_quarters = 44) {
 #' @param n_quarters Total number of quarters to generate
 #'
 #' @return Vector of UTFIBC values (baseline + shock)
-compute_utfibc_shocks <- function(baseline_utfibc = 3.0,
+compute_utfibc_shocks <- function(baseline_utfibc,
                                    pre_sub_etr,
                                    post_sub_etr,
                                    shock_start_quarter = 4,
                                    initial_shock = NULL,
                                    interpolation_quarters = 12,
-                                   n_quarters = 44) {
+                                   n_quarters = 46) {
 
   # Convert ETR to percentage points (as used in MAUS)
   pre_sub_shock <- pre_sub_etr * 100
@@ -80,15 +113,17 @@ compute_utfibc_shocks <- function(baseline_utfibc = 3.0,
   }
 
   # Build the shock series
-  utfibc <- rep(baseline_utfibc, n_quarters)
+  utfibc <- numeric(n_quarters)
 
   for (q in seq_len(n_quarters)) {
+    base <- baseline_utfibc[q]
+
     if (q < shock_start_quarter) {
       # Before shock: baseline only
-      utfibc[q] <- baseline_utfibc
+      utfibc[q] <- base
     } else if (q == shock_start_quarter) {
       # First shock quarter: baseline + initial shock
-      utfibc[q] <- baseline_utfibc + initial_shock
+      utfibc[q] <- base + initial_shock
     } else {
       # Subsequent quarters: interpolate from pre-sub to post-sub
       quarters_after_start <- q - shock_start_quarter
@@ -102,7 +137,7 @@ compute_utfibc_shocks <- function(baseline_utfibc = 3.0,
         shock <- post_sub_shock
       }
 
-      utfibc[q] <- baseline_utfibc + shock
+      utfibc[q] <- base + shock
     }
   }
 
@@ -130,7 +165,6 @@ generate_maus_inputs <- function(etr_results, inputs, scenario) {
 
   start_date <- maus_params$start_date %||% '2024-07-01'
   n_quarters <- maus_params$n_quarters %||% 46
-  baseline_utfibc <- maus_params$baseline_utfibc %||% 3.0
   shock_start_quarter <- maus_params$shock_start_quarter %||% 4
   interpolation_quarters <- maus_params$interpolation_quarters %||% 12
 
@@ -151,11 +185,20 @@ generate_maus_inputs <- function(etr_results, inputs, scenario) {
   message(sprintf('    Loaded VIX for %d quarters', nrow(quarterly_vix)))
 
   # -------------------------------------------------------------------------
+  # Load baseline UTFIBC series
+  # -------------------------------------------------------------------------
+
+  utfibc_file <- 'resources/maus/baseline_utfibc.csv'
+  quarterly_utfibc <- load_baseline_utfibc(utfibc_file, start_date, n_quarters)
+
+  message(sprintf('    Loaded baseline UTFIBC for %d quarters', nrow(quarterly_utfibc)))
+
+  # -------------------------------------------------------------------------
   # Compute UTFIBC shock series
   # -------------------------------------------------------------------------
 
   utfibc <- compute_utfibc_shocks(
-    baseline_utfibc = baseline_utfibc,
+    baseline_utfibc = quarterly_utfibc$utfibc,
     pre_sub_etr = pre_sub_etr,
     post_sub_etr = post_sub_etr,
     shock_start_quarter = shock_start_quarter,
