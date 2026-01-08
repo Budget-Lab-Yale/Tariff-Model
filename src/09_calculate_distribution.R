@@ -76,7 +76,7 @@ calculate_distribution <- function(price_results, inputs) {
   #          Cost_d = PCE_d × scaling_factor_d × income_d
 
   # Dynamic calculation using variation factors (pre-substitution)
-  # Dollar amounts adjusted from 2024 to 2025 dollars using inflation factor
+  # Cost calculation uses original income; income column inflated for display only
   distribution <- decile_params %>%
     mutate(
       # Per-decile PCE effect (varies by consumption basket)
@@ -85,8 +85,11 @@ calculate_distribution <- function(price_results, inputs) {
       # Scaled effect as percentage of after-tax income
       pct_of_income = pce_effect * scaling_factor * 100,
 
-      # Dollar cost per household (negative = cost to household, in 2025 dollars)
-      cost_per_hh = -1 * (pct_of_income / 100) * income * inflation_factor
+      # Dollar cost per household (already in 2025 dollars via price effect)
+      cost_per_hh = -1 * (pct_of_income / 100) * income,
+
+      # Inflate income from 2024 to 2025 dollars for display
+      income = income * inflation_factor
     )
 
   # Post-substitution distribution (same formula, different base PCE)
@@ -94,7 +97,8 @@ calculate_distribution <- function(price_results, inputs) {
     mutate(
       pce_effect = post_sub_pce * pce_variation,
       pct_of_income = pce_effect * scaling_factor * 100,
-      cost_per_hh = -1 * (pct_of_income / 100) * income * inflation_factor
+      cost_per_hh = -1 * (pct_of_income / 100) * income,
+      income = income * inflation_factor
     )
 
   message('  Using dynamic calculation: base_pce × pce_variation × scaling_factor')
