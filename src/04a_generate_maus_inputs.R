@@ -17,49 +17,34 @@
 
 library(tidyverse)
 
-#' Load daily VIX data and compute quarterly averages
+#' Load quarterly VIX data from config file
 #'
-#' @param vix_file Path to daily VIX CSV file
+#' @param vix_file Path to quarterly VIX CSV file
 #' @param start_date Start date for shock period
 #' @param n_quarters Number of quarters to generate
 #'
 #' @return Tibble with quarter dates and VIX values
-compute_quarterly_vix <- function(vix_file, start_date, n_quarters = 44) {
+load_quarterly_vix <- function(vix_file, start_date, n_quarters = 44) {
 
   if (!file.exists(vix_file)) {
     stop('VIX data file not found: ', vix_file)
   }
 
-  daily_vix <- read_csv(vix_file, show_col_types = FALSE) %>%
-    mutate(date = as.Date(date))
+  # Load exogenous quarterly VIX values
+  vix_data <- read_csv(vix_file, show_col_types = FALSE)
 
   # Generate quarterly date sequence
   quarters <- tibble(
     quarter_start = seq(as.Date(start_date), by = 'quarter', length.out = n_quarters)
   ) %>%
     mutate(
-      quarter_end = lead(quarter_start, default = max(quarter_start) + 90) - 1,
       year = year(quarter_start),
       quarter = quarter(quarter_start)
     )
 
-  # Compute quarterly averages
+  # Join with VIX data (will be NA for quarters not in file)
   quarterly_vix <- quarters %>%
-    rowwise() %>%
-    mutate(
-      vix = {
-        period_data <- daily_vix %>%
-          filter(date >= quarter_start, date <= quarter_end)
-        if (nrow(period_data) > 0) {
-          mean(period_data$vix)
-        } else {
-          NA_real_
-        }
-      }
-    ) %>%
-    ungroup()
-
-  # Leave VIX as NA for quarters without data (no fill forward)
+    left_join(vix_data, by = c('year', 'quarter'))
 
   return(quarterly_vix)
 }
@@ -157,13 +142,13 @@ generate_maus_inputs <- function(etr_results, inputs, scenario) {
   message(sprintf('    Post-sub ETR: %.2f%%', post_sub_etr * 100))
 
   # -------------------------------------------------------------------------
-  # Compute VIX quarterly series
+  # Load VIX quarterly series
   # -------------------------------------------------------------------------
 
-  vix_file <- 'resources/vix/daily_vix.csv'
-  quarterly_vix <- compute_quarterly_vix(vix_file, start_date, n_quarters)
+  vix_file <- 'resources/vix/quarterly_vix.csv'
+  quarterly_vix <- load_quarterly_vix(vix_file, start_date, n_quarters)
 
-  message(sprintf('    Computed VIX for %d quarters', nrow(quarterly_vix)))
+  message(sprintf('    Loaded VIX for %d quarters', nrow(quarterly_vix)))
 
   # -------------------------------------------------------------------------
   # Compute UTFIBC shock series
