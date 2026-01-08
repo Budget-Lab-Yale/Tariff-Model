@@ -1,4 +1,4 @@
-# Yale Budget Lab Tariff Model
+# The Budget Lab's Tariff Model
 
 An R-based pipeline that automates tariff impact analysis, calculating effective tariff rates (ETRs), consumer price effects, revenue estimates, and macroeconomic impacts.
 
@@ -24,31 +24,29 @@ Rscript run.R 11-17
 
 ## Workflow
 
-The model requires MAUS to be run externally, so you run it twice:
+The model pauses after generating MAUS shocks so you can run MAUS and drop in the
+results, then it continues in the same run.
 
 ```bash
-# First run - generates MAUS inputs, then stops
-Rscript run.R 11-17
-
-# Run MAUS externally with the generated shocks...
-
-# Second run - completes the model
 Rscript run.R 11-17
 ```
 
 ### MAUS Integration
 
-After the first run:
+When the run pauses:
 1. Find the generated shocks at: `output/{scenario}/maus_inputs/shocks.csv`
 2. Run MAUS with those inputs
 3. Save MAUS output to: `config/scenarios/{scenario}/maus_outputs/quarterly.csv`
-4. Run the model again - it will detect the MAUS output and continue
+4. Return to the terminal and press Enter to continue
+
+If `config/scenarios/{scenario}/maus_outputs/quarterly.csv` already exists, the
+model skips the pause and continues.
 
 Required MAUS output columns:
 - `year`, `quarter`
-- `gdp_baseline`, `gdp_tariff`
-- `employment_baseline`, `employment_tariff`
-- `urate_baseline`, `urate_tariff`
+- `GDP` (real GDP, billions)
+- `LEB` (employment, millions)
+- `LURC` (unemployment rate, %)
 
 ## Scenarios
 
