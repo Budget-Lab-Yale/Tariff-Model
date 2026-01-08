@@ -113,8 +113,16 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
 
   cat(msg)
 
-  # Stop execution - user must run MAUS and then re-run the model
-  stop('Run MAUS and save output, then run this script again.')
+  # Wait for user to run MAUS and save output
+
+  readline(prompt = 'Press [Enter] when MAUS output file is ready...')
+
+  # Verify the file now exists
+  if (!file.exists(maus_output_file)) {
+    stop('MAUS output file still not found: ', maus_output_file)
+  }
+
+  message('  MAUS output file found, continuing...')
 }
 
 
