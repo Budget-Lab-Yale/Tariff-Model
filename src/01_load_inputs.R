@@ -5,6 +5,60 @@
 # Source GTAP file reader
 source('src/read_gtap.R')
 
+#' Load and merge MAUS scenario data with baseline
+#'
+#' Reads scenario-specific MAUS output (tariff values) and joins with baseline.
+#' MAUS uses column names: GDP, LEB (employment), LURC (unemployment rate)
+#' These are mapped to internal names: gdp_tariff, employment_tariff, urate_tariff
+#'
+#' @param scenario_file Path to scenario MAUS output file
+#' @param baseline_data Baseline MAUS data (from load_baselines())
+#' @return Tibble with both baseline and tariff columns
+load_maus_scenario <- function(scenario_file, baseline_data) {
+
+  if (!file.exists(scenario_file)) {
+    stop('MAUS scenario file not found: ', scenario_file)
+  }
+
+  # Read scenario data with MAUS column names
+  scenario_raw <- read_csv(scenario_file, show_col_types = FALSE)
+
+  # Validate required columns (MAUS native names)
+  required_cols <- c('year', 'quarter', 'GDP', 'LEB', 'LURC')
+  missing_cols <- setdiff(required_cols, names(scenario_raw))
+  if (length(missing_cols) > 0) {
+    stop('Missing required columns in MAUS output: ', paste(missing_cols, collapse = ', '),
+         '\n  Expected columns: year, quarter, GDP, LEB, LURC')
+  }
+
+  # Map MAUS column names to internal names for tariff values
+  scenario_data <- scenario_raw %>%
+    rename(
+      gdp_tariff = GDP,
+      employment_tariff = LEB,
+      urate_tariff = LURC
+    )
+
+  # Join with baseline data
+  maus_combined <- baseline_data %>%
+    left_join(
+      scenario_data %>% select(year, quarter, gdp_tariff, employment_tariff, urate_tariff),
+      by = c('year', 'quarter')
+    )
+
+  # Validate join worked
+  if (any(is.na(maus_combined$gdp_tariff))) {
+    missing_quarters <- maus_combined %>%
+      filter(is.na(gdp_tariff)) %>%
+      mutate(yq = paste0(year, 'Q', quarter)) %>%
+      pull(yq)
+    stop('Missing tariff data for quarters: ', paste(missing_quarters, collapse = ', '))
+  }
+
+  return(maus_combined)
+}
+
+
 #' Load global assumptions (applies to all scenarios)
 #'
 #' @return List containing global assumption parameters
@@ -90,6 +144,23 @@ load_baselines <- function() {
     message('  Loaded import baseline (dollars)')
   } else {
     stop('Import baseline (dollars) file not found: ', import_baseline_file)
+  }
+
+  # MAUS baseline (GDP, employment, unemployment rate)
+  maus_baseline_file <- 'resources/baselines/maus_baseline.csv'
+  if (file.exists(maus_baseline_file)) {
+    maus_raw <- read_csv(maus_baseline_file, show_col_types = FALSE)
+    # Map MAUS column names to internal names
+    # MAUS uses: GDP, LEB (employment), LURC (unemployment rate)
+    baselines$maus <- maus_raw %>%
+      rename(
+        gdp_baseline = GDP,
+        employment_baseline = LEB,
+        urate_baseline = LURC
+      )
+    message(sprintf('  Loaded MAUS baseline: %d quarters', nrow(baselines$maus)))
+  } else {
+    stop('MAUS baseline file not found: ', maus_baseline_file)
   }
 
   return(baselines)
@@ -239,7 +310,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     if (!file.exists(maus_file)) {
       stop('MAUS results not found: ', maus_file)
     }
-    inputs$maus <- read_csv(maus_file, show_col_types = FALSE)
+    inputs$maus <- load_maus_scenario(maus_file, inputs$baselines$maus)
     message(sprintf('  Loaded MAUS results: %d rows', nrow(inputs$maus)))
   } else {
     message('  Skipping MAUS load (will be loaded after shock generation)')

@@ -32,20 +32,15 @@ source('src/11_write_outputs.R')
 
 #' Load MAUS output levels after user runs MAUS
 #' @param scenario_dir Path to scenario directory
-#' @return Tibble with MAUS quarterly data
-load_maus_levels <- function(scenario_dir) {
+#' @param maus_baseline Baseline MAUS data (from inputs$baselines$maus)
+#' @return Tibble with MAUS quarterly data (baseline + tariff)
+load_maus_levels <- function(scenario_dir, maus_baseline) {
   maus_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
   if (!file.exists(maus_file)) {
     stop('MAUS output file not found: ', maus_file)
   }
-  maus <- read_csv(maus_file, show_col_types = FALSE)
-  required_cols <- c('year', 'quarter', 'gdp_baseline', 'gdp_tariff',
-                     'employment_baseline', 'employment_tariff',
-                     'urate_baseline', 'urate_tariff')
-  missing_cols <- setdiff(required_cols, names(maus))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in MAUS output: ', paste(missing_cols, collapse = ', '))
-  }
+  # Use shared loader that merges scenario data with baseline
+  maus <- load_maus_scenario(maus_file, maus_baseline)
   message(sprintf('  Loaded MAUS output: %d quarters', nrow(maus)))
   return(maus)
 }
@@ -80,9 +75,15 @@ NEXT STEPS:
      ', maus_output_file, '
 
 REQUIRED OUTPUT FORMAT (CSV with columns):
-  year, quarter, gdp_baseline, gdp_tariff,
-  employment_baseline, employment_tariff,
-  urate_baseline, urate_tariff
+  year, quarter, GDP, LEB, LURC
+
+  Column mapping:
+    GDP  = Real GDP (billions)
+    LEB  = Employment (millions)
+    LURC = Unemployment rate (%)
+
+  NOTE: Only include tariff scenario values.
+        Baseline values are loaded from resources/baselines/maus_baseline.csv
 
 ===========================================================
 
@@ -193,7 +194,7 @@ Step 4a: Generating MAUS input shocks...')
   # Load MAUS output levels
   message('
 Loading MAUS output levels...')
-  inputs$maus <- load_maus_levels(scenario_dir)
+  inputs$maus <- load_maus_levels(scenario_dir, inputs$baselines$maus)
 
   # Step 4: Calculate revenue
   #---------------------------
