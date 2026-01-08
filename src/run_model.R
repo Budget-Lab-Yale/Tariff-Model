@@ -10,8 +10,10 @@
 #
 # =============================================================================
 
-library(tidyverse)
-library(yaml)
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(yaml)
+})
 
 # Source helper modules
 source('src/00_run_tariff_etrs.R')
