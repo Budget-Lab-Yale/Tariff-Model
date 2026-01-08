@@ -58,6 +58,14 @@ wait_for_maus <- function(maus_inputs, scenario_dir) {
     return()
   }
 
+  # Get date range from shock data
+  shocks <- maus_inputs$shocks
+  start_year <- min(shocks$year)
+  start_qtr <- shocks$quarter[shocks$year == start_year][1]
+  end_year <- max(shocks$year)
+  end_qtr <- shocks$quarter[shocks$year == end_year]
+  end_qtr <- end_qtr[length(end_qtr)]
+
   cat('
 ===========================================================
 MAUS INPUT REQUIRED
@@ -81,6 +89,9 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
     GDP  = Real GDP (billions)
     LEB  = Employment (millions)
     LURC = Unemployment rate (%)
+
+  DATE RANGE: ', start_year, ' Q', start_qtr, ' through ', end_year, ' Q', end_qtr, '
+              (', maus_inputs$n_quarters, ' quarters total)
 
   NOTE: Only include tariff scenario values.
         Baseline values are loaded from resources/baselines/maus_baseline.csv
