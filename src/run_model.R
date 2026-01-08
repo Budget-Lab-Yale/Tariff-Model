@@ -73,7 +73,7 @@ wait_for_maus <- function(maus_inputs, scenario_dir) {
     pull(row) %>%
     paste(collapse = '\n')
 
-  cat('
+  msg <- sprintf('
 ===========================================================
 MAUS INPUT REQUIRED
 ===========================================================
@@ -81,13 +81,13 @@ MAUS INPUT REQUIRED
 The model has generated MAUS input shocks.
 
 INPUT FILE (shocks for MAUS):
-  ', maus_inputs$output_file, '
+  %s
 
 NEXT STEPS:
   1. Open MAUS and load the shock series from the file above
   2. Run MAUS to generate quarterly GDP/employment projections
   3. Save MAUS output to:
-     ', maus_output_file, '
+     %s
 
 REQUIRED OUTPUT FORMAT (CSV with columns):
   year, quarter, GDP, LEB, LURC
@@ -99,16 +99,19 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
 
   Example (first rows should look like):
   year,quarter,GDP,LEB,LURC
-', example_rows, '
+%s
   ...
-  (', maus_inputs$n_quarters, ' quarters total, through ', end_year, ' Q', end_qtr, ')
+  (%d quarters total, through %d Q%d)
 
   NOTE: Only include tariff scenario values.
         Baseline values are loaded from resources/baselines/maus_baseline.csv
 
 ===========================================================
 
-')
+', maus_inputs$output_file, maus_output_file, example_rows,
+   maus_inputs$n_quarters, end_year, end_qtr)
+
+  cat(msg)
 
   # Stop execution - user must run MAUS and then re-run the model
   stop('Run MAUS and save output, then run this script again.')
