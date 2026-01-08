@@ -332,18 +332,10 @@ Loading MAUS output levels...')
   message(sprintf('Pre-sub price increase:         %.3f%%', price_results$pre_sub_price_increase))
   message(sprintf('Post-sub price increase:        %.3f%%', price_results$post_sub_price_increase))
 
-  # Use distribution results for per-HH cost if available (more accurate)
+  # Per-HH costs come from distribution calculation (matches Excel methodology)
   if (!is.null(distribution_results)) {
-    if (!is.null(distribution_results$pre_sub)) {
-      message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub$avg_per_hh_cost)))
-      message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub$avg_per_hh_cost)))
-    } else {
-      message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$avg_per_hh_cost)))
-      message(sprintf('Post-sub per-HH cost:           $%.0f (approx)', abs(price_results$post_sub_per_hh_cost)))
-    }
-  } else {
-    message(sprintf('Pre-sub per-HH cost:            $%.0f (approx)', price_results$pre_sub_per_hh_cost))
-    message(sprintf('Post-sub per-HH cost:           $%.0f (approx)', abs(price_results$post_sub_per_hh_cost)))
+    message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub_per_hh_cost)))
+    message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub_per_hh_cost)))
   }
   message(sprintf('10-yr conventional revenue:     $%.0fB', revenue_results$conventional_10yr))
   if (!is.null(dynamic_results)) {
