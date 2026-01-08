@@ -66,6 +66,13 @@ wait_for_maus <- function(maus_inputs, scenario_dir) {
   end_qtr <- shocks$quarter[shocks$year == end_year]
   end_qtr <- end_qtr[length(end_qtr)]
 
+  # Build example rows from first few quarters
+  example_rows <- shocks %>%
+    head(4) %>%
+    mutate(row = sprintf('  %d,%d,<GDP>,<LEB>,<LURC>', year, quarter)) %>%
+    pull(row) %>%
+    paste(collapse = '\n')
+
   cat('
 ===========================================================
 MAUS INPUT REQUIRED
@@ -90,8 +97,11 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
     LEB  = Employment (millions)
     LURC = Unemployment rate (%)
 
-  DATE RANGE: ', start_year, ' Q', start_qtr, ' through ', end_year, ' Q', end_qtr, '
-              (', maus_inputs$n_quarters, ' quarters total)
+  Example (first rows should look like):
+  year,quarter,GDP,LEB,LURC
+', example_rows, '
+  ...
+  (', maus_inputs$n_quarters, ' quarters total, through ', end_year, ' Q', end_qtr, ')
 
   NOTE: Only include tariff scenario values.
         Baseline values are loaded from resources/baselines/maus_baseline.csv
