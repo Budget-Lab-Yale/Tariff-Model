@@ -59,11 +59,7 @@ compute_quarterly_vix <- function(vix_file, start_date, n_quarters = 44) {
     ) %>%
     ungroup()
 
-  # Fill forward any missing VIX values (for quarters without data)
-  quarterly_vix <- quarterly_vix %>%
-    fill(vix, .direction = 'down') %>%
-    # If still NA at start, fill backward
-    fill(vix, .direction = 'up')
+  # Leave VIX as NA for quarters without data (no fill forward)
 
   return(quarterly_vix)
 }
