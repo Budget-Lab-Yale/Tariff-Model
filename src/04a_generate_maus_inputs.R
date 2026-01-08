@@ -129,7 +129,7 @@ generate_maus_inputs <- function(etr_results, inputs, scenario) {
   maus_params <- inputs$model_params$maus %||% list()
 
   start_date <- maus_params$start_date %||% '2024-07-01'
-  n_quarters <- maus_params$n_quarters %||% 44
+  n_quarters <- maus_params$n_quarters %||% 46
   baseline_utfibc <- maus_params$baseline_utfibc %||% 3.0
   shock_start_quarter <- maus_params$shock_start_quarter %||% 4
   interpolation_quarters <- maus_params$interpolation_quarters %||% 12
