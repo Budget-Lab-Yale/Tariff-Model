@@ -1,4 +1,4 @@
-# Yale Budget Lab Tariff Model
+# The Budget Lab's Tariff Model
 
 An R-based pipeline that automates tariff impact analysis, calculating effective tariff rates (ETRs), consumer price effects, revenue estimates, and macroeconomic impacts.
 
