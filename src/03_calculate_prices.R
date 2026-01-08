@@ -1,7 +1,7 @@
 # =============================================================================
 # 03_calculate_prices.R - Calculate consumer price effects
 # =============================================================================
-# Calculates the impact of tariffs on consumer prices and per-household costs.
+# Calculates the impact of tariffs on consumer prices.
 #
 # Source: ricco_price_effects_and_etr sheet in Excel model (cells E24-E25)
 #
@@ -11,6 +11,9 @@
 #
 # For post-substitution, goods_share and import_share are adjusted using
 # GTAP trade flow data.
+#
+# Note: Per-household costs are calculated separately in 09_calculate_distribution.R
+# using the Excel methodology (average of per-decile costs from F6 Distribution).
 
 library(tidyverse)
 
@@ -102,30 +105,17 @@ calculate_prices <- function(etr_results, inputs) {
   )
 
   # -------------------------------------------------------------------------
-  # Calculate per-household costs
-  # -------------------------------------------------------------------------
-  # From F6 Distribution sheet - uses a scaling factor based on average
-  # household income/expenditure
-
-  # Approximate scaling factor from Excel (I24 value)
-  # This should be calibrated to match the distribution calculations
-  HH_SCALING_FACTOR <- -135000  # Approximate $/percentage point
-
-  pre_sub_per_hh <- pre_sub_price * HH_SCALING_FACTOR
-  post_sub_per_hh <- post_sub_price * HH_SCALING_FACTOR
-
-  # -------------------------------------------------------------------------
   # Compile results
   # -------------------------------------------------------------------------
+  # Note: Per-household costs are calculated in 09_calculate_distribution.R
+  # using the Excel methodology (average of per-decile costs from F6 Distribution).
+  # This matches how Excel Key Results B13/B15 pull from F6 Distribution via
+  # ricco_price_effects_and_etr!I24/I25.
 
   results <- list(
     # Price increases (as percentage points)
     pre_sub_price_increase = pre_sub_price * 100,
     post_sub_price_increase = post_sub_price * 100,
-
-    # Per-household costs (negative = cost to households)
-    pre_sub_per_hh_cost = pre_sub_per_hh,
-    post_sub_per_hh_cost = post_sub_per_hh,
 
     # Parameters used
     params_used = list(
@@ -140,8 +130,6 @@ calculate_prices <- function(etr_results, inputs) {
 
   message(sprintf('  Pre-sub price increase: %.3f%%', pre_sub_price * 100))
   message(sprintf('  Post-sub price increase: %.3f%%', post_sub_price * 100))
-  message(sprintf('  Pre-sub per-HH cost: $%.0f', pre_sub_per_hh))
-  message(sprintf('  Post-sub per-HH cost: $%.0f', post_sub_per_hh))
 
   return(results)
 }

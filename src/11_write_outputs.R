@@ -42,11 +42,13 @@ write_outputs <- function(results, scenario) {
     add_row(metric = 'post_sub_etr_increase', value = results$etr$post_sub_increase, unit = 'pct')
 
   # Prices
+  # Per-HH costs come from distribution calculation (matches Excel: Key Results B13/B15
+  # pull from F6 Distribution via ricco_price_effects_and_etr!I24/I25)
   key_results <- key_results %>%
     add_row(metric = 'pre_sub_price_increase', value = results$prices$pre_sub_price_increase, unit = 'pct') %>%
     add_row(metric = 'post_sub_price_increase', value = results$prices$post_sub_price_increase, unit = 'pct') %>%
-    add_row(metric = 'pre_sub_per_hh_cost', value = abs(results$prices$pre_sub_per_hh_cost), unit = 'dollars') %>%
-    add_row(metric = 'post_sub_per_hh_cost', value = abs(results$prices$post_sub_per_hh_cost), unit = 'dollars')
+    add_row(metric = 'pre_sub_per_hh_cost', value = abs(results$distribution$pre_sub_per_hh_cost), unit = 'dollars') %>%
+    add_row(metric = 'post_sub_per_hh_cost', value = abs(results$distribution$post_sub_per_hh_cost), unit = 'dollars')
 
   # Revenue
   key_results <- key_results %>%
@@ -67,10 +69,7 @@ write_outputs <- function(results, scenario) {
     add_row(metric = 'payroll_2025_q4', value = results$macro$payroll_2025, unit = 'thousands') %>%
     add_row(metric = 'payroll_2026_q4', value = results$macro$payroll_2026, unit = 'thousands')
 
-  # Distribution
-  key_results <- key_results %>%
-    add_row(metric = 'avg_per_hh_cost', value = abs(results$distribution$avg_per_hh_cost), unit = 'dollars') %>%
-    add_row(metric = 'regressivity_ratio', value = results$distribution$regressivity$burden_ratio, unit = 'ratio')
+  # Distribution (avg_per_hh_cost removed - now reported as pre_sub_per_hh_cost above)
 
   # Products
   key_results <- key_results %>%

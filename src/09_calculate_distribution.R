@@ -52,12 +52,14 @@ calculate_distribution <- function(price_results, inputs) {
   }
 
   # -------------------------------------------------------------------------
-  # Get base price effect from actual tariff calculation
+  # Get base price effects from actual tariff calculation (pre and post-sub)
   # -------------------------------------------------------------------------
 
-  base_pce <- price_results$pre_sub_price_increase / 100  # Convert to decimal
+  pre_sub_pce <- price_results$pre_sub_price_increase / 100  # Convert to decimal
+  post_sub_pce <- price_results$post_sub_price_increase / 100  # Convert to decimal
 
-  message(sprintf('  Base PCE effect from tariff calc: %.4f%%', base_pce * 100))
+  message(sprintf('  Pre-sub PCE effect: %.4f%%', pre_sub_pce * 100))
+  message(sprintf('  Post-sub PCE effect: %.4f%%', post_sub_pce * 100))
 
   # -------------------------------------------------------------------------
   # Calculate per-decile impacts using dynamic formula
@@ -65,11 +67,11 @@ calculate_distribution <- function(price_results, inputs) {
   # Formula: PCE_d = base_pce × pce_variation_d
   #          Cost_d = PCE_d × scaling_factor_d × income_d
 
-  # Dynamic calculation using variation factors
+  # Dynamic calculation using variation factors (pre-substitution)
   distribution <- decile_params %>%
     mutate(
       # Per-decile PCE effect (varies by consumption basket)
-      pce_effect = base_pce * pce_variation,
+      pce_effect = pre_sub_pce * pce_variation,
 
       # Scaled effect as percentage of after-tax income
       pct_of_income = pce_effect * scaling_factor * 100,
@@ -77,39 +79,53 @@ calculate_distribution <- function(price_results, inputs) {
       # Dollar cost per household (negative = cost to household)
       cost_per_hh = -1 * (pct_of_income / 100) * income
     )
+
+  # Post-substitution distribution (same formula, different base PCE)
+  distribution_post <- decile_params %>%
+    mutate(
+      pce_effect = post_sub_pce * pce_variation,
+      pct_of_income = pce_effect * scaling_factor * 100,
+      cost_per_hh = -1 * (pct_of_income / 100) * income
+    )
+
   message('  Using dynamic calculation: base_pce × pce_variation × scaling_factor')
 
   # -------------------------------------------------------------------------
   # Calculate summary statistics
   # -------------------------------------------------------------------------
 
-  # Simple average across deciles (matches Excel AVERAGE(B23:K23))
-  avg_cost <- mean(distribution$cost_per_hh)
+  # Simple average across deciles (matches Excel AVERAGE(B23:K23) in F6 Distribution)
+  # This is what Key Results per-HH cost should use (via ricco_price_effects_and_etr!I24)
+  pre_sub_avg_cost <- mean(distribution$cost_per_hh)
+  post_sub_avg_cost <- mean(distribution_post$cost_per_hh)
 
   # Median cost (decile 5-6 midpoint approximation)
-  median_cost <- (distribution$cost_per_hh[5] + distribution$cost_per_hh[6]) / 2
+  pre_sub_median_cost <- (distribution$cost_per_hh[5] + distribution$cost_per_hh[6]) / 2
+  post_sub_median_cost <- (distribution_post$cost_per_hh[5] + distribution_post$cost_per_hh[6]) / 2
 
-  message(sprintf('  Average per-HH cost: $%.0f', avg_cost))
-  message(sprintf('  Median per-HH cost: $%.0f', median_cost))
+  message(sprintf('  Pre-sub average per-HH cost: $%.0f', pre_sub_avg_cost))
+  message(sprintf('  Post-sub average per-HH cost: $%.0f', post_sub_avg_cost))
 
   # -------------------------------------------------------------------------
   # Compile results
   # -------------------------------------------------------------------------
 
   results <- list(
-    # Distribution by decile
+    # Distribution by decile (pre-substitution, for detailed output)
     by_decile = distribution %>%
       select(decile, income, pct_of_income, cost_per_hh),
-    avg_per_hh_cost = avg_cost,
-    median_per_hh_cost = median_cost,
 
-    # Regressivity measures
-    regressivity = list(
-      # Ratio of decile 1 burden to decile 10 burden (as % of income)
-      burden_ratio = distribution$pct_of_income[1] / distribution$pct_of_income[10],
-      # Difference in percentage points
-      burden_diff_pp = distribution$pct_of_income[1] - distribution$pct_of_income[10]
-    )
+    # Pre-substitution per-HH costs (matches Excel Key Results B13)
+    pre_sub_per_hh_cost = pre_sub_avg_cost,
+    pre_sub_median_cost = pre_sub_median_cost,
+
+    # Post-substitution per-HH costs (matches Excel Key Results B15)
+    post_sub_per_hh_cost = post_sub_avg_cost,
+    post_sub_median_cost = post_sub_median_cost,
+
+    # Legacy field for backwards compatibility
+    avg_per_hh_cost = pre_sub_avg_cost,
+    median_per_hh_cost = pre_sub_median_cost
   )
 
   # Print distribution summary
@@ -123,9 +139,6 @@ calculate_distribution <- function(price_results, inputs) {
                     distribution$pct_of_income[i],
                     format(round(distribution$cost_per_hh[i]), big.mark = ',', scientific = FALSE)))
   }
-
-  message(sprintf('\n  Regressivity: Decile 1 pays %.1fx the rate of Decile 10',
-                  results$regressivity$burden_ratio))
 
   return(results)
 }
