@@ -95,7 +95,7 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
   Column mapping:
     GDP  = Real GDP (billions)
     LEB  = Employment (millions)
-    LURC = Unemployment rate (%)
+    LURC = Unemployment rate (%%)
 
   Example (first rows should look like):
   year,quarter,GDP,LEB,LURC
