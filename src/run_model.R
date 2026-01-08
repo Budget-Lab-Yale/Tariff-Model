@@ -114,8 +114,8 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
   cat(msg)
 
   # Wait for user to run MAUS and save output
-
-  readline(prompt = 'Press [Enter] when MAUS output file is ready...')
+  cat('Press [Enter] when MAUS output file is ready...')
+  readLines(con = 'stdin', n = 1)
 
   # Verify the file now exists
   if (!file.exists(maus_output_file)) {
