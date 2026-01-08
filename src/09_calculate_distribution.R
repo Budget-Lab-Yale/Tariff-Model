@@ -52,6 +52,14 @@ calculate_distribution <- function(price_results, inputs) {
   }
 
   # -------------------------------------------------------------------------
+  # Get inflation adjustment factor (convert 2024 dollars to 2025 dollars)
+  # -------------------------------------------------------------------------
+
+  inflation_factor <- 1 + (inputs$assumptions$inflation_2024_to_2025 %||% 0)
+  message(sprintf('  Inflation adjustment: %.1f%% (2024 -> 2025 dollars)',
+                  (inflation_factor - 1) * 100))
+
+  # -------------------------------------------------------------------------
   # Get base price effects from actual tariff calculation (pre and post-sub)
   # -------------------------------------------------------------------------
 
@@ -68,6 +76,7 @@ calculate_distribution <- function(price_results, inputs) {
   #          Cost_d = PCE_d × scaling_factor_d × income_d
 
   # Dynamic calculation using variation factors (pre-substitution)
+  # Dollar amounts adjusted from 2024 to 2025 dollars using inflation factor
   distribution <- decile_params %>%
     mutate(
       # Per-decile PCE effect (varies by consumption basket)
@@ -76,8 +85,8 @@ calculate_distribution <- function(price_results, inputs) {
       # Scaled effect as percentage of after-tax income
       pct_of_income = pce_effect * scaling_factor * 100,
 
-      # Dollar cost per household (negative = cost to household)
-      cost_per_hh = -1 * (pct_of_income / 100) * income
+      # Dollar cost per household (negative = cost to household, in 2025 dollars)
+      cost_per_hh = -1 * (pct_of_income / 100) * income * inflation_factor
     )
 
   # Post-substitution distribution (same formula, different base PCE)
@@ -85,7 +94,7 @@ calculate_distribution <- function(price_results, inputs) {
     mutate(
       pce_effect = post_sub_pce * pce_variation,
       pct_of_income = pce_effect * scaling_factor * 100,
-      cost_per_hh = -1 * (pct_of_income / 100) * income
+      cost_per_hh = -1 * (pct_of_income / 100) * income * inflation_factor
     )
 
   message('  Using dynamic calculation: base_pce × pce_variation × scaling_factor')
@@ -103,8 +112,8 @@ calculate_distribution <- function(price_results, inputs) {
   pre_sub_median_cost <- (distribution$cost_per_hh[5] + distribution$cost_per_hh[6]) / 2
   post_sub_median_cost <- (distribution_post$cost_per_hh[5] + distribution_post$cost_per_hh[6]) / 2
 
-  message(sprintf('  Pre-sub average per-HH cost: $%.0f', pre_sub_avg_cost))
-  message(sprintf('  Post-sub average per-HH cost: $%.0f', post_sub_avg_cost))
+  message(sprintf('  Pre-sub average per-HH cost: $%.0f (2025 dollars)', pre_sub_avg_cost))
+  message(sprintf('  Post-sub average per-HH cost: $%.0f (2025 dollars)', post_sub_avg_cost))
 
   # -------------------------------------------------------------------------
   # Compile results
@@ -129,7 +138,7 @@ calculate_distribution <- function(price_results, inputs) {
   )
 
   # Print distribution summary
-  message('\n  Distribution by decile (pre-substitution):')
+  message('\n  Distribution by decile (pre-substitution, 2025 dollars):')
   message('  Decile | Income     | % of Income | Cost/HH')
   message('  -------|------------|-------------|--------')
   for (i in 1:10) {
