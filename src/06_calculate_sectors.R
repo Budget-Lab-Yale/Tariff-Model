@@ -50,44 +50,25 @@ calculate_sectors <- function(inputs) {
   message('  Processing ', nrow(sector_data), ' sectors')
 
   # -------------------------------------------------------------------------
-  # Calculate aggregate sector effects
+  # Calculate aggregate sector effects (weighted average by output baseline)
   # -------------------------------------------------------------------------
 
-  # Helper function for weighted average
-  weighted_avg <- function(data) {
-    if (nrow(data) == 0) {
-      stop('No rows available to calculate sector weighted average')
-    }
-    if (sum(data$output_baseline) == 0) {
-      stop('output_baseline sums to 0 for sector weighted average')
-    }
-    sum(data$output_baseline * data$output_pct_change) / sum(data$output_baseline)
-  }
+  sector_effects <- sector_data %>%
+    group_by(aggregate_sector) %>%
+    summarise(
+      effect = sum(output_baseline * output_pct_change) / sum(output_baseline),
+      .groups = 'drop'
+    )
 
-  # Main aggregate sectors
-  agriculture <- sector_data %>%
-    filter(aggregate_sector == 'Agriculture') %>%
-    weighted_avg()
+  # Extract individual sector effects
+  get_effect <- function(sector) sector_effects$effect[sector_effects$aggregate_sector == sector]
 
-  mining <- sector_data %>%
-    filter(aggregate_sector == 'Mining') %>%
-    weighted_avg()
-
-  manufacturing <- sector_data %>%
-    filter(aggregate_sector == 'Manufacturing') %>%
-    weighted_avg()
-
-  utilities <- sector_data %>%
-    filter(aggregate_sector == 'Utilities') %>%
-    weighted_avg()
-
-  construction <- sector_data %>%
-    filter(aggregate_sector == 'Construction') %>%
-    weighted_avg()
-
-  services <- sector_data %>%
-    filter(aggregate_sector == 'Services') %>%
-    weighted_avg()
+  agriculture <- get_effect('Agriculture')
+  mining <- get_effect('Mining')
+  manufacturing <- get_effect('Manufacturing')
+  utilities <- get_effect('Utilities')
+  construction <- get_effect('Construction')
+  services <- get_effect('Services')
 
   # -------------------------------------------------------------------------
   # Manufacturing subcategories
@@ -108,13 +89,18 @@ calculate_sectors <- function(inputs) {
   mfg_data <- sector_data %>%
     filter(aggregate_sector == 'Manufacturing')
 
+  # Helper for manufacturing subcategories (inline weighted average)
+  calc_weighted_avg <- function(data) {
+    sum(data$output_baseline * data$output_pct_change) / sum(data$output_baseline)
+  }
+
   durable <- mfg_data %>%
     filter(is_durable == 1) %>%
-    weighted_avg()
+    calc_weighted_avg()
 
   nondurable <- mfg_data %>%
     filter(is_nondurable == 1) %>%
-    weighted_avg()
+    calc_weighted_avg()
 
   # Advanced manufacturing is just electronics (ele)
   advanced <- mfg_data %>%
@@ -131,7 +117,7 @@ calculate_sectors <- function(inputs) {
     overall_gdp <- inputs$qgdp['usa']
   } else {
     # Fallback to weighted average if qgdp not available
-    overall_gdp <- weighted_avg(sector_data)
+    overall_gdp <- calc_weighted_avg(sector_data)
   }
 
   # -------------------------------------------------------------------------

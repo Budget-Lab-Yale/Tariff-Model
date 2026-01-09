@@ -49,73 +49,37 @@ calculate_macro <- function(inputs) {
   message(sprintf('  Processing %d quarters of MAUS data', nrow(maus)))
 
   # -------------------------------------------------------------------------
-  # Helper function to get Q4 data
+  # Extract Q4 data for key years and compute all metrics
   # -------------------------------------------------------------------------
 
-  get_q4 <- function(data, yr) {
-    data %>%
-      filter(year == yr, quarter == 4) %>%
-      slice(1)
-  }
+  q4_data <- maus %>%
+    filter(quarter == 4, year %in% c(2024, 2025, 2026)) %>%
+    arrange(year)
 
-  # -------------------------------------------------------------------------
-  # Calculate GDP Q4-Q4 growth differential
-  # -------------------------------------------------------------------------
-  #
+  # GDP Q4-Q4 growth differential:
   # Formula: 100 * ((tariff_q4/tariff_q4_prior) / (base_q4/base_q4_prior) - 1)
-  # This measures the percent difference in Q4-to-Q4 GDP growth rates
-
   calc_gdp_q4q4 <- function(yr) {
-    q4_current <- get_q4(maus, yr)
-    q4_prior <- get_q4(maus, yr - 1)
-
-    if (nrow(q4_current) == 0 || nrow(q4_prior) == 0) {
-      return(NA_real_)
-    }
-
-    tariff_growth <- q4_current$gdp_tariff / q4_prior$gdp_tariff
-    base_growth <- q4_current$gdp_baseline / q4_prior$gdp_baseline
-
+    current <- q4_data %>% filter(year == yr)
+    prior <- q4_data %>% filter(year == yr - 1)
+    if (nrow(current) == 0 || nrow(prior) == 0) return(NA_real_)
+    tariff_growth <- current$gdp_tariff / prior$gdp_tariff
+    base_growth <- current$gdp_baseline / prior$gdp_baseline
     100 * (tariff_growth / base_growth - 1)
   }
 
   gdp_2025 <- calc_gdp_q4q4(2025)
   gdp_2026 <- calc_gdp_q4q4(2026)
 
-  # -------------------------------------------------------------------------
-  # Calculate unemployment rate changes
-  # -------------------------------------------------------------------------
-  #
-  # Simple difference: tariff_urate - baseline_urate at Q4
+  # Unemployment and payroll changes (simple differences at Q4)
+  q4_2025 <- q4_data %>% filter(year == 2025)
+  q4_2026 <- q4_data %>% filter(year == 2026)
 
-  calc_urate_change <- function(yr) {
-    q4 <- get_q4(maus, yr)
-    if (nrow(q4) == 0) {
-      return(NA_real_)
-    }
-    q4$urate_tariff - q4$urate_baseline
-  }
+  urate_2025 <- if (nrow(q4_2025) > 0) q4_2025$urate_tariff - q4_2025$urate_baseline else NA_real_
+  urate_2026 <- if (nrow(q4_2026) > 0) q4_2026$urate_tariff - q4_2026$urate_baseline else NA_real_
 
-  urate_2025 <- calc_urate_change(2025)
-  urate_2026 <- calc_urate_change(2026)
-
-  # -------------------------------------------------------------------------
-  # Calculate payroll changes (in thousands)
-  # -------------------------------------------------------------------------
-  #
-  # Employment is in millions, multiply by 1000 to get thousands
-  # Negative means job losses
-
-  calc_payroll_change <- function(yr) {
-    q4 <- get_q4(maus, yr)
-    if (nrow(q4) == 0) {
-      return(NA_real_)
-    }
-    1000 * (q4$employment_tariff - q4$employment_baseline)
-  }
-
-  payroll_2025 <- calc_payroll_change(2025)
-  payroll_2026 <- calc_payroll_change(2026)
+  # Employment in millions -> thousands
+  payroll_2025 <- if (nrow(q4_2025) > 0) 1000 * (q4_2025$employment_tariff - q4_2025$employment_baseline) else NA_real_
+  payroll_2026 <- if (nrow(q4_2026) > 0) 1000 * (q4_2026$employment_tariff - q4_2026$employment_baseline) else NA_real_
 
   # -------------------------------------------------------------------------
   # Build results

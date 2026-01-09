@@ -30,51 +30,46 @@ write_outputs <- function(results, scenario) {
   # Key Results Summary
   # ============================
 
-  key_results <- tibble(
-    metric = character(),
-    value = numeric(),
-    unit = character()
-  )
-
-  # ETR
-  key_results <- key_results %>%
-    add_row(metric = 'pre_sub_etr_increase', value = results$etr$pre_sub_increase, unit = 'pct') %>%
-    add_row(metric = 'post_sub_etr_increase', value = results$etr$post_sub_increase, unit = 'pct')
-
-  # Prices
   # Per-HH costs come from distribution calculation (matches Excel: Key Results B13/B15
   # pull from F6 Distribution via ricco_price_effects_and_etr!I24/I25)
-  key_results <- key_results %>%
-    add_row(metric = 'pre_sub_price_increase', value = results$prices$pre_sub_price_increase, unit = 'pct') %>%
-    add_row(metric = 'post_sub_price_increase', value = results$prices$post_sub_price_increase, unit = 'pct') %>%
-    add_row(metric = 'pre_sub_per_hh_cost', value = abs(results$distribution$pre_sub_per_hh_cost), unit = 'dollars') %>%
-    add_row(metric = 'post_sub_per_hh_cost', value = abs(results$distribution$post_sub_per_hh_cost), unit = 'dollars')
-
-  # Revenue
-  key_results <- key_results %>%
-    add_row(metric = 'gross_revenue_10yr', value = results$revenue$gross_10yr, unit = 'billions') %>%
-    add_row(metric = 'conventional_revenue_10yr', value = results$revenue$conventional_10yr, unit = 'billions')
-
-  # Dynamic revenue
-  key_results <- key_results %>%
-    add_row(metric = 'dynamic_effect_10yr', value = results$dynamic$dynamic_effect_10yr, unit = 'billions') %>%
-    add_row(metric = 'dynamic_revenue_10yr', value = results$dynamic$dynamic_10yr, unit = 'billions')
-
-  # Macro
-  key_results <- key_results %>%
-    add_row(metric = 'gdp_2025_q4q4', value = results$macro$gdp_2025, unit = 'pct') %>%
-    add_row(metric = 'gdp_2026_q4q4', value = results$macro$gdp_2026, unit = 'pct') %>%
-    add_row(metric = 'urate_2025_q4', value = results$macro$urate_2025, unit = 'pp') %>%
-    add_row(metric = 'urate_2026_q4', value = results$macro$urate_2026, unit = 'pp') %>%
-    add_row(metric = 'payroll_2025_q4', value = results$macro$payroll_2025, unit = 'thousands') %>%
-    add_row(metric = 'payroll_2026_q4', value = results$macro$payroll_2026, unit = 'thousands')
-
-  # Distribution (avg_per_hh_cost removed - now reported as pre_sub_per_hh_cost above)
-
-  # Products
-  key_results <- key_results %>%
-    add_row(metric = 'food_price_sr', value = results$products$food_sr, unit = 'pct') %>%
-    add_row(metric = 'food_price_lr', value = results$products$food_lr, unit = 'pct')
+  key_results <- tibble(
+    metric = c(
+      # ETR
+      'pre_sub_etr_increase', 'post_sub_etr_increase',
+      # Prices
+      'pre_sub_price_increase', 'post_sub_price_increase',
+      'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
+      # Revenue
+      'gross_revenue_10yr', 'conventional_revenue_10yr',
+      # Dynamic revenue
+      'dynamic_effect_10yr', 'dynamic_revenue_10yr',
+      # Macro
+      'gdp_2025_q4q4', 'gdp_2026_q4q4',
+      'urate_2025_q4', 'urate_2026_q4',
+      'payroll_2025_q4', 'payroll_2026_q4',
+      # Products
+      'food_price_sr', 'food_price_lr'
+    ),
+    value = c(
+      results$etr$pre_sub_increase, results$etr$post_sub_increase,
+      results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
+      abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
+      results$revenue$gross_10yr, results$revenue$conventional_10yr,
+      results$dynamic$dynamic_effect_10yr, results$dynamic$dynamic_10yr,
+      results$macro$gdp_2025, results$macro$gdp_2026,
+      results$macro$urate_2025, results$macro$urate_2026,
+      results$macro$payroll_2025, results$macro$payroll_2026,
+      results$products$food_sr, results$products$food_lr
+    ),
+    unit = c(
+      'pct', 'pct',
+      'pct', 'pct', 'dollars', 'dollars',
+      'billions', 'billions',
+      'billions', 'billions',
+      'pct', 'pct', 'pp', 'pp', 'thousands', 'thousands',
+      'pct', 'pct'
+    )
+  )
 
   write_csv(key_results, file.path(output_dir, 'key_results.csv'))
   message(sprintf('    key_results.csv (%d metrics)', nrow(key_results)))

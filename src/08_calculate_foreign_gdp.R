@@ -63,30 +63,16 @@ calculate_foreign_gdp <- function(inputs) {
   # Extract GDP effects by region
   # -------------------------------------------------------------------------
 
-  # Helper function to get GDP effect for a region
-  get_gdp_effect <- function(region_code) {
-    effect <- gdp_data %>%
-      filter(region == region_code) %>%
-      pull(gdp_pct_change)
+  # Region mapping: output name -> gtap region code
+  region_codes <- c(usa = 'usa', china = 'chn', canada = 'can', mexico = 'mex',
+                    eu = 'eu', uk = 'gbr', japan = 'jpn', fta = 'fta', row = 'row')
 
-    if (length(effect) == 0) {
-      stop('Missing GDP effect for region: ', region_code)
-    }
-    return(effect[1])
-  }
-
-  # Build results
-  results <- list(
-    usa = get_gdp_effect('usa'),
-    china = get_gdp_effect('chn'),
-    canada = get_gdp_effect('can'),
-    mexico = get_gdp_effect('mex'),
-    eu = get_gdp_effect('eu'),
-    uk = get_gdp_effect('gbr'),
-    japan = get_gdp_effect('jpn'),
-    fta = get_gdp_effect('fta'),
-    row = get_gdp_effect('row')
-  )
+  # Build results by looking up each region
+  gdp_lookup <- setNames(gdp_data$gdp_pct_change, gdp_data$region)
+  results <- lapply(region_codes, function(code) {
+    if (!code %in% names(gdp_lookup)) stop('Missing GDP effect for region: ', code)
+    gdp_lookup[[code]]
+  })
 
   # -------------------------------------------------------------------------
   # Calculate World and World ex USA (GDP-weighted averages)
