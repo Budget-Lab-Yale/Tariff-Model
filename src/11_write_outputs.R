@@ -137,7 +137,8 @@ write_outputs <- function(results, scenario) {
   # ============================
 
   foreign_gdp <- tibble(
-    region = c('usa', 'china', 'canada', 'mexico', 'eu', 'uk', 'japan', 'fta', 'row'),
+    region = c('usa', 'china', 'canada', 'mexico', 'eu', 'uk', 'japan', 'fta', 'row',
+               'world', 'world_ex_usa'),
     gdp_change_pct = c(
       results$foreign_gdp$usa,
       results$foreign_gdp$china,
@@ -147,11 +148,13 @@ write_outputs <- function(results, scenario) {
       results$foreign_gdp$uk,
       results$foreign_gdp$japan,
       results$foreign_gdp$fta,
-      results$foreign_gdp$row
+      results$foreign_gdp$row,
+      results$foreign_gdp$world,
+      results$foreign_gdp$world_ex_usa
     )
   )
   write_csv(foreign_gdp, file.path(output_dir, 'foreign_gdp.csv'))
-  message('    foreign_gdp.csv (9 regions)')
+  message('    foreign_gdp.csv (11 regions)')
 
   # ============================
   # Distribution by Decile

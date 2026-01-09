@@ -27,18 +27,43 @@ library(tidyverse)
 #' Maps calendar quarters to fiscal years and computes the incremental
 #' growth deviation for each fiscal year.
 #'
+#' Implements Excel blending logic: starting from 2026 Q1, level deviations
+#' are floored at the GTAP long-run GDP effect (can't recover beyond long-run).
+#' Formula: MIN(maus_level_dev, gtap_long_run_gdp) for 2026 Q1 onwards.
+#'
 #' @param maus Quarterly GDP data with baseline and tariff scenarios
+#' @param gtap_long_run_gdp GTAP long-run US GDP percent change (e.g., -0.31)
 #' @return Data frame with fiscal_year and growth_deviation
-calculate_fy_growth_deviations <- function(maus) {
+calculate_fy_growth_deviations <- function(maus, gtap_long_run_gdp = NULL) {
 
   # Map calendar quarters to fiscal years
   # FY runs Oct-Sep: Q4 → next FY Q1, Q1-Q3 → same FY
   maus_fy <- maus %>%
     mutate(
       fiscal_year = if_else(quarter == 4, year + 1, year),
-      # Level deviation (%) for each quarter
-      level_deviation = 100 * (gdp_tariff / gdp_baseline - 1)
+      # Raw level deviation (%) for each quarter
+      raw_level_deviation = 100 * (gdp_tariff / gdp_baseline - 1)
     )
+
+  # Apply GTAP long-run GDP floor starting from 2026 Q1
+  # Excel logic: MIN(maus_deviation, gtap_long_run) for 2026 Q1 onwards
+  # Since both are negative, MIN selects the more negative (worse) value,
+  # preventing recovery beyond the GTAP long-run equilibrium
+  if (!is.null(gtap_long_run_gdp)) {
+    maus_fy <- maus_fy %>%
+      mutate(
+        level_deviation = case_when(
+          # Through 2025 Q4: use raw MAUS deviation
+          year < 2026 ~ raw_level_deviation,
+          # 2026 Q1 onwards: apply MIN (floor at GTAP long-run)
+          TRUE ~ pmin(raw_level_deviation, gtap_long_run_gdp)
+        )
+      )
+    message(sprintf('  Applying GTAP long-run GDP floor: %.2f%% (from 2026 Q1)', gtap_long_run_gdp))
+  } else {
+    maus_fy <- maus_fy %>%
+      mutate(level_deviation = raw_level_deviation)
+  }
 
   # Average level deviation by fiscal year
   fy_level_dev <- maus_fy %>%
@@ -190,11 +215,18 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
 
   message(sprintf('  Processing %d quarters of MAUS data', nrow(maus)))
 
+  # Get GTAP long-run US GDP effect for blending
+  gtap_long_run_gdp <- NULL
+  if (!is.null(inputs$qgdp) && 'usa' %in% names(inputs$qgdp)) {
+    gtap_long_run_gdp <- inputs$qgdp['usa']
+    message(sprintf('  GTAP long-run US GDP: %.2f%%', gtap_long_run_gdp))
+  }
+
   # -------------------------------------------------------------------------
   # Step 1: Calculate FY growth deviations from MAUS
   # -------------------------------------------------------------------------
 
-  fy_growth_dev <- calculate_fy_growth_deviations(maus)
+  fy_growth_dev <- calculate_fy_growth_deviations(maus, gtap_long_run_gdp)
 
   message('  FY growth deviations (matching Excel AI column):')
   fy_growth_dev %>%

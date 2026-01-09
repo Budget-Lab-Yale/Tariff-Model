@@ -27,6 +27,7 @@ GTAP_HEADERS <- list(
   qgdp = '0160',      # GDP % change by region (9 values)
   qo = '0052',        # Sector output % change (65 x 9)
   qva = '0058',       # Value-added % change (65 x 9) - for sector GDP aggregation
+  qxwreg = '0177',    # Aggregate export % change by region (9 values)
   qmwreg = '0181',    # Aggregate import % change by region (9 values)
   ppa = '0095',       # Import price from all sources (65 x 9)
   ppm = '0022',       # Import market price (65 x 9)
@@ -110,6 +111,13 @@ read_gtap_solution <- function(sol_path, sl4_path) {
     qmwreg <- as.vector(sol[[GTAP_HEADERS$qmwreg]])
     names(qmwreg) <- regions
     result$qmwreg <- qmwreg
+  }
+
+  # Extract qxwreg (aggregate exports)
+  if (!is.null(sol[[GTAP_HEADERS$qxwreg]])) {
+    qxwreg <- as.vector(sol[[GTAP_HEADERS$qxwreg]])
+    names(qxwreg) <- regions
+    result$qxwreg <- qxwreg
   }
 
   # Extract ppa (import prices from all sources)
@@ -215,6 +223,19 @@ get_import_change <- function(gtap_data, target_region = 'usa') {
   }
 
   return(gtap_data$qmwreg[target_region])
+}
+
+#' Get aggregate export change
+#'
+#' @param gtap_data Result from read_gtap_solution()
+#' @param target_region Region to extract (default 'usa')
+#' @return Numeric value (% change)
+get_export_change <- function(gtap_data, target_region = 'usa') {
+  if (is.null(gtap_data$qxwreg)) {
+    stop('qxwreg not found in GTAP data')
+  }
+
+  return(gtap_data$qxwreg[target_region])
 }
 
 #' Get import prices by commodity
@@ -823,6 +844,10 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   # Import change (qmwreg)
   result$qmwreg <- get_import_change(gtap_data, 'usa')
   message(sprintf('    - Import change (qmwreg): %.2f%%', result$qmwreg))
+
+  # Export change (qxwreg)
+  result$qxwreg <- get_export_change(gtap_data, 'usa')
+  message(sprintf('    - Export change (qxwreg): %.2f%%', result$qxwreg))
 
   # Imports by country
   result$imports_by_country <- get_imports_by_country(gtap_data)

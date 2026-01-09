@@ -30,6 +30,7 @@ source('src/08_calculate_foreign_gdp.R')
 source('src/09_calculate_distribution.R')
 source('src/10_calculate_products.R')
 source('src/11_write_outputs.R')
+source('src/12_export_excel.R')
 
 
 #' Load MAUS output levels after user runs MAUS
@@ -323,6 +324,13 @@ Loading MAUS output levels...')
   message('\nStep 11: Writing outputs to disk...')
   write_outputs(results, scenario)
 
+  #---------------------------
+  # Step 12: Export Excel tables
+  #---------------------------
+
+  message('\nStep 12: Exporting Excel tables...')
+  export_excel_tables(scenario)
+
   # Print key results summary
   message('\n----------------------------------------------------------')
   message('KEY RESULTS')
@@ -353,6 +361,10 @@ Loading MAUS output levels...')
     message(sprintf('U-rate 2026 Q4:                 %+.2f pp', macro_results$urate_2026))
     message(sprintf('Payroll 2025 Q4:                %.0f thousand', macro_results$payroll_2025))
     message(sprintf('Payroll 2026 Q4:                %.0f thousand', macro_results$payroll_2026))
+    # Export change from GTAP
+    if (!is.null(inputs$qxwreg)) {
+      message(sprintf('Export change (GTAP):           %.2f%%', inputs$qxwreg))
+    }
   }
 
   if (!is.null(sector_results)) {
@@ -375,6 +387,9 @@ Loading MAUS output levels...')
     message('FOREIGN GDP EFFECTS (Long-Run)')
     message('----------------------------------------------------------')
     message(sprintf('USA:                            %+.2f%%', foreign_gdp_results$usa))
+    # Long-run GDP dollar loss (2025 concept dollars, estimated 2025 GDP = $30,441B)
+    lr_gdp_dollar_loss <- foreign_gdp_results$usa / 100 * 30441
+    message(sprintf('USA (2025$):                    $%.0fB', lr_gdp_dollar_loss))
     message(sprintf('China:                          %+.2f%%', foreign_gdp_results$china))
     message(sprintf('Canada:                         %+.2f%%', foreign_gdp_results$canada))
     message(sprintf('Mexico:                         %+.2f%%', foreign_gdp_results$mexico))

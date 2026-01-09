@@ -276,6 +276,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   # Transfer GTAP data to inputs
   inputs$foreign_gdp <- gtap_data$foreign_gdp
   inputs$qmwreg <- gtap_data$qmwreg
+  inputs$qxwreg <- gtap_data$qxwreg
   inputs$sector_outputs <- gtap_data$sector_outputs
   inputs$imports_by_country <- gtap_data$imports_by_country
   inputs$viws <- gtap_data$viws
