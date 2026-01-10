@@ -24,12 +24,7 @@ load_maus_scenario <- function(scenario_file, baseline_data) {
   scenario_raw <- read_csv(scenario_file, show_col_types = FALSE)
 
   # Validate required columns (MAUS native names)
-  required_cols <- c('year', 'quarter', 'GDP', 'LEB', 'LURC')
-  missing_cols <- setdiff(required_cols, names(scenario_raw))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in MAUS output: ', paste(missing_cols, collapse = ', '),
-         '\n  Expected columns: year, quarter, GDP, LEB, LURC')
-  }
+  assert_has_columns(scenario_raw, c('year', 'quarter', 'GDP', 'LEB', 'LURC'), 'MAUS output')
 
   # Map MAUS column names to internal names for tariff values
   scenario_data <- scenario_raw %>%

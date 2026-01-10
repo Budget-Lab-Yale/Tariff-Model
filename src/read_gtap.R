@@ -162,21 +162,8 @@ get_foreign_gdp <- function(gtap_data) {
     stop('qgdp not found in GTAP data')
   }
 
-  # Map GTAP region codes to standard abbreviations
-  region_map <- c(
-    usa = 'usa',
-    china = 'chn',
-    row = 'row',
-    canada = 'can',
-    mexico = 'mex',
-    ftrow = 'fta',
-    japan = 'jpn',
-    eu = 'eu',
-    uk = 'gbr'
-  )
-
   result <- data.frame(
-    region = region_map[names(gtap_data$qgdp)],
+    region = GTAP_TO_ABBR[names(gtap_data$qgdp)],
     gdp_pct_change = round(gtap_data$qgdp, 2),
     stringsAsFactors = FALSE
   )
@@ -539,20 +526,7 @@ get_imports_by_country <- function(gtap_data) {
   # Sum across commodities (rows) for each source country (columns)
   country_totals <- colSums(gtap_data$viws)
 
-  # Map GTAP region names to standard abbreviations
-  region_map <- c(
-    usa = 'usa',
-    china = 'chn',
-    row = 'row',
-    canada = 'can',
-    mexico = 'mex',
-    ftrow = 'fta',
-    japan = 'jpn',
-    eu = 'eu',
-    uk = 'gbr'
-  )
-
-  names(country_totals) <- region_map[names(country_totals)]
+  names(country_totals) <- GTAP_TO_ABBR[names(country_totals)]
 
   return(country_totals)
 }

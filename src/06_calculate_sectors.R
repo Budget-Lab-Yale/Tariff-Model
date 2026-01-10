@@ -41,11 +41,8 @@ calculate_sectors <- function(inputs) {
   }
 
   # Validate required columns
-  required_cols <- c('gtap_sector', 'aggregate_sector', 'output_baseline', 'output_pct_change')
-  missing_cols <- setdiff(required_cols, names(sector_data))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in sector_outputs: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(sector_data, c('gtap_sector', 'aggregate_sector', 'output_baseline',
+                                    'output_pct_change'), 'sector_outputs')
 
   message('  Processing ', nrow(sector_data), ' sectors')
 
@@ -74,12 +71,8 @@ calculate_sectors <- function(inputs) {
   # Manufacturing subcategories
   # -------------------------------------------------------------------------
 
-  required_flags <- c('is_durable', 'is_nondurable', 'is_advanced')
-  missing_flags <- setdiff(required_flags, names(sector_data))
-  if (length(missing_flags) > 0) {
-    stop('Missing required manufacturing flag columns in sector_outputs: ',
-         paste(missing_flags, collapse = ', '))
-  }
+  assert_has_columns(sector_data, c('is_durable', 'is_nondurable', 'is_advanced'),
+                     'sector_outputs (manufacturing flags)')
   if (any(is.na(sector_data$is_durable)) ||
       any(is.na(sector_data$is_nondurable)) ||
       any(is.na(sector_data$is_advanced))) {

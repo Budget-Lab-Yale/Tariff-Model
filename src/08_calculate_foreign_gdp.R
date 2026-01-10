@@ -41,11 +41,7 @@ calculate_foreign_gdp <- function(inputs) {
   }
 
   # Validate required columns
-  required_cols <- c('region', 'gdp_pct_change')
-  missing_cols <- setdiff(required_cols, names(gdp_data))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in foreign_gdp: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(gdp_data, c('region', 'gdp_pct_change'), 'foreign_gdp')
 
   message('  Processing ', nrow(gdp_data), ' regions')
 
@@ -78,15 +74,9 @@ calculate_foreign_gdp <- function(inputs) {
   # Calculate World and World ex USA (GDP-weighted averages)
   # -------------------------------------------------------------------------
 
-  # Map region codes to GTAP region names
-  region_map <- c(
-    usa = 'usa', chn = 'china', row = 'row', can = 'canada',
-    mex = 'mexico', fta = 'ftrow', jpn = 'japan', eu = 'eu', gbr = 'uk'
-  )
-
   # Join gdp_data with vgdp_baseline
   gdp_with_levels <- gdp_data %>%
-    mutate(gtap_region = region_map[region]) %>%
+    mutate(gtap_region = ABBR_TO_GTAP[region]) %>%
     left_join(vgdp_baseline, by = c('gtap_region' = 'region'))
 
   if (any(is.na(gdp_with_levels$vgdp))) {

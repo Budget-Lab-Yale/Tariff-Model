@@ -16,6 +16,7 @@ suppressPackageStartupMessages({
 })
 
 # Source helper modules
+source('src/helpers.R')
 source('src/00_run_tariff_etrs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')

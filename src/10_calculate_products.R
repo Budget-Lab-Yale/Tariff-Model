@@ -39,11 +39,8 @@ calculate_products <- function(inputs) {
   }
 
   # Validate required columns
-  required_cols <- c('gtap_sector', 'sr_price_effect', 'lr_price_effect', 'is_food')
-  missing_cols <- setdiff(required_cols, names(product_data))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in product_prices: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(product_data, c('gtap_sector', 'sr_price_effect', 'lr_price_effect',
+                                     'is_food'), 'product_prices')
 
   message('  Processing ', nrow(product_data), ' products')
 

@@ -38,13 +38,9 @@ calculate_macro <- function(inputs) {
   }
 
   # Validate required columns
-  required_cols <- c('year', 'quarter', 'gdp_baseline', 'gdp_tariff',
-                     'employment_baseline', 'employment_tariff',
-                     'urate_baseline', 'urate_tariff')
-  missing_cols <- setdiff(required_cols, names(maus))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in MAUS data: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(maus, c('year', 'quarter', 'gdp_baseline', 'gdp_tariff',
+                             'employment_baseline', 'employment_tariff',
+                             'urate_baseline', 'urate_tariff'), 'MAUS data')
 
   message(sprintf('  Processing %d quarters of MAUS data', nrow(maus)))
 

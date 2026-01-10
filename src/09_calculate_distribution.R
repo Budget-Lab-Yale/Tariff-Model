@@ -45,11 +45,8 @@ calculate_distribution <- function(price_results, inputs) {
     stop('decile_parameters not found in inputs. Load from resources/distribution/decile_parameters.csv')
   }
 
-  required_cols <- c('decile', 'income', 'scaling_factor', 'pce_variation')
-  missing_cols <- setdiff(required_cols, names(decile_params))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in decile_parameters: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(decile_params, c('decile', 'income', 'scaling_factor', 'pce_variation'),
+                     'decile_parameters')
 
   # -------------------------------------------------------------------------
   # Get inflation adjustment factor (convert 2024 dollars to 2025 dollars)
