@@ -103,14 +103,14 @@ calculate_foreign_gdp <- function(inputs) {
     )
 
   # World Total
-  world_pre <- sum(gdp_with_levels$vgdp_pre, na.rm = TRUE)
-  world_post <- sum(gdp_with_levels$vgdp_post, na.rm = TRUE)
+  world_pre <- sum(gdp_with_levels$vgdp_pre)
+  world_post <- sum(gdp_with_levels$vgdp_post)
   world_pct <- (world_post / world_pre - 1) * 100
 
   # World ex USA
   world_ex_usa <- gdp_with_levels %>% filter(region != 'usa')
-  world_ex_usa_pre <- sum(world_ex_usa$vgdp_pre, na.rm = TRUE)
-  world_ex_usa_post <- sum(world_ex_usa$vgdp_post, na.rm = TRUE)
+  world_ex_usa_pre <- sum(world_ex_usa$vgdp_pre)
+  world_ex_usa_post <- sum(world_ex_usa$vgdp_post)
   world_ex_usa_pct <- (world_ex_usa_post / world_ex_usa_pre - 1) * 100
 
   results$world <- world_pct

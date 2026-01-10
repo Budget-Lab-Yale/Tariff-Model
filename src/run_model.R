@@ -413,11 +413,7 @@ Loading MAUS output levels...')
     message('----------------------------------------------------------')
     message('DISTRIBUTION BY INCOME DECILE (Pre-Substitution)')
     message('----------------------------------------------------------')
-    dist <- if (!is.null(distribution_results$pre_sub)) {
-      distribution_results$pre_sub$by_decile
-    } else {
-      distribution_results$by_decile
-    }
+    dist <- distribution_results$by_decile
     for (i in 1:nrow(dist)) {
       message(sprintf('Decile %2d ($%s income):  $%s (%.2f%% of income)',
                       dist$decile[i],
@@ -425,11 +421,7 @@ Loading MAUS output levels...')
                       format(round(abs(dist$cost_per_hh[i])), big.mark = ',', scientific = FALSE),
                       abs(dist$pct_of_income[i])))
     }
-    avg_cost <- if (!is.null(distribution_results$pre_sub)) {
-      distribution_results$pre_sub$avg_per_hh_cost
-    } else {
-      distribution_results$avg_per_hh_cost
-    }
+    avg_cost <- distribution_results$avg_per_hh_cost
     message(sprintf('Average per-HH cost:            $%s',
                     format(round(abs(avg_cost)), big.mark = ',', scientific = FALSE)))
   }

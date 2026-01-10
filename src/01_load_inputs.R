@@ -259,7 +259,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
 
   if (!dir.exists(gtap_solution_dir)) {
     stop('GTAP solution directory not found: ', gtap_solution_dir,
-         '\n  Run run_gtap() first or use skip_gtap=FALSE')
+         '\n  Run run_gtap() first')
   }
 
   message('  Loading GTAP from: ', gtap_solution_dir)

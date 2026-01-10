@@ -62,21 +62,24 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
   cmf_path <- normalizePath(cmf_path)
   message('  CMF written: ', cmf_path)
 
+  # Resolve paths that are relative to repo root before changing directories
+  sltoht_exe <- params$gtap$sltoht %||% 'C:/GP/sltoht.exe'
+  map_file <- params$gtap$map_file %||% 'resources/gtap/tariff_model.map'
+  map_file_abs <- normalizePath(map_file, mustWork = TRUE)
+  output_dir_abs <- normalizePath(output_dir, mustWork = TRUE)
+
   # Run GTAP (from work directory for relative paths in CMF)
   message('  Running GTAP...')
   old_wd <- getwd()
   setwd(gtap_work)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  result <- tryCatch({
-    system2(
-      gtap_exe,
-      args = c('-cmf', cmf_path),
-      stdout = TRUE,
-      stderr = TRUE
-    )
-  }, finally = {
-    setwd(old_wd)
-  })
+  result <- system2(
+    gtap_exe,
+    args = c('-cmf', cmf_path),
+    stdout = TRUE,
+    stderr = TRUE
+  )
 
   # Check exit code
   exit_code <- attr(result, 'status') %||% 0
@@ -99,23 +102,20 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
 
   # Post-process: Extract solution variables to HAR file using sltoht
   message('  Extracting solution variables (sltoht)...')
-  sltoht_exe <- params$gtap$sltoht %||% 'C:/GP/sltoht.exe'
-  map_file <- params$gtap$map_file %||% 'resources/gtap/tariff_model.map'
 
   if (!file.exists(sltoht_exe)) {
     stop('sltoht executable not found: ', sltoht_exe)
   }
 
-  # Run sltoht from output directory
+  # Run sltoht from output directory (scoped so on.exit restores immediately)
   # sltoht reads .sl4 and writes .sol (HAR format)
   # Input format: sl4_file, then output_file, then map_file via stdin
-  # Use absolute path for map file since we change directories
-  map_file_abs <- normalizePath(map_file, mustWork = TRUE)
   sltoht_input <- paste0(basename(sol_file), '\n', map_file_abs, '\n\n')
-  old_wd2 <- getwd()
-  setwd(output_dir)
+  sltoht_result <- local({
+    old_wd2 <- getwd()
+    setwd(output_dir_abs)
+    on.exit(setwd(old_wd2))
 
-  sltoht_result <- tryCatch({
     system2(
       sltoht_exe,
       args = basename(sl4_file),
@@ -123,8 +123,6 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
       stdout = TRUE,
       stderr = TRUE
     )
-  }, finally = {
-    setwd(old_wd2)
   })
 
   sltoht_exit <- attr(sltoht_result, 'status') %||% 0

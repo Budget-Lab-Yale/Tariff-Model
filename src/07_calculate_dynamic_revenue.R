@@ -272,8 +272,8 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
                     paste(missing_years, collapse = ', ')))
     dynamic_by_year <- dynamic_by_year %>%
       mutate(
-        fy_gdp_change = if_else(is.na(fy_gdp_change), 0, fy_gdp_change),
-        dynamic_effect = if_else(is.na(dynamic_effect), 0, dynamic_effect)
+        fy_gdp_change = coalesce(fy_gdp_change, 0),
+        dynamic_effect = coalesce(dynamic_effect, 0)
       )
   }
 

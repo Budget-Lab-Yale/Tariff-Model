@@ -199,14 +199,14 @@ write_outputs <- function(results, scenario) {
   goods_etrs <- tibble(
     country = country_names,
     country_code = country_codes,
-    postsub_imports = sapply(country_codes, function(c)
-      results$etr$postsim_country[[paste0('imports_', c)]]),
-    postsub_etr = sapply(country_codes, function(c)
-      results$etr$postsim_country[[paste0('etr_', c)]]),
-    presub_imports = sapply(country_codes, function(c)
-      results$etr$presim_country[[paste0('imports_', c)]]),
-    presub_etr = sapply(country_codes, function(c)
-      results$etr$presim_country[[paste0('etr_', c)]])
+    postsub_imports = sapply(country_codes, function(code)
+      results$etr$postsim_country[[paste0('imports_', code)]]),
+    postsub_etr = sapply(country_codes, function(code)
+      results$etr$postsim_country[[paste0('etr_', code)]]),
+    presub_imports = sapply(country_codes, function(code)
+      results$etr$presim_country[[paste0('imports_', code)]]),
+    presub_etr = sapply(country_codes, function(code)
+      results$etr$presim_country[[paste0('etr_', code)]])
   )
 
   # Add totals row
