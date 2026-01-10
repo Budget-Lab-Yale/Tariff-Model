@@ -79,10 +79,10 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   get_phase_in <- function(fy) {
     # Handle both integer and character keys in the YAML
     key <- as.character(fy)
-    if (key %in% names(phase_in_schedule)) {
-      return(phase_in_schedule[[key]])
+    if (!key %in% names(phase_in_schedule)) {
+      stop('Missing phase_in value for fiscal year: ', fy)
     }
-    stop('Missing phase_in value for fiscal year: ', fy)
+    return(phase_in_schedule[[key]])
   }
 
   # Calculate revenue for each fiscal year

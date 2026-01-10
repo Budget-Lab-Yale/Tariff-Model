@@ -58,7 +58,9 @@ calculate_sectors <- function(inputs) {
     )
 
   # Extract individual sector effects
-  get_effect <- function(sector) sector_effects$effect[sector_effects$aggregate_sector == sector]
+  get_effect <- function(sector) {
+    return(sector_effects$effect[sector_effects$aggregate_sector == sector])
+  }
 
   agriculture <- get_effect('Agriculture')
   mining <- get_effect('Mining')

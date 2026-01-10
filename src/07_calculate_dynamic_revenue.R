@@ -206,12 +206,16 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
 
   # Load CBO convolution parameters
   cbo_conv_file <- 'resources/cbo_rules/cbo_convolution_params.csv'
-  if (file.exists(cbo_conv_file)) {
-    cbo_params <- read_csv(cbo_conv_file, show_col_types = FALSE)
-    message('  Loaded CBO convolution parameters')
-  } else {
+  if (!file.exists(cbo_conv_file)) {
     stop('CBO convolution parameters not found: ', cbo_conv_file)
   }
+  cbo_params <- read_csv(cbo_conv_file, show_col_types = FALSE)
+  assert_has_columns(cbo_params,
+                     c('fiscal_year', 'baseline_productivity_growth', 'impulse_response',
+                       'baseline_real_gdp', 'baseline_nominal_gdp',
+                       'cbo_gdp_baseline', 'cbo_gdp_scenario', 'cbo_revenue_change'),
+                     'CBO convolution parameters')
+  message('  Loaded CBO convolution parameters')
 
   message(sprintf('  Processing %d quarters of MAUS data', nrow(maus)))
 

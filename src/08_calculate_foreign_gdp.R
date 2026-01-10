@@ -54,6 +54,7 @@ calculate_foreign_gdp <- function(inputs) {
     stop('vgdp_baseline.csv not found: ', vgdp_baseline_file)
   }
   vgdp_baseline <- read_csv(vgdp_baseline_file, show_col_types = FALSE)
+  assert_has_columns(vgdp_baseline, c('region', 'vgdp'), 'vgdp_baseline')
 
   # -------------------------------------------------------------------------
   # Extract GDP effects by region

@@ -57,10 +57,12 @@ calculate_macro <- function(inputs) {
   calc_gdp_q4q4 <- function(yr) {
     current <- q4_data %>% filter(year == yr)
     prior <- q4_data %>% filter(year == yr - 1)
-    if (nrow(current) == 0 || nrow(prior) == 0) return(NA_real_)
+    if (nrow(current) == 0 || nrow(prior) == 0) {
+      return(NA_real_)
+    }
     tariff_growth <- current$gdp_tariff / prior$gdp_tariff
     base_growth <- current$gdp_baseline / prior$gdp_baseline
-    100 * (tariff_growth / base_growth - 1)
+    return(100 * (tariff_growth / base_growth - 1))
   }
 
   gdp_2025 <- calc_gdp_q4q4(2025)

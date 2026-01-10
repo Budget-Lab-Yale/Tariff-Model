@@ -99,64 +99,64 @@ load_baselines <- function() {
 
   # CBO baseline projections
   cbo_file <- 'resources/baselines/cbo.csv'
-  if (file.exists(cbo_file)) {
-    baselines$cbo <- read_csv(cbo_file, show_col_types = FALSE)
-    message(sprintf('  Loaded CBO baselines: FY%d-FY%d',
-                    min(baselines$cbo$fiscal_year),
-                    max(baselines$cbo$fiscal_year)))
-  } else {
+  if (!file.exists(cbo_file)) {
     stop('CBO baseline file not found: ', cbo_file)
   }
+  baselines$cbo <- read_csv(cbo_file, show_col_types = FALSE)
+  assert_has_columns(baselines$cbo, c('fiscal_year', 'imports_bn', 'duties_bn', 'baseline_etr'),
+                     'CBO baselines')
+  message(sprintf('  Loaded CBO baselines: FY%d-FY%d',
+                  min(baselines$cbo$fiscal_year),
+                  max(baselines$cbo$fiscal_year)))
 
   # GTAP baseline (no policy change)
   gtap_file <- 'resources/baselines/gtap.csv'
-  if (file.exists(gtap_file)) {
-    baselines$gtap <- read_csv(gtap_file, show_col_types = FALSE)
-    message('  Loaded GTAP baseline')
-  } else {
+  if (!file.exists(gtap_file)) {
     stop('GTAP baseline file not found: ', gtap_file)
   }
+  baselines$gtap <- read_csv(gtap_file, show_col_types = FALSE)
+  message('  Loaded GTAP baseline')
 
   # VIWS baseline (baseline imports matrix for pre-substitution calculations)
   viws_baseline_file <- 'resources/gtap_baseline/viws_baseline.csv'
-  if (file.exists(viws_baseline_file)) {
-    viws_data <- read_csv(viws_baseline_file, show_col_types = FALSE)
-    # Convert to matrix format matching GTAP output
-    baselines$viws_baseline <- as.matrix(viws_data[, -1])  # Remove commodity column
-    rownames(baselines$viws_baseline) <- viws_data$commodity
-    message('  Loaded VIWS baseline')
-  } else {
+  if (!file.exists(viws_baseline_file)) {
     stop('VIWS baseline file not found: ', viws_baseline_file)
   }
+  viws_data <- read_csv(viws_baseline_file, show_col_types = FALSE)
+  assert_has_columns(viws_data, 'commodity', 'VIWS baseline')
+  # Convert to matrix format matching GTAP output
+  baselines$viws_baseline <- as.matrix(viws_data[, -1])  # Remove commodity column
+  rownames(baselines$viws_baseline) <- viws_data$commodity
+  message('  Loaded VIWS baseline')
 
   # Import baseline in dollars (for Excel-compatible ETR weighting)
   import_baseline_file <- 'resources/gtap_baseline/import_baseline_dollars.csv'
-  if (file.exists(import_baseline_file)) {
-    import_data <- read_csv(import_baseline_file, show_col_types = FALSE)
-    # Convert to matrix format
-    baselines$import_baseline_dollars <- as.matrix(import_data[, -1])
-    rownames(baselines$import_baseline_dollars) <- import_data$gtap_code
-    message('  Loaded import baseline (dollars)')
-  } else {
+  if (!file.exists(import_baseline_file)) {
     stop('Import baseline (dollars) file not found: ', import_baseline_file)
   }
+  import_data <- read_csv(import_baseline_file, show_col_types = FALSE)
+  assert_has_columns(import_data, 'gtap_code', 'import baseline dollars')
+  # Convert to matrix format
+  baselines$import_baseline_dollars <- as.matrix(import_data[, -1])
+  rownames(baselines$import_baseline_dollars) <- import_data$gtap_code
+  message('  Loaded import baseline (dollars)')
 
   # MAUS baseline (GDP, employment, unemployment rate)
   maus_baseline_file <- 'resources/baselines/maus_baseline.csv'
-  if (file.exists(maus_baseline_file)) {
-    maus_raw <- read_csv(maus_baseline_file, show_col_types = FALSE)
-    # Map MAUS column names to internal names
-    # MAUS uses: GDP, LEB (employment), LURC (unemployment rate)
-    baselines$maus <- maus_raw %>%
-      rename(
-        gdp_baseline = GDP,
-        employment_baseline = LEB,
-        urate_baseline = LURC
-      )
-    message(sprintf('  Loaded MAUS baseline: %d quarters', nrow(baselines$maus)))
-  } else {
+  if (!file.exists(maus_baseline_file)) {
     stop('MAUS baseline file not found: ', maus_baseline_file)
   }
+  maus_raw <- read_csv(maus_baseline_file, show_col_types = FALSE)
+  assert_has_columns(maus_raw, c('year', 'quarter', 'GDP', 'LEB', 'LURC'), 'MAUS baseline')
+  # Map MAUS column names to internal names
+  # MAUS uses: GDP, LEB (employment), LURC (unemployment rate)
+  baselines$maus <- maus_raw %>%
+    rename(
+      gdp_baseline = GDP,
+      employment_baseline = LEB,
+      urate_baseline = LURC
+    )
+  message(sprintf('  Loaded MAUS baseline: %d quarters', nrow(baselines$maus)))
 
   return(baselines)
 }
@@ -207,6 +207,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('ETR matrix not found: ', etr_file)
   }
   inputs$etr_matrix <- read_csv(etr_file, show_col_types = FALSE)
+  assert_has_columns(inputs$etr_matrix, 'gtap_code', 'ETR matrix')
   message(sprintf('  Loaded ETR matrix: %d sectors', nrow(inputs$etr_matrix)))
 
   # ============================
@@ -218,6 +219,10 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('GTAP sector mappings not found: ', gtap_mapping_file)
   }
   inputs$gtap_sector_mapping <- read_csv(gtap_mapping_file, show_col_types = FALSE)
+  assert_has_columns(inputs$gtap_sector_mapping,
+                     c('gtap_code', 'aggregate_sector', 'is_manufacturing', 'is_durable',
+                       'is_nondurable', 'is_advanced'),
+                     'GTAP sector mappings')
   message('  Loaded GTAP sector mappings')
 
   # Product parameters (coefficients and weights for aggregation)
@@ -226,6 +231,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('Product parameters not found: ', product_params_file)
   }
   inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
+  assert_has_columns(inputs$product_params, c('gtap_sector', 'weight', 'is_food'), 'product parameters')
   message('  Loaded product parameters')
 
   # Import shares (baseline import share of consumption by sector)
@@ -234,6 +240,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('Import shares not found: ', import_shares_file)
   }
   inputs$import_shares <- read_csv(import_shares_file, show_col_types = FALSE)
+  assert_has_columns(inputs$import_shares, c('gtap_sector', 'import_share'), 'import shares')
   message('  Loaded import shares')
 
   # Import weights by country (for product-level weighted ETR calculation)
@@ -242,6 +249,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('Import weights not found: ', import_weights_file)
   }
   inputs$import_weights <- read_csv(import_weights_file, show_col_types = FALSE)
+  assert_has_columns(inputs$import_weights, c('gtap_sector', 'total'), 'import weights')
   message('  Loaded import weights')
 
   # ============================
@@ -324,6 +332,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('CBO revenue sensitivity parameters not found: ', cbo_file)
   }
   inputs$cbo_sensitivity <- read_csv(cbo_file, show_col_types = FALSE)
+  assert_has_columns(inputs$cbo_sensitivity, 'fiscal_year', 'CBO sensitivity')
   message('  Loaded CBO revenue sensitivity parameters')
 
   # ============================
@@ -335,6 +344,9 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     stop('Distribution parameters not found: ', dist_file)
   }
   inputs$decile_parameters <- read_csv(dist_file, show_col_types = FALSE)
+  assert_has_columns(inputs$decile_parameters,
+                     c('decile', 'income', 'scaling_factor', 'pce_variation'),
+                     'distribution parameters')
   message('  Loaded distribution parameters (10 deciles)')
 
   return(inputs)

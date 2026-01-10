@@ -1,5 +1,5 @@
 # =============================================================================
-# 09_calculate_products.R - Calculate product-level price effects
+# 10_calculate_products.R - Calculate product-level price effects
 # =============================================================================
 #
 # This module reports product-level (commodity) price effects from GTAP results.
