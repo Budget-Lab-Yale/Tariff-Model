@@ -17,6 +17,22 @@
 
 library(tidyverse)
 
+#' Build a quarterly sequence starting from a date
+#'
+#' @param start_date Start date for shock period
+#' @param n_quarters Number of quarters to generate
+#'
+#' @return Tibble with quarter_start, year, quarter
+build_quarter_sequence <- function(start_date, n_quarters) {
+  tibble(
+    quarter_start = seq(as.Date(start_date), by = 'quarter', length.out = n_quarters)
+  ) %>%
+    mutate(
+      year = year(quarter_start),
+      quarter = quarter(quarter_start)
+    )
+}
+
 #' Load quarterly VIX data from config file
 #'
 #' @param vix_file Path to quarterly VIX CSV file
@@ -34,13 +50,7 @@ load_quarterly_vix <- function(vix_file, start_date, n_quarters = 44) {
   vix_data <- read_csv(vix_file, show_col_types = FALSE)
 
   # Generate quarterly date sequence
-  quarters <- tibble(
-    quarter_start = seq(as.Date(start_date), by = 'quarter', length.out = n_quarters)
-  ) %>%
-    mutate(
-      year = year(quarter_start),
-      quarter = quarter(quarter_start)
-    )
+  quarters <- build_quarter_sequence(start_date, n_quarters)
 
   # Join with VIX data (will be NA for quarters not in file)
   quarterly_vix <- quarters %>%
@@ -67,13 +77,7 @@ load_baseline_utfibc <- function(utfibc_file, start_date, n_quarters = 46) {
   utfibc_data <- read_csv(utfibc_file, show_col_types = FALSE)
 
   # Generate quarterly date sequence
-  quarters <- tibble(
-    quarter_start = seq(as.Date(start_date), by = 'quarter', length.out = n_quarters)
-  ) %>%
-    mutate(
-      year = year(quarter_start),
-      quarter = quarter(quarter_start)
-    )
+  quarters <- build_quarter_sequence(start_date, n_quarters)
 
   # Join with UTFIBC data
   quarterly_utfibc <- quarters %>%

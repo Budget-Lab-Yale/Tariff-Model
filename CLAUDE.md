@@ -87,9 +87,80 @@ Based on the Excel model dependency map in `excel_model/tariff_model_dependency_
 - **Tariff-ETRs repo**: Located at `../Tariff-ETRs`, called via `Rscript`
 - R packages: tidyverse, yaml
 
-## Style Guidelines
+## Reading Excel Files
 
-- Use single quotes for strings
-- Prefer tabular data structures over loops
-- Never use `na.rm = TRUE` - missing values should cause errors to surface bugs
-- 2 spaces for indentation
+Excel files (.xlsx, .xlsm) are ZIP archives containing XML files. To read them:
+
+```bash
+# Extract the Excel file structure
+unzip -l excel_model/ricco_tariffs_11-17.xlsm
+
+# Extract specific sheet XML (sheets are in xl/worksheets/)
+unzip -p excel_model/ricco_tariffs_11-17.xlsm xl/worksheets/sheet1.xml
+
+# Get sheet names from workbook.xml
+unzip -p excel_model/ricco_tariffs_11-17.xlsm xl/workbook.xml
+
+# Shared strings (cell text values) are in sharedStrings.xml
+unzip -p excel_model/ricco_tariffs_11-17.xlsm xl/sharedStrings.xml
+```
+
+**Important:** The Excel model is ground truth. When replicating calculations, always examine the actual Excel formulas in the XML, don't guess.
+
+## Coding Style Guidelines
+
+Based on Tariff-ETRs codebase patterns:
+
+### General
+- 2-space indentation
+- Single quotes for all strings: `'like this'`
+- Explicit `return()` at end of functions
+- Roxygen-style docstrings with `#'` for functions
+
+### Tidyverse-First
+- Heavy use of dplyr/tidyr — no data.table
+- Pipe chains with `%>%`
+- `mutate()`, `select()`, `filter()` for transformations
+- `group_by() + summarise()` for aggregations (always use `.groups = 'drop'`)
+- `left_join()` for combining data (prefer joins over loops)
+- `pivot_longer()` / `pivot_wider()` for reshaping
+
+### Conditionals
+- `case_when()` for complex multi-condition logic
+- `if_else()` (not base R `ifelse()`) for simple conditionals
+- `coalesce()` for fallback values
+
+### Error Philosophy
+- **Never use `na.rm = TRUE`** — missing values indicate bugs, let them surface
+- **Never use preemptive `replace_na()`** — same reason
+- Let operations fail loudly so we catch data issues early
+
+### Naming
+- snake_case for variables and functions
+- Descriptive names: `weighted_etr` not `w_etr`
+- Constants in UPPER_SNAKE_CASE: `CTY_CHINA <- '5700'`
+
+### Structure
+- Section separators: `# ====` blocks for major sections
+- Comments explain *why*, not *what*
+- Prefer tabular data over lists — convert early, join instead of loop
+
+### Example Pattern
+```r
+result <- input_data %>%
+  left_join(rates, by = 'hs10') %>%
+  mutate(
+    final_rate = case_when(
+      rate_232 > 0 ~ rate_232,
+      TRUE ~ ieepa_rate
+    ),
+    weighted = final_rate * imports
+  ) %>%
+  group_by(partner) %>%
+  summarise(
+    etr = sum(weighted) / sum(imports),
+    .groups = 'drop'
+  )
+
+return(result)
+```

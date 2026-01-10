@@ -16,6 +16,7 @@ suppressPackageStartupMessages({
 })
 
 # Source helper modules
+source('src/helpers.R')
 source('src/00_run_tariff_etrs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
@@ -30,6 +31,7 @@ source('src/08_calculate_foreign_gdp.R')
 source('src/09_calculate_distribution.R')
 source('src/10_calculate_products.R')
 source('src/11_write_outputs.R')
+source('src/12_export_excel.R')
 
 
 #' Load MAUS output levels after user runs MAUS
@@ -323,6 +325,13 @@ Loading MAUS output levels...')
   message('\nStep 11: Writing outputs to disk...')
   write_outputs(results, scenario)
 
+  #---------------------------
+  # Step 12: Export Excel tables
+  #---------------------------
+
+  message('\nStep 12: Exporting Excel tables...')
+  export_excel_tables(scenario)
+
   # Print key results summary
   message('\n----------------------------------------------------------')
   message('KEY RESULTS')
@@ -353,6 +362,10 @@ Loading MAUS output levels...')
     message(sprintf('U-rate 2026 Q4:                 %+.2f pp', macro_results$urate_2026))
     message(sprintf('Payroll 2025 Q4:                %.0f thousand', macro_results$payroll_2025))
     message(sprintf('Payroll 2026 Q4:                %.0f thousand', macro_results$payroll_2026))
+    # Export change from GTAP
+    if (!is.null(inputs$qxwreg)) {
+      message(sprintf('Export change (GTAP):           %.2f%%', inputs$qxwreg))
+    }
   }
 
   if (!is.null(sector_results)) {
@@ -375,6 +388,9 @@ Loading MAUS output levels...')
     message('FOREIGN GDP EFFECTS (Long-Run)')
     message('----------------------------------------------------------')
     message(sprintf('USA:                            %+.2f%%', foreign_gdp_results$usa))
+    # Long-run GDP dollar loss (2025 concept dollars, estimated 2025 GDP = $30,441B)
+    lr_gdp_dollar_loss <- foreign_gdp_results$usa / 100 * 30441
+    message(sprintf('USA (2025$):                    $%.0fB', lr_gdp_dollar_loss))
     message(sprintf('China:                          %+.2f%%', foreign_gdp_results$china))
     message(sprintf('Canada:                         %+.2f%%', foreign_gdp_results$canada))
     message(sprintf('Mexico:                         %+.2f%%', foreign_gdp_results$mexico))
@@ -398,11 +414,7 @@ Loading MAUS output levels...')
     message('----------------------------------------------------------')
     message('DISTRIBUTION BY INCOME DECILE (Pre-Substitution)')
     message('----------------------------------------------------------')
-    dist <- if (!is.null(distribution_results$pre_sub)) {
-      distribution_results$pre_sub$by_decile
-    } else {
-      distribution_results$by_decile
-    }
+    dist <- distribution_results$by_decile
     for (i in 1:nrow(dist)) {
       message(sprintf('Decile %2d ($%s income):  $%s (%.2f%% of income)',
                       dist$decile[i],
@@ -410,11 +422,7 @@ Loading MAUS output levels...')
                       format(round(abs(dist$cost_per_hh[i])), big.mark = ',', scientific = FALSE),
                       abs(dist$pct_of_income[i])))
     }
-    avg_cost <- if (!is.null(distribution_results$pre_sub)) {
-      distribution_results$pre_sub$avg_per_hh_cost
-    } else {
-      distribution_results$avg_per_hh_cost
-    }
+    avg_cost <- distribution_results$avg_per_hh_cost
     message(sprintf('Average per-HH cost:            $%s',
                     format(round(abs(avg_cost)), big.mark = ',', scientific = FALSE)))
   }

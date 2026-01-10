@@ -41,64 +41,40 @@ calculate_sectors <- function(inputs) {
   }
 
   # Validate required columns
-  required_cols <- c('gtap_sector', 'aggregate_sector', 'output_baseline', 'output_pct_change')
-  missing_cols <- setdiff(required_cols, names(sector_data))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in sector_outputs: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(sector_data, c('gtap_sector', 'aggregate_sector', 'output_baseline',
+                                    'output_pct_change'), 'sector_outputs')
 
   message('  Processing ', nrow(sector_data), ' sectors')
 
   # -------------------------------------------------------------------------
-  # Calculate aggregate sector effects
+  # Calculate aggregate sector effects (weighted average by output baseline)
   # -------------------------------------------------------------------------
 
-  # Helper function for weighted average
-  weighted_avg <- function(data) {
-    if (nrow(data) == 0) {
-      stop('No rows available to calculate sector weighted average')
-    }
-    if (sum(data$output_baseline) == 0) {
-      stop('output_baseline sums to 0 for sector weighted average')
-    }
-    sum(data$output_baseline * data$output_pct_change) / sum(data$output_baseline)
+  sector_effects <- sector_data %>%
+    group_by(aggregate_sector) %>%
+    summarise(
+      effect = sum(output_baseline * output_pct_change) / sum(output_baseline),
+      .groups = 'drop'
+    )
+
+  # Extract individual sector effects
+  get_effect <- function(sector) {
+    return(sector_effects$effect[sector_effects$aggregate_sector == sector])
   }
 
-  # Main aggregate sectors
-  agriculture <- sector_data %>%
-    filter(aggregate_sector == 'Agriculture') %>%
-    weighted_avg()
-
-  mining <- sector_data %>%
-    filter(aggregate_sector == 'Mining') %>%
-    weighted_avg()
-
-  manufacturing <- sector_data %>%
-    filter(aggregate_sector == 'Manufacturing') %>%
-    weighted_avg()
-
-  utilities <- sector_data %>%
-    filter(aggregate_sector == 'Utilities') %>%
-    weighted_avg()
-
-  construction <- sector_data %>%
-    filter(aggregate_sector == 'Construction') %>%
-    weighted_avg()
-
-  services <- sector_data %>%
-    filter(aggregate_sector == 'Services') %>%
-    weighted_avg()
+  agriculture <- get_effect('Agriculture')
+  mining <- get_effect('Mining')
+  manufacturing <- get_effect('Manufacturing')
+  utilities <- get_effect('Utilities')
+  construction <- get_effect('Construction')
+  services <- get_effect('Services')
 
   # -------------------------------------------------------------------------
   # Manufacturing subcategories
   # -------------------------------------------------------------------------
 
-  required_flags <- c('is_durable', 'is_nondurable', 'is_advanced')
-  missing_flags <- setdiff(required_flags, names(sector_data))
-  if (length(missing_flags) > 0) {
-    stop('Missing required manufacturing flag columns in sector_outputs: ',
-         paste(missing_flags, collapse = ', '))
-  }
+  assert_has_columns(sector_data, c('is_durable', 'is_nondurable', 'is_advanced'),
+                     'sector_outputs (manufacturing flags)')
   if (any(is.na(sector_data$is_durable)) ||
       any(is.na(sector_data$is_nondurable)) ||
       any(is.na(sector_data$is_advanced))) {
@@ -108,13 +84,18 @@ calculate_sectors <- function(inputs) {
   mfg_data <- sector_data %>%
     filter(aggregate_sector == 'Manufacturing')
 
+  # Helper for manufacturing subcategories (inline weighted average)
+  calc_weighted_avg <- function(data) {
+    sum(data$output_baseline * data$output_pct_change) / sum(data$output_baseline)
+  }
+
   durable <- mfg_data %>%
     filter(is_durable == 1) %>%
-    weighted_avg()
+    calc_weighted_avg()
 
   nondurable <- mfg_data %>%
     filter(is_nondurable == 1) %>%
-    weighted_avg()
+    calc_weighted_avg()
 
   # Advanced manufacturing is just electronics (ele)
   advanced <- mfg_data %>%
@@ -131,7 +112,7 @@ calculate_sectors <- function(inputs) {
     overall_gdp <- inputs$qgdp['usa']
   } else {
     # Fallback to weighted average if qgdp not available
-    overall_gdp <- weighted_avg(sector_data)
+    overall_gdp <- calc_weighted_avg(sector_data)
   }
 
   # -------------------------------------------------------------------------

@@ -41,11 +41,7 @@ calculate_foreign_gdp <- function(inputs) {
   }
 
   # Validate required columns
-  required_cols <- c('region', 'gdp_pct_change')
-  missing_cols <- setdiff(required_cols, names(gdp_data))
-  if (length(missing_cols) > 0) {
-    stop('Missing required columns in foreign_gdp: ', paste(missing_cols, collapse = ', '))
-  }
+  assert_has_columns(gdp_data, c('region', 'gdp_pct_change'), 'foreign_gdp')
 
   message('  Processing ', nrow(gdp_data), ' regions')
 
@@ -58,49 +54,30 @@ calculate_foreign_gdp <- function(inputs) {
     stop('vgdp_baseline.csv not found: ', vgdp_baseline_file)
   }
   vgdp_baseline <- read_csv(vgdp_baseline_file, show_col_types = FALSE)
+  assert_has_columns(vgdp_baseline, c('region', 'vgdp'), 'vgdp_baseline')
 
   # -------------------------------------------------------------------------
   # Extract GDP effects by region
   # -------------------------------------------------------------------------
 
-  # Helper function to get GDP effect for a region
-  get_gdp_effect <- function(region_code) {
-    effect <- gdp_data %>%
-      filter(region == region_code) %>%
-      pull(gdp_pct_change)
+  # Region mapping: output name -> gtap region code
+  region_codes <- c(usa = 'usa', china = 'chn', canada = 'can', mexico = 'mex',
+                    eu = 'eu', uk = 'gbr', japan = 'jpn', fta = 'fta', row = 'row')
 
-    if (length(effect) == 0) {
-      stop('Missing GDP effect for region: ', region_code)
-    }
-    return(effect[1])
-  }
-
-  # Build results
-  results <- list(
-    usa = get_gdp_effect('usa'),
-    china = get_gdp_effect('chn'),
-    canada = get_gdp_effect('can'),
-    mexico = get_gdp_effect('mex'),
-    eu = get_gdp_effect('eu'),
-    uk = get_gdp_effect('gbr'),
-    japan = get_gdp_effect('jpn'),
-    fta = get_gdp_effect('fta'),
-    row = get_gdp_effect('row')
-  )
+  # Build results by looking up each region
+  gdp_lookup <- setNames(gdp_data$gdp_pct_change, gdp_data$region)
+  results <- lapply(region_codes, function(code) {
+    if (!code %in% names(gdp_lookup)) stop('Missing GDP effect for region: ', code)
+    gdp_lookup[[code]]
+  })
 
   # -------------------------------------------------------------------------
   # Calculate World and World ex USA (GDP-weighted averages)
   # -------------------------------------------------------------------------
 
-  # Map region codes to GTAP region names
-  region_map <- c(
-    usa = 'usa', chn = 'china', row = 'row', can = 'canada',
-    mex = 'mexico', fta = 'ftrow', jpn = 'japan', eu = 'eu', gbr = 'uk'
-  )
-
   # Join gdp_data with vgdp_baseline
   gdp_with_levels <- gdp_data %>%
-    mutate(gtap_region = region_map[region]) %>%
+    mutate(gtap_region = ABBR_TO_GTAP[region]) %>%
     left_join(vgdp_baseline, by = c('gtap_region' = 'region'))
 
   if (any(is.na(gdp_with_levels$vgdp))) {
@@ -117,14 +94,14 @@ calculate_foreign_gdp <- function(inputs) {
     )
 
   # World Total
-  world_pre <- sum(gdp_with_levels$vgdp_pre, na.rm = TRUE)
-  world_post <- sum(gdp_with_levels$vgdp_post, na.rm = TRUE)
+  world_pre <- sum(gdp_with_levels$vgdp_pre)
+  world_post <- sum(gdp_with_levels$vgdp_post)
   world_pct <- (world_post / world_pre - 1) * 100
 
   # World ex USA
   world_ex_usa <- gdp_with_levels %>% filter(region != 'usa')
-  world_ex_usa_pre <- sum(world_ex_usa$vgdp_pre, na.rm = TRUE)
-  world_ex_usa_post <- sum(world_ex_usa$vgdp_post, na.rm = TRUE)
+  world_ex_usa_pre <- sum(world_ex_usa$vgdp_pre)
+  world_ex_usa_post <- sum(world_ex_usa$vgdp_post)
   world_ex_usa_pct <- (world_ex_usa_post / world_ex_usa_pre - 1) * 100
 
   results$world <- world_pct

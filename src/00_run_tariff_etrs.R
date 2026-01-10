@@ -51,22 +51,19 @@ run_tariff_etrs <- function(scenario, tariff_etrs_path = '../Tariff-ETRs') {
   # Change to Tariff-ETRs directory so relative paths in that script work
   old_wd <- getwd()
   setwd(tariff_etrs_path)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  result <- tryCatch({
-    system2(
-      rscript,
-      args = c(
-        'src/main.R',
-        '--scenario', 'tariff_etrs',
-        '--config-dir', normalizePath(file.path(old_wd, scenario_dir), mustWork = FALSE),
-        '--output-dir', normalizePath(file.path(old_wd, output_dir), mustWork = FALSE)
-      ),
-      stdout = TRUE,
-      stderr = TRUE
-    )
-  }, finally = {
-    setwd(old_wd)
-  })
+  result <- system2(
+    rscript,
+    args = c(
+      'src/main.R',
+      '--scenario', 'tariff_etrs',
+      '--config-dir', normalizePath(file.path(old_wd, scenario_dir), mustWork = FALSE),
+      '--output-dir', normalizePath(file.path(old_wd, output_dir), mustWork = FALSE)
+    ),
+    stdout = TRUE,
+    stderr = TRUE
+  )
 
   # Check for errors
   exit_code <- attr(result, 'status')

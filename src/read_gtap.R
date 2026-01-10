@@ -27,6 +27,7 @@ GTAP_HEADERS <- list(
   qgdp = '0160',      # GDP % change by region (9 values)
   qo = '0052',        # Sector output % change (65 x 9)
   qva = '0058',       # Value-added % change (65 x 9) - for sector GDP aggregation
+  qxwreg = '0177',    # Aggregate export % change by region (9 values)
   qmwreg = '0181',    # Aggregate import % change by region (9 values)
   ppa = '0095',       # Import price from all sources (65 x 9)
   ppm = '0022',       # Import market price (65 x 9)
@@ -112,6 +113,13 @@ read_gtap_solution <- function(sol_path, sl4_path) {
     result$qmwreg <- qmwreg
   }
 
+  # Extract qxwreg (aggregate exports)
+  if (!is.null(sol[[GTAP_HEADERS$qxwreg]])) {
+    qxwreg <- as.vector(sol[[GTAP_HEADERS$qxwreg]])
+    names(qxwreg) <- regions
+    result$qxwreg <- qxwreg
+  }
+
   # Extract ppa (import prices from all sources)
   if (!is.null(sol[[GTAP_HEADERS$ppa]])) {
     ppa <- sol[[GTAP_HEADERS$ppa]]
@@ -154,21 +162,8 @@ get_foreign_gdp <- function(gtap_data) {
     stop('qgdp not found in GTAP data')
   }
 
-  # Map GTAP region codes to standard abbreviations
-  region_map <- c(
-    usa = 'usa',
-    china = 'chn',
-    row = 'row',
-    canada = 'can',
-    mexico = 'mex',
-    ftrow = 'fta',
-    japan = 'jpn',
-    eu = 'eu',
-    uk = 'gbr'
-  )
-
   result <- data.frame(
-    region = region_map[names(gtap_data$qgdp)],
+    region = GTAP_TO_ABBR[names(gtap_data$qgdp)],
     gdp_pct_change = round(gtap_data$qgdp, 2),
     stringsAsFactors = FALSE
   )
@@ -215,6 +210,19 @@ get_import_change <- function(gtap_data, target_region = 'usa') {
   }
 
   return(gtap_data$qmwreg[target_region])
+}
+
+#' Get aggregate export change
+#'
+#' @param gtap_data Result from read_gtap_solution()
+#' @param target_region Region to extract (default 'usa')
+#' @return Numeric value (% change)
+get_export_change <- function(gtap_data, target_region = 'usa') {
+  if (is.null(gtap_data$qxwreg)) {
+    stop('qxwreg not found in GTAP data')
+  }
+
+  return(gtap_data$qxwreg[target_region])
 }
 
 #' Get import prices by commodity
@@ -518,20 +526,7 @@ get_imports_by_country <- function(gtap_data) {
   # Sum across commodities (rows) for each source country (columns)
   country_totals <- colSums(gtap_data$viws)
 
-  # Map GTAP region names to standard abbreviations
-  region_map <- c(
-    usa = 'usa',
-    china = 'chn',
-    row = 'row',
-    canada = 'can',
-    mexico = 'mex',
-    ftrow = 'fta',
-    japan = 'jpn',
-    eu = 'eu',
-    uk = 'gbr'
-  )
-
-  names(country_totals) <- region_map[names(country_totals)]
+  names(country_totals) <- GTAP_TO_ABBR[names(country_totals)]
 
   return(country_totals)
 }
@@ -643,53 +638,31 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
   # Excel order: china, row, canada, mexico, ftrow, japan, eu, uk
   weight_countries <- c('china', 'row', 'canada', 'mexico', 'ftrow', 'japan', 'eu', 'uk')
 
-  # Calculate weighted ETR for each goods sector using exogenous import_weights
-  weighted_etrs <- numeric(length(all_commodities))
-  names(weighted_etrs) <- all_commodities
+  # Pre-join import_weights and etr_matrix for vectorized weighted ETR calculation
+  # Rename etr_matrix gtap_code to gtap_sector for joining
+  etr_for_join <- etr_matrix %>%
+    rename(gtap_sector = gtap_code)
 
-  for (i in seq_along(all_commodities)) {
-    comm <- all_commodities[i]
+  # Join weights with ETRs - only goods sectors will match
+  weights_with_etrs <- import_weights %>%
+    inner_join(etr_for_join, by = 'gtap_sector', suffix = c('_wt', '_etr'))
 
-    # Services sectors (not in ETR matrix) have weighted_etr = 0
-    if (!comm %in% goods_sectors) {
-      weighted_etrs[i] <- 0
-      next
-    }
+  # Calculate weighted ETR for each sector: SUMPRODUCT(ETRs, weights) / total
+  # Use rowwise vectorization across countries
+  weighted_etr_calc <- weights_with_etrs %>%
+    rowwise() %>%
+    mutate(
+      weighted_sum = sum(c_across(all_of(paste0(weight_countries, '_wt'))) *
+                         c_across(all_of(paste0(weight_countries, '_etr'))), na.rm = TRUE),
+      weighted_etr = if_else(is.na(total) | total == 0, 0, weighted_sum / total)
+    ) %>%
+    ungroup() %>%
+    select(gtap_sector, weighted_etr)
 
-    # Get import weights for this commodity from exogenous data
-    weight_row <- import_weights %>% filter(gtap_sector == comm)
-    if (nrow(weight_row) == 0) {
-      weighted_etrs[i] <- 0
-      next
-    }
-
-    total_imports <- weight_row$total
-    if (is.na(total_imports) || total_imports == 0) {
-      weighted_etrs[i] <- 0
-      next
-    }
-
-    # Get ETR row for this commodity
-    etr_row_idx <- which(etr_matrix$gtap_code == comm)
-    if (length(etr_row_idx) == 0) {
-      weighted_etrs[i] <- 0
-      next
-    }
-
-    # Calculate import-weighted ETR: SUMPRODUCT(ETRs, weights) / total
-    weighted_etr <- 0
-    for (country in weight_countries) {
-      if (country %in% names(weight_row) && country %in% names(etr_matrix)) {
-        import_weight <- weight_row[[country]]
-        etr_value <- etr_matrix[[country]][etr_row_idx]
-        if (!is.na(import_weight) && !is.na(etr_value)) {
-          weighted_etr <- weighted_etr + (etr_value * import_weight)
-        }
-      }
-    }
-
-    weighted_etrs[i] <- weighted_etr / total_imports
-  }
+  # Build named vector for all commodities (services get 0)
+  weighted_etrs <- setNames(rep(0, length(all_commodities)), all_commodities)
+  matched_sectors <- weighted_etr_calc$gtap_sector
+  weighted_etrs[matched_sectors] <- weighted_etr_calc$weighted_etr
 
   # Build result data frame - all 65 sectors
   result <- data.frame(
@@ -699,24 +672,16 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
     stringsAsFactors = FALSE
   )
 
-  # Add import_share from import_shares data
-  result <- result %>%
-    left_join(
-      import_shares %>% select(gtap_sector, import_share),
-      by = 'gtap_sector'
-    )
-  # Services have import_share = 0
-  result$import_share[is.na(result$import_share)] <- 0
+  # Add import_share, weight, is_food via joins; coalesce NAs to 0 for services
 
-  # Add weight from product_params
   result <- result %>%
-    left_join(
-      product_params %>% select(gtap_sector, weight, is_food),
-      by = 'gtap_sector'
+    left_join(import_shares %>% select(gtap_sector, import_share), by = 'gtap_sector') %>%
+    left_join(product_params %>% select(gtap_sector, weight, is_food), by = 'gtap_sector') %>%
+    mutate(
+      import_share = coalesce(import_share, 0),
+      weight = coalesce(weight, 0),
+      is_food = coalesce(is_food, 0)
     )
-  # Fill NA weight with 0, is_food with 0
-  result$weight[is.na(result$weight)] <- 0
-  result$is_food[is.na(result$is_food)] <- 0
 
   # Calculate M = import_share * weighted_ETR (raw SR effect)
   result$M <- result$import_share * result$weighted_etr
@@ -823,6 +788,10 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   # Import change (qmwreg)
   result$qmwreg <- get_import_change(gtap_data, 'usa')
   message(sprintf('    - Import change (qmwreg): %.2f%%', result$qmwreg))
+
+  # Export change (qxwreg)
+  result$qxwreg <- get_export_change(gtap_data, 'usa')
+  message(sprintf('    - Export change (qxwreg): %.2f%%', result$qxwreg))
 
   # Imports by country
   result$imports_by_country <- get_imports_by_country(gtap_data)
