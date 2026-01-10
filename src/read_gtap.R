@@ -638,53 +638,31 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
   # Excel order: china, row, canada, mexico, ftrow, japan, eu, uk
   weight_countries <- c('china', 'row', 'canada', 'mexico', 'ftrow', 'japan', 'eu', 'uk')
 
-  # Calculate weighted ETR for each goods sector using exogenous import_weights
-  weighted_etrs <- numeric(length(all_commodities))
-  names(weighted_etrs) <- all_commodities
+  # Pre-join import_weights and etr_matrix for vectorized weighted ETR calculation
+  # Rename etr_matrix gtap_code to gtap_sector for joining
+  etr_for_join <- etr_matrix %>%
+    rename(gtap_sector = gtap_code)
 
-  for (i in seq_along(all_commodities)) {
-    comm <- all_commodities[i]
+  # Join weights with ETRs - only goods sectors will match
+  weights_with_etrs <- import_weights %>%
+    inner_join(etr_for_join, by = 'gtap_sector', suffix = c('_wt', '_etr'))
 
-    # Services sectors (not in ETR matrix) have weighted_etr = 0
-    if (!comm %in% goods_sectors) {
-      weighted_etrs[i] <- 0
-      next
-    }
+  # Calculate weighted ETR for each sector: SUMPRODUCT(ETRs, weights) / total
+  # Use rowwise vectorization across countries
+  weighted_etr_calc <- weights_with_etrs %>%
+    rowwise() %>%
+    mutate(
+      weighted_sum = sum(c_across(all_of(paste0(weight_countries, '_wt'))) *
+                         c_across(all_of(paste0(weight_countries, '_etr'))), na.rm = TRUE),
+      weighted_etr = if_else(is.na(total) | total == 0, 0, weighted_sum / total)
+    ) %>%
+    ungroup() %>%
+    select(gtap_sector, weighted_etr)
 
-    # Get import weights for this commodity from exogenous data
-    weight_row <- import_weights %>% filter(gtap_sector == comm)
-    if (nrow(weight_row) == 0) {
-      weighted_etrs[i] <- 0
-      next
-    }
-
-    total_imports <- weight_row$total
-    if (is.na(total_imports) || total_imports == 0) {
-      weighted_etrs[i] <- 0
-      next
-    }
-
-    # Get ETR row for this commodity
-    etr_row_idx <- which(etr_matrix$gtap_code == comm)
-    if (length(etr_row_idx) == 0) {
-      weighted_etrs[i] <- 0
-      next
-    }
-
-    # Calculate import-weighted ETR: SUMPRODUCT(ETRs, weights) / total
-    weighted_etr <- 0
-    for (country in weight_countries) {
-      if (country %in% names(weight_row) && country %in% names(etr_matrix)) {
-        import_weight <- weight_row[[country]]
-        etr_value <- etr_matrix[[country]][etr_row_idx]
-        if (!is.na(import_weight) && !is.na(etr_value)) {
-          weighted_etr <- weighted_etr + (etr_value * import_weight)
-        }
-      }
-    }
-
-    weighted_etrs[i] <- weighted_etr / total_imports
-  }
+  # Build named vector for all commodities (services get 0)
+  weighted_etrs <- setNames(rep(0, length(all_commodities)), all_commodities)
+  matched_sectors <- weighted_etr_calc$gtap_sector
+  weighted_etrs[matched_sectors] <- weighted_etr_calc$weighted_etr
 
   # Build result data frame - all 65 sectors
   result <- data.frame(
@@ -694,24 +672,16 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
     stringsAsFactors = FALSE
   )
 
-  # Add import_share from import_shares data
-  result <- result %>%
-    left_join(
-      import_shares %>% select(gtap_sector, import_share),
-      by = 'gtap_sector'
-    )
-  # Services have import_share = 0
-  result$import_share[is.na(result$import_share)] <- 0
+  # Add import_share, weight, is_food via joins; coalesce NAs to 0 for services
 
-  # Add weight from product_params
   result <- result %>%
-    left_join(
-      product_params %>% select(gtap_sector, weight, is_food),
-      by = 'gtap_sector'
+    left_join(import_shares %>% select(gtap_sector, import_share), by = 'gtap_sector') %>%
+    left_join(product_params %>% select(gtap_sector, weight, is_food), by = 'gtap_sector') %>%
+    mutate(
+      import_share = coalesce(import_share, 0),
+      weight = coalesce(weight, 0),
+      is_food = coalesce(is_food, 0)
     )
-  # Fill NA weight with 0, is_food with 0
-  result$weight[is.na(result$weight)] <- 0
-  result$is_food[is.na(result$is_food)] <- 0
 
   # Calculate M = import_share * weighted_ETR (raw SR effect)
   result$M <- result$import_share * result$weighted_etr
