@@ -85,23 +85,22 @@ calculate_country_etrs <- function(etr_matrix, viws, viws_baseline,
 
     # derived_import = (postsim / baseline) * baseline_dollars
     # Handle division by zero: if baseline is 0, use 0
-    derived_imports <- numeric(length(sectors))
-    for (i in seq_along(sectors)) {
-      sector <- sectors[i]
-      baseline_idx <- which(rownames(viws_baseline) == sector)
-      dollars_idx <- which(rownames(import_baseline_dollars) == sector)
 
-      if (length(baseline_idx) == 0 || length(dollars_idx) == 0) {
-        stop('Baseline rows missing for sector: ', sector)
-      }
-      if (baseline_viws[baseline_idx] > 0) {
-        ratio <- raw_imports[i] / baseline_viws[baseline_idx]
-        derived_imports[i] <- ratio * baseline_dollars[dollars_idx]
-      } else {
-        derived_imports[i] <- 0
-      }
+    # Validate all sectors exist in baseline matrices (vectorized check)
+    missing_baseline <- setdiff(sectors, rownames(viws_baseline))
+    missing_dollars <- setdiff(sectors, rownames(import_baseline_dollars))
+    if (length(missing_baseline) > 0 || length(missing_dollars) > 0) {
+      stop('Baseline rows missing for sector(s): ',
+           paste(union(missing_baseline, missing_dollars), collapse = ', '))
     }
-    country_imports <- derived_imports
+
+    # Vectorized calculation using direct row indexing by sector name
+    baseline_viws_vec <- baseline_viws[sectors]
+    baseline_dollars_vec <- baseline_dollars[sectors]
+
+    # Calculate ratio where baseline > 0, else 0
+    ratio <- if_else(baseline_viws_vec > 0, raw_imports / baseline_viws_vec, 0)
+    country_imports <- ratio * baseline_dollars_vec
 
     total_imports <- sum(country_imports)
     result[[paste0('imports_', output_suffix)]] <- total_imports
@@ -116,22 +115,19 @@ calculate_country_etrs <- function(etr_matrix, viws, viws_baseline,
       stop('Total imports are non-positive for country: ', viws_col)
     }
 
-    weighted_etr <- 0
-    matched_imports <- 0  # Only count imports from sectors with ETR values
-
-    for (i in seq_along(sectors)) {
-      sector <- sectors[i]
-      # etr_matrix uses gtap_code column
-      etr_row <- which(etr_matrix$gtap_code == sector)
-
-      if (length(etr_row) == 0) {
-        stop('ETR matrix missing gtap_code for sector: ', sector)
-      }
-      sector_etr <- etr_matrix[[etr_col]][etr_row]
-      sector_imports <- country_imports[i]
-      weighted_etr <- weighted_etr + (sector_etr * sector_imports)
-      matched_imports <- matched_imports + sector_imports
+    # Validate all sectors exist in ETR matrix (vectorized check)
+    missing_etr <- setdiff(sectors, etr_matrix$gtap_code)
+    if (length(missing_etr) > 0) {
+      stop('ETR matrix missing gtap_code for sector(s): ', paste(missing_etr, collapse = ', '))
     }
+
+    # Build named lookup vector for ETR values (gtap_code -> etr)
+    etr_lookup <- setNames(etr_matrix[[etr_col]], etr_matrix$gtap_code)
+
+    # Vectorized weighted ETR calculation
+    sector_etrs <- etr_lookup[sectors]
+    weighted_etr <- sum(sector_etrs * country_imports)
+    matched_imports <- sum(country_imports)
 
     # Use matched imports as denominator (excludes services without tariffs)
     if (matched_imports > 0) {
