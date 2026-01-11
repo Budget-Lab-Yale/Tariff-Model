@@ -33,6 +33,7 @@ source('src/09_calculate_distribution.R')
 source('src/10_calculate_products.R')
 source('src/11_write_outputs.R')
 source('src/12_export_excel.R')
+source('src/13_generate_report.R')
 
 
 #' Load MAUS output levels after user runs MAUS
