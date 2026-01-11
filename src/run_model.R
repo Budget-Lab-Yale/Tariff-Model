@@ -24,6 +24,7 @@ source('src/02_calculate_etr.R')
 source('src/03_calculate_prices.R')
 source('src/04a_generate_maus_inputs.R')
 source('src/04_calculate_revenue.R')
+source('src/05a_predict_maus.R')
 source('src/05_calculate_macro.R')
 source('src/06_calculate_sectors.R')
 source('src/07_calculate_dynamic_revenue.R')
@@ -133,9 +134,11 @@ REQUIRED OUTPUT FORMAT (CSV with columns):
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
+#' @param use_maus_surrogate If TRUE (default), use pre-estimated MAUS surrogate.
+#'   If FALSE, use manual MAUS workflow (generate shocks, pause, load output).
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario) {
+run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -216,22 +219,38 @@ run_scenario <- function(scenario) {
   message(sprintf('  Calculated price effects for %d products', nrow(inputs$product_prices)))
 
   #---------------------------
+  # Step 4a: Get MAUS outputs (surrogate or manual)
   #---------------------------
-  # Step 4a: Generate MAUS inputs and pause
+
+  if (use_maus_surrogate) {
+    # Use pre-estimated surrogate model
+    message('\nStep 4a: Predicting MAUS outputs (surrogate)...')
+
+    if (!maus_surrogate_available()) {
+      stop('MAUS surrogate not found. Either:\n',
+           '  1. Run estimate_maus_surrogate() first, or\n',
+           '  2. Use run_scenario(..., use_maus_surrogate = FALSE) for manual MAUS')
+    }
+
+    # Predict MAUS using interpolation
+    inputs$maus <- predict_maus(
+      etr = etr_results$post_sub_increase / 100,  # convert to decimal
+      baseline_maus = inputs$baselines$maus
+    )
+  } else {
+    # Manual MAUS workflow: generate shocks, pause, load output
+    message('\nStep 4a: Generating MAUS input shocks...')
+    maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
+    print_shock_summary(maus_inputs)
+
+    wait_for_maus(maus_inputs, scenario_dir)
+
+    # Load MAUS output levels
+    message('\nLoading MAUS output levels...')
+    inputs$maus <- load_maus_levels(scenario_dir, inputs$baselines$maus)
+  }
+
   #---------------------------
-
-  message('
-Step 4a: Generating MAUS input shocks...')
-  maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
-  print_shock_summary(maus_inputs)
-
-  wait_for_maus(maus_inputs, scenario_dir)
-
-  # Load MAUS output levels
-  message('
-Loading MAUS output levels...')
-  inputs$maus <- load_maus_levels(scenario_dir, inputs$baselines$maus)
-
   # Step 4: Calculate revenue
   #---------------------------
 
