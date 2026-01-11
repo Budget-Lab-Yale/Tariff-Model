@@ -1,0 +1,29 @@
+# =============================================================================
+# Model Parameters for Scenario: example
+# =============================================================================
+#
+# Scenario-specific parameters and paths
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GTAP Configuration
+# -----------------------------------------------------------------------------
+
+gtap:
+  # Path to GTAP executable
+  executable: 'C:/Users/jar335/Documents/GTAP/gtapv7.exe'
+
+  # Working directory for GTAP (where basedata.har etc. are located)
+  work_dir: 'C:/Users/jar335/Documents/GTAP/work'
+
+  # Include retaliation shocks from this scenario's retaliation/shocks.txt
+  include_retaliation: true
+
+# ---------------------------------------------------------------------------
+# Refund Parameters
+# ---------------------------------------------------------------------------
+
+# Calendar-year 2026 refund in billions (reduces FY2026/FY2027 revenue and
+# lowers UTFIBC shocks for 2026 Q1-Q4). Set to 0 to disable.
+refund_2026: 142.0
