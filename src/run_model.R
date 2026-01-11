@@ -222,9 +222,13 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   # Step 4a: Get MAUS outputs (surrogate or manual)
   #---------------------------
 
+  # Always generate MAUS input shocks (needed for both surrogate and manual)
+  message('\nStep 4a: Generating MAUS input shocks...')
+  maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
+
   if (use_maus_surrogate) {
-    # Use pre-estimated surrogate model
-    message('\nStep 4a: Predicting MAUS outputs (surrogate)...')
+    # Use pre-estimated surrogate model (indexed by UTFIBC)
+    message('  Using MAUS surrogate model...')
 
     if (!maus_surrogate_available()) {
       stop('MAUS surrogate not found. Either:\n',
@@ -232,15 +236,13 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
            '  2. Use run_scenario(..., use_maus_surrogate = FALSE) for manual MAUS')
     }
 
-    # Predict MAUS using interpolation
+    # Predict MAUS using interpolation on UTFIBC
     inputs$maus <- predict_maus(
-      etr = etr_results$post_sub_increase / 100,  # convert to decimal
+      maus_inputs = maus_inputs$shocks,
       baseline_maus = inputs$baselines$maus
     )
   } else {
-    # Manual MAUS workflow: generate shocks, pause, load output
-    message('\nStep 4a: Generating MAUS input shocks...')
-    maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
+    # Manual MAUS workflow: print shocks, pause, load output
     print_shock_summary(maus_inputs)
 
     wait_for_maus(maus_inputs, scenario_dir)

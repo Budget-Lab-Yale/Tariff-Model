@@ -1,13 +1,21 @@
 # Build MAUS surrogate from calibration data
 # Run this script from the project root
+#
+# The surrogate is indexed by UTFIBC (the actual MAUS input shock) rather
+# than ETR, which provides more accurate predictions when tariff structure
+# varies (e.g., changing rates for specific countries).
 
 library(readr)
 
-message('=== Building MAUS Surrogate ===')
+message('=== Building MAUS Surrogate (UTFIBC-indexed) ===')
 
 # Parameters
 training_dir <- 'output/maus_calibration'
 output_file <- 'resources/maus_surrogate/interpolators.rds'
+
+# Reference quarter for UTFIBC indexing (2026 Q1 - in peak impact period)
+UTFIBC_REF_YEAR <- 2026
+UTFIBC_REF_QUARTER <- 1
 
 # Find training runs
 run_dirs <- list.dirs(training_dir, recursive = FALSE, full.names = TRUE)
@@ -17,24 +25,28 @@ message(sprintf('Found %d training runs in %s', length(run_dirs), training_dir))
 training_runs <- list()
 for (dir in run_dirs) {
   name <- basename(dir)
-  etr_file <- file.path(dir, 'etr.txt')
   shocks_file <- file.path(dir, 'shocks.csv')
 
-  etr <- as.numeric(readLines(etr_file, n = 1))
   quarterly <- read_csv(shocks_file, show_col_types = FALSE)
 
-  training_runs[[name]] <- list(etr = etr, quarterly = quarterly)
-  message(sprintf('  Loaded %s: ETR = %.4f (%.2f%%)', name, etr, etr * 100))
+  # Extract UTFIBC at reference quarter
+  ref_row <- quarterly[quarterly$year == UTFIBC_REF_YEAR &
+                         quarterly$quarter == UTFIBC_REF_QUARTER, ]
+  utfibc_ref <- ref_row$utfibc
+
+  training_runs[[name]] <- list(utfibc = utfibc_ref, quarterly = quarterly)
+  message(sprintf('  Loaded %s: UTFIBC = %.2f (at %d Q%d)',
+                  name, utfibc_ref, UTFIBC_REF_YEAR, UTFIBC_REF_QUARTER))
 }
 
-# Extract ETRs and sort
-etrs <- sapply(training_runs, function(x) x$etr)
-etr_order <- order(etrs)
-etrs <- etrs[etr_order]
-training_runs <- training_runs[etr_order]
+# Extract UTFIBCs and sort
+utfibcs <- sapply(training_runs, function(x) x$utfibc)
+utfibc_order <- order(utfibcs)
+utfibcs <- utfibcs[utfibc_order]
+training_runs <- training_runs[utfibc_order]
 
-etr_range <- c(min(etrs), max(etrs))
-message(sprintf('ETR range: %.2f%% to %.2f%%', etr_range[1] * 100, etr_range[2] * 100))
+utfibc_range <- c(min(utfibcs), max(utfibcs))
+message(sprintf('UTFIBC range: %.2f to %.2f', utfibc_range[1], utfibc_range[2]))
 
 # Get quarter structure from first run
 quarters <- training_runs[[1]]$quarterly[, c('year', 'quarter')]
@@ -42,7 +54,7 @@ n_quarters <- nrow(quarters)
 message(sprintf('Quarters: %d', n_quarters))
 
 # Build interpolators for each quarter
-message('Building interpolators...')
+message('Building interpolators (indexed by UTFIBC)...')
 interpolators <- list()
 
 for (i in seq_len(n_quarters)) {
@@ -55,21 +67,23 @@ for (i in seq_len(n_quarters)) {
   emp_vals <- sapply(training_runs, function(x) x$quarterly$LEB[i])
   ur_vals <- sapply(training_runs, function(x) x$quarterly$LURC[i])
 
-  # Build approxfun interpolators (rule = 2 for constant extrapolation)
+  # Build approxfun interpolators indexed by UTFIBC (rule = 2 for constant extrapolation)
   interpolators[[key]] <- list(
-    gdp = approxfun(etrs, gdp_vals, rule = 2),
-    emp = approxfun(etrs, emp_vals, rule = 2),
-    ur = approxfun(etrs, ur_vals, rule = 2)
+    gdp = approxfun(utfibcs, gdp_vals, rule = 2),
+    emp = approxfun(utfibcs, emp_vals, rule = 2),
+    ur = approxfun(utfibcs, ur_vals, rule = 2)
   )
 }
 
 # Build surrogate object
 surrogate <- list(
   interpolators = interpolators,
-  etr_range = etr_range,
+  utfibc_range = utfibc_range,
+  utfibc_ref_year = UTFIBC_REF_YEAR,
+  utfibc_ref_quarter = UTFIBC_REF_QUARTER,
   quarters = quarters,
   n_training_runs = length(training_runs),
-  training_etrs = etrs,
+  training_utfibcs = utfibcs,
   created_at = Sys.time()
 )
 
@@ -80,7 +94,8 @@ saveRDS(surrogate, output_file)
 message(sprintf('\nSaved surrogate to: %s', output_file))
 message('\n=== Surrogate Model Summary ===')
 message(sprintf('Training runs: %d', surrogate$n_training_runs))
-message(sprintf('Training ETRs: %s', paste(sprintf('%.2f%%', surrogate$training_etrs * 100), collapse = ', ')))
-message(sprintf('ETR range: %.2f%% to %.2f%%', etr_range[1] * 100, etr_range[2] * 100))
+message(sprintf('Training UTFIBCs: %s', paste(sprintf('%.2f', surrogate$training_utfibcs), collapse = ', ')))
+message(sprintf('UTFIBC range: %.2f to %.2f (at %d Q%d)',
+                utfibc_range[1], utfibc_range[2], UTFIBC_REF_YEAR, UTFIBC_REF_QUARTER))
 message(sprintf('Quarters: %d', n_quarters))
 message('Done!')

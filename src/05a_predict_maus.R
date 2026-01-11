@@ -5,9 +5,12 @@
 # This module predicts MAUS quarterly outputs using pre-estimated interpolators.
 # Replaces the manual MAUS workflow with instant surrogate predictions.
 #
+# The surrogate is indexed by UTFIBC (the actual MAUS input shock) rather than
+# ETR, which provides more accurate predictions when tariff structure varies.
+#
 # Usage:
 #   source('src/05a_predict_maus.R')
-#   maus_data <- predict_maus(etr = 0.10, baseline_maus = inputs$baselines$maus)
+#   maus_data <- predict_maus(maus_inputs = maus_shocks, baseline_maus = inputs$baselines$maus)
 #
 # =============================================================================
 
@@ -50,9 +53,10 @@ load_maus_surrogate <- function(
 #' Predict MAUS outputs using surrogate model
 #'
 #' Uses pre-estimated interpolators to predict quarterly GDP, employment,
-#' and unemployment rate for a given ETR magnitude.
+#' and unemployment rate based on UTFIBC shock magnitude.
 #'
-#' @param etr Post-substitution ETR increase as decimal (e.g., 0.10 for 10%)
+#' @param maus_inputs Tibble with MAUS input shocks containing columns:
+#'   year, quarter, utfibc (from generate_maus_inputs())
 #' @param baseline_maus Baseline MAUS data tibble with columns:
 #'   year, quarter, gdp_baseline, employment_baseline, urate_baseline
 #' @param surrogate_file Path to surrogate RDS file (default: resources/maus_surrogate/interpolators.rds)
@@ -61,30 +65,45 @@ load_maus_surrogate <- function(
 #'   year, quarter, gdp_baseline, gdp_tariff, employment_baseline,
 #'   employment_tariff, urate_baseline, urate_tariff
 predict_maus <- function(
-  etr,
+  maus_inputs,
   baseline_maus,
   surrogate_file = 'resources/maus_surrogate/interpolators.rds'
 ) {
 
   # Validate inputs
-  if (!is.numeric(etr) || length(etr) != 1) {
-    stop('etr must be a single numeric value')
+  if (!is.data.frame(maus_inputs)) {
+    stop('maus_inputs must be a data frame with year, quarter, utfibc columns')
   }
-  if (etr < 0) {
-    stop('etr must be non-negative')
+  required_cols <- c('year', 'quarter', 'utfibc')
+  missing_cols <- setdiff(required_cols, names(maus_inputs))
+  if (length(missing_cols) > 0) {
+    stop('maus_inputs missing columns: ', paste(missing_cols, collapse = ', '))
   }
 
   # Load surrogate
   surrogate <- load_maus_surrogate(surrogate_file)
 
-  # Check if ETR is within training range
-  etr_min <- surrogate$etr_range[1]
-  etr_max <- surrogate$etr_range[2]
+  # Extract UTFIBC at reference quarter for interpolation lookup
+  ref_year <- surrogate$utfibc_ref_year
+  ref_quarter <- surrogate$utfibc_ref_quarter
 
-  if (etr < etr_min || etr > etr_max) {
+  ref_row <- maus_inputs %>%
+    filter(year == ref_year, quarter == ref_quarter)
+
+  if (nrow(ref_row) != 1) {
+    stop('Reference quarter ', ref_year, ' Q', ref_quarter, ' not found in maus_inputs')
+  }
+
+  utfibc_ref <- ref_row$utfibc
+
+  # Check if UTFIBC is within training range
+  utfibc_min <- surrogate$utfibc_range[1]
+  utfibc_max <- surrogate$utfibc_range[2]
+
+  if (utfibc_ref < utfibc_min || utfibc_ref > utfibc_max) {
     warning(sprintf(
-      'ETR %.2f%% is outside training range [%.2f%%, %.2f%%]. Extrapolating.',
-      etr * 100, etr_min * 100, etr_max * 100
+      'UTFIBC %.2f is outside training range [%.2f, %.2f]. Extrapolating.',
+      utfibc_ref, utfibc_min, utfibc_max
     ))
   }
 
@@ -100,9 +119,9 @@ predict_maus <- function(
     key <- paste0(quarters$year[i], '_Q', quarters$quarter[i])
     interp <- surrogate$interpolators[[key]]
 
-    gdp_tariff[i] <- interp$gdp(etr)
-    emp_tariff[i] <- interp$emp(etr)
-    ur_tariff[i] <- interp$ur(etr)
+    gdp_tariff[i] <- interp$gdp(utfibc_ref)
+    emp_tariff[i] <- interp$emp(utfibc_ref)
+    ur_tariff[i] <- interp$ur(utfibc_ref)
   }
 
   # Build prediction tibble
@@ -128,7 +147,8 @@ predict_maus <- function(
     stop('Surrogate missing quarters: ', paste(missing, collapse = ', '))
   }
 
-  message(sprintf('  Predicted MAUS outputs for ETR = %.2f%%', etr * 100))
+  message(sprintf('  Predicted MAUS outputs for UTFIBC = %.2f (at %d Q%d)',
+                  utfibc_ref, ref_year, ref_quarter))
 
   return(result)
 }
