@@ -1,0 +1,32 @@
+/*
+ * ATTENTION: The "eval" devtool has been used (maybe by default in mode: "development").
+ * This devtool is neither made for production nor for readable output files.
+ * It uses "eval()" calls to create a separate source file in the browser devtools.
+ * If you are trying to read the output file, select a different devtool (https://webpack.js.org/configuration/devtool/)
+ * or disable the default devtool with "devtool: false".
+ * If you are looking for production-ready output files, see mode: "production" (https://webpack.js.org/configuration/mode/).
+ */
+/******/ (() => { // webpackBootstrap
+/******/ 	var __webpack_modules__ = ({
+
+/***/ "./src/templates/layout/component/layout.js":
+/*!**************************************************!*\
+  !*** ./src/templates/layout/component/layout.js ***!
+  \**************************************************/
+/***/ (() => {
+
+eval("Drupal.behaviors.layout = {\n  attach: function attach(context) {\n    var MAIN_MENU_MQ = window.matchMedia(\"(\".concat(getComputedStyle(document.documentElement).getPropertyValue('--main-menu-mq'), \")\"));\n    var ROOT = document.documentElement;\n    var BLOCK_MAIN_MENU = context.querySelector('[data-js=\"block-main-menu\"]');\n    if (!BLOCK_MAIN_MENU) return;\n    var MENU_TOGGLE = context.querySelector('[data-js=\"menu-toggle\"]');\n    if (!MENU_TOGGLE) return;\n    var SITE_HEADER = document.querySelector('[data-js=\"site-header\"]');\n    if (!SITE_HEADER) return;\n\n    // Remove the opacity style.\n    BLOCK_MAIN_MENU.style.opacity = null;\n    MENU_TOGGLE.addEventListener('click', function () {\n      // Hide the menu.\n      if (MENU_TOGGLE.getAttribute('aria-expanded') === 'true') {\n        hideBlockMainMenu();\n      }\n      // Show the menu.\n      else {\n        showBlockMainMenu();\n      }\n    });\n    window.addEventListener('resize', function () {\n      ROOT.style.setProperty('--site-header-height', \"\".concat(SITE_HEADER.clientHeight, \"px\"));\n    });\n    MAIN_MENU_MQ.onchange = function (e) {\n      mqOnChange(e);\n    };\n    function mqOnChange(e) {\n      // Desktop\n      if (e.matches) {\n        showBlockMainMenu();\n      }\n      // Mobile\n      else {\n        hideBlockMainMenu();\n      }\n    }\n    function showBlockMainMenu() {\n      BLOCK_MAIN_MENU.setAttribute('aria-hidden', 'false');\n    }\n    function hideBlockMainMenu() {\n      BLOCK_MAIN_MENU.setAttribute('aria-hidden', 'true');\n    }\n\n    // Kickoff!\n\n    window.dispatchEvent(new Event('resize'));\n    mqOnChange(MAIN_MENU_MQ);\n  }\n};\n\n//# sourceURL=webpack://@budgetlab/ui/./src/templates/layout/component/layout.js?");
+
+/***/ })
+
+/******/ 	});
+/************************************************************************/
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module can't be inlined because the eval devtool is used.
+/******/ 	var __webpack_exports__ = {};
+/******/ 	__webpack_modules__["./src/templates/layout/component/layout.js"]();
+/******/ 	
+/******/ })()
+;

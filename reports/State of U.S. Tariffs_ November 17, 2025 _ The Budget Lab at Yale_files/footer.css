@@ -1,0 +1,30 @@
+/*!*****************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ../node_modules/css-loader/dist/cjs.js!../node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[0].use[2]!../node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[0].use[3]!./src/templates/navigation/footer/component/footer.scss ***!
+  \*****************************************************************************************************************************************************************************************************************************************************/
+.menu--footer {
+  --list-margin: 0;
+  --list-padding: 0;
+  --li-margin: 0;
+  --li-padding: 0;
+  --li-style-type: none;
+}
+
+.menu--footer {
+  font-size: 0.7501875469rem;
+  -moz-columns: 2;
+       columns: 2;
+  -moz-column-gap: 35.53778px;
+       column-gap: 35.53778px;
+}
+.menu--footer.menu--level-0 > .menu__item:not(:last-child) {
+  --li-margin: 0 0 20px 0;
+}
+.menu--footer.menu--level-0 > .menu__item > a {
+  --a-font-weight: 800;
+}
+.menu--footer.menu--level-1 {
+  --list-margin: 6.3344570821px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
