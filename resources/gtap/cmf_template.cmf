@@ -10,12 +10,12 @@ file GTAPSUM = SUMMARY.har;
 file WELVIEW = DECOMP.har;
 file GTAPVOL = GTAPVOL.har;
 
-! GTAP installation paths
-aux files = C:\Users\jar335\Documents\GTAP\GTAPV7;
-file gtapSETS = C:\Users\jar335\Documents\GTAP\tbltarv7\sets.har;
-file gtapDATA = C:\Users\jar335\Documents\GTAP\tbltarv7\basedata.har;
+! GTAP installation paths - replaced at runtime from config/gtap_config.yaml
+aux files = {{GTAP_AUX_DIR}};
+file gtapSETS = {{GTAP_DATA_DIR}}/sets.har;
+file gtapDATA = {{GTAP_DATA_DIR}}/basedata.har;
 Updated file gtapDATA = gdata.upd;
-file gtapPARM = C:\Users\jar335\Documents\GTAP\tbltarv7\default.prm;
+file gtapPARM = {{GTAP_DATA_DIR}}/default.prm;
 
 ! Dynamic values - replaced at runtime
 Solution file = {{SOLUTION_FILE}};

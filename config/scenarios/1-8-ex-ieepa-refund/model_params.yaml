@@ -1,22 +1,17 @@
 # =============================================================================
-# Model Parameters for Scenario: example
+# Model Parameters for Scenario: 1-8-ex-ieepa-refund
 # =============================================================================
 #
-# Scenario-specific parameters and paths
+# Scenario-specific parameters only.
+# GTAP paths are configured globally in config/gtap_config.yaml
 #
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# GTAP Configuration
+# GTAP Configuration (scenario-specific options only)
 # -----------------------------------------------------------------------------
 
 gtap:
-  # Path to GTAP executable
-  executable: 'C:/Users/jar335/Documents/GTAP/gtapv7.exe'
-
-  # Working directory for GTAP (where basedata.har etc. are located)
-  work_dir: 'C:/Users/jar335/Documents/GTAP/work'
-
   # Include retaliation shocks from this scenario's retaliation/shocks.txt
   include_retaliation: true
 

@@ -67,7 +67,7 @@ install.packages(c('openxlsx', 'httr2', 'jsonlite'))
 ### External Dependencies
 
 1. **Tariff-ETRs**: Clone to `../Tariff-ETRs` (sibling directory)
-2. **GTAP executables**: `gtapv7.exe` and `sltoht.exe` - paths configured per scenario in `model_params.yaml`
+2. **GTAP + GEMPACK**: See [GTAP Setup](#gtap-setup) section below
 3. **MAUS surrogate**: Pre-trained model at `resources/maus_surrogate/interpolators.rds`
 
 ### For Report Generation (Optional)
@@ -94,6 +94,75 @@ cd Tariff-Model
 # Install R packages
 Rscript -e "install.packages(c('tidyverse', 'yaml', 'HARr'))"
 ```
+
+## GTAP Setup
+
+The model requires GTAP (Global Trade Analysis Project) and GEMPACK for trade simulations. Follow these steps to configure GTAP for your system.
+
+### 1. Install Required Software
+
+| Component | Source | Purpose |
+|-----------|--------|---------|
+| **RunGTAP** | [GTAP Website](https://www.gtap.agecon.purdue.edu/products/rungtap/) | GTAP model executable (gtapv7.exe) |
+| **GEMPACK** | [COPSMODELS](https://www.copsmodels.com/gempack.htm) | Solution extraction tools (sltoht.exe) |
+| **GTAP Database** | Included with RunGTAP | Data files (sets.har, basedata.har, default.prm) |
+
+### 2. Configure GTAP Paths
+
+Edit `config/gtap_config.yaml` with your installation paths:
+
+```yaml
+# Path to GTAP executable (gtapv7.exe)
+gtap_executable: 'C:/runGTAP375/gtapv7.exe'
+
+# GTAP working directory
+gtap_work_dir: 'C:/runGTAP375/work'
+
+# GTAP data directory (contains sets.har, basedata.har, default.prm)
+gtap_data_dir: 'C:/runGTAP375/tbltarv7'
+
+# GTAP auxiliary files directory
+gtap_aux_dir: 'C:/runGTAP375'
+
+# Path to sltoht executable (GEMPACK)
+sltoht_executable: 'C:/GP/sltoht.exe'
+```
+
+### 3. Verify Installation
+
+The model will automatically validate your GTAP configuration on startup. If components are missing, you'll see detailed error messages:
+
+```
+============================================================
+GTAP SETUP ISSUES DETECTED
+============================================================
+
+- GTAP executable not found: C:/runGTAP375/gtapv7.exe
+  -> Install RunGTAP from https://www.gtap.agecon.purdue.edu/
+
+- sltoht executable not found: C:/GP/sltoht.exe
+  -> Install GEMPACK from https://www.copsmodels.com/gempack.htm
+
+Please update config/gtap_config.yaml with correct paths.
+============================================================
+```
+
+### Common GTAP Installation Paths
+
+| System | Typical RunGTAP Location | Typical GEMPACK Location |
+|--------|--------------------------|--------------------------|
+| Windows | `C:/runGTAP375/` | `C:/GP/` |
+| Windows (user) | `C:/Users/{name}/Documents/GTAP/` | `C:/GP/` |
+
+### Required GTAP Files
+
+The model needs these files in your `gtap_data_dir`:
+
+| File | Description |
+|------|-------------|
+| `sets.har` | GTAP region/sector definitions |
+| `basedata.har` | Baseline trade flow data |
+| `default.prm` | Default parameter values |
 
 ## Command Line Usage
 
@@ -179,16 +248,19 @@ Tariff-Model/
 │   ├── helpers.R              # Shared utilities
 │   └── read_gtap.R            # GTAP HAR file reader
 ├── config/
+│   ├── gtap_config.yaml       # Global GTAP installation paths
+│   ├── global_assumptions.yaml # Model-wide parameters
 │   └── scenarios/
 │       ├── 11-17/             # Example scenario
 │       │   ├── tariff_etrs/   # Tariff-ETRs config (232.yaml, ieepa_*.yaml)
 │       │   ├── retaliation/   # Retaliation shock definitions
 │       │   ├── maus_outputs/  # MAUS output (quarterly.csv)
-│       │   └── model_params.yaml
+│       │   └── model_params.yaml  # Scenario-specific settings
 │       └── {other-scenarios}/
 ├── resources/
 │   ├── baselines/             # CBO baseline projections
 │   ├── mappings/              # GTAP sector crosswalks
+│   ├── gtap/                  # GTAP CMF template and mappings
 │   ├── maus_surrogate/        # Pre-trained MAUS surrogate
 │   └── distribution/          # Consumption weight data
 ├── output/
@@ -233,15 +305,15 @@ Available scenarios:
    - `ieepa_reciprocal.yaml` - IEEPA reciprocal tariffs
    - `other_params.yaml` - Other tariff parameters
 
-3. Edit model parameters in `model_params.yaml`:
+3. Edit scenario-specific parameters in `model_params.yaml`:
    ```yaml
    gtap:
-     executable: 'C:/path/to/gtapv7.exe'
-     work_dir: 'C:/path/to/gtap/work'
-     include_retaliation: true
+     include_retaliation: true  # Include retaliation shocks
 
    refund_2026: 0.0  # Optional refund amount in billions
    ```
+
+   > **Note:** GTAP installation paths are configured globally in `config/gtap_config.yaml`, not per-scenario.
 
 4. (Optional) Add retaliation shocks in `retaliation/shocks.txt`
 
