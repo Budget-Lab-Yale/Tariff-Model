@@ -1,0 +1,110 @@
+/*!*************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ../node_modules/css-loader/dist/cjs.js!../node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[0].use[2]!../node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[0].use[3]!./src/templates/navigation/main/component/main.scss ***!
+  \*************************************************************************************************************************************************************************************************************************************************/
+.menu--main {
+  --list-margin: 0;
+  --list-padding: 0;
+  --li-margin: 0;
+  --li-padding: 0;
+  --li-style-type: none;
+}
+
+.menu--main.menu--level-0 > .menu__item > a,
+.menu--main.menu--level-0 > .menu__item > .menu__details > .menu__summary > a {
+  display: inline;
+  background-image: linear-gradient(0deg, var(--animate-underline-gradient-color-1, currentColor) 0%, var(--animate-underline-gradient-color-2, var(--animate-underline-gradient-color-1, currentColor)) 100%);
+  background-size: var(--animate-underline-background-size-width, 0%) var(--animate-underline-background-size-height, 1px);
+  background-repeat: no-repeat;
+  background-position: var(--animate-underline-background-position-x, left) bottom;
+  transition: all 200ms ease-in-out;
+}
+.menu--main.menu--level-0 > .menu__item > a:hover,
+.menu--main.menu--level-0 > .menu__item > .menu__details > .menu__summary > a:hover {
+  --animate-underline-background-size-height: var(--animate-underline-background-size-height-hover);
+  --animate-underline-background-size-width: var(--animate-underline-background-size-width-hover, 100%);
+}
+
+.menu--main {
+  --a-font-weight: 800;
+  --a-color: #63aaff;
+  --a-color-hover: #ffffff;
+}
+.menu--main.menu--level-0 {
+  font-size: 0.7501875469rem;
+  display: flex;
+  gap: 26.66px;
+  position: fixed;
+  flex-direction: column;
+  inset: -1px;
+  margin-top: var(--site-header-height);
+  background-color: #1b3499;
+  z-index: 1;
+  padding-block: 20px;
+  padding-inline: var(--safe-area-inline);
+}
+@media (min-width: 64em) {
+  .menu--main.menu--level-0 {
+    padding-block: 0;
+    flex-direction: row;
+    margin-top: 0;
+    position: relative;
+    padding-inline: 0;
+  }
+}
+@media (min-width: 64em) {
+  .menu--main.menu--level-0 > .menu__item {
+    padding-block: 26.66px;
+  }
+}
+.menu--main.menu--level-0 > .menu__item > a,
+.menu--main.menu--level-0 > .menu__item > .menu__details > .menu__summary > a {
+  --animate-underline-background-size-width: 100%;
+  --animate-underline-background-size-height: 0;
+  --animate-underline-background-size-height-hover: 1ex;
+  --animate-underline-gradient-color-1: #286dc0;
+}
+.menu--main.menu--level-0 > .menu__item--active > a,
+.menu--main.menu--level-0 > .menu__item--active > .menu__details > .menu__summary > a,
+.menu--main.menu--level-0 > .menu__item > .menu__details[open] > .menu__summary > a {
+  --animate-underline-background-size-height: 1ex;
+  --a-color: #ffffff;
+}
+.menu--main.menu--level-0 .menu__expand {
+  margin-left: 0.5ch;
+}
+.menu--main.menu--level-0 .menu__submenu-wrapper {
+  background-color: #1b3499;
+  padding-block: 20px 0;
+}
+@media (min-width: 64em) {
+  .menu--main.menu--level-0 .menu__submenu-wrapper {
+    padding-block: 0 20px;
+    margin-inline: calc(20px * -1);
+    position: absolute;
+    z-index: 10;
+    bottom: 0;
+    transform: translateY(100%);
+    border-bottom: 3px solid #63aaff;
+  }
+}
+.menu--main.menu--level-1 {
+  display: flex;
+  flex-direction: column;
+  gap: 26.66px;
+  margin-inline: 20px;
+  white-space: nowrap;
+}
+.menu--main.menu--level-1 > .menu__item--active > a {
+  --a-color: #ffffff;
+}
+.menu--main.menu--level-1 .menu__item:nth-child(1) .menu__expand {
+  display: none;
+}
+@media (min-width: 64em) {
+  .menu--main.menu--level-1 {
+    padding-inline: 0;
+  }
+  .menu--main.menu--level-1 .menu__item:nth-child(1) {
+    display: none;
+  }
+}

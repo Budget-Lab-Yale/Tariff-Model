@@ -1,0 +1,24 @@
+/*!***********************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ../node_modules/css-loader/dist/cjs.js!../node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[0].use[2]!../node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[0].use[3]!./src/templates/navigation/corporate/component/corporate.scss ***!
+  \***********************************************************************************************************************************************************************************************************************************************************/
+.menu--corporate {
+  --list-margin: 0;
+  --list-padding: 0;
+  --li-margin: 0;
+  --li-padding: 0;
+  --li-style-type: none;
+}
+
+.menu--corporate {
+  --a-font-weight: 800;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  font-size: 0.7501875469rem;
+  flex-direction: column;
+}
+@container (width > 300px) {
+  .menu--corporate {
+    flex-direction: row;
+  }
+}

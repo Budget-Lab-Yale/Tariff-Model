@@ -1,0 +1,116 @@
+/*!*******************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ../node_modules/css-loader/dist/cjs.js!../node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[0].use[2]!../node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[0].use[3]!./src/templates/node/publication/full/component/publication.full.scss ***!
+  \*******************************************************************************************************************************************************************************************************************************************************************/
+.node--publication.node--full .node__metadata .node__publish-tags h2 {
+  --heading-font-size: var(--h2-font-size, clamp(1.333rem, 1.185037rem + 0.8220166667vw, 1.776889rem));
+  --heading-font-family: YaleNew;
+  --heading-font-weight: 700;
+}
+
+.node--publication.node--full .node__metadata .node__publish-tags a, .node--publication.node--full .node__authors a {
+  display: inline;
+  background-image: linear-gradient(0deg, var(--animate-underline-gradient-color-1, currentColor) 0%, var(--animate-underline-gradient-color-2, var(--animate-underline-gradient-color-1, currentColor)) 100%);
+  background-size: var(--animate-underline-background-size-width, 0%) var(--animate-underline-background-size-height, 1px);
+  background-repeat: no-repeat;
+  background-position: var(--animate-underline-background-position-x, left) bottom;
+  transition: all 200ms ease-in-out;
+}
+.node--publication.node--full .node__metadata .node__publish-tags a:hover, .node--publication.node--full .node__authors a:hover {
+  --animate-underline-background-size-height: var(--animate-underline-background-size-height-hover);
+  --animate-underline-background-size-width: var(--animate-underline-background-size-width-hover, 100%);
+}
+
+.node--publication.node--full .node__header-link a {
+  --a-color: var(--header-link-color);
+  --a-color-hover: var(--header-link-color-hover);
+  --a-font-weight: 800;
+  --a-font-size: 0.7501875469rem;
+  --a-display: inline-flex;
+  gap: 0.5em;
+}
+
+/**
+* for http://budgetlab-yale-edu.lndo.site/research/how-would-fundamental-tax-reform-affect-time-burden-filing-taxes
+* css should be under .paragraph--file-download
+* but download buttons content shouldn't be written in this file
+*/
+.node--publication.node--full .node__header {
+  display: grid;
+  grid-template-columns: 1fr;
+  -moz-column-gap: 35.53778px;
+       column-gap: 35.53778px;
+  margin-bottom: 47.37186074px;
+}
+@media (min-width: 48em) {
+  .node--publication.node--full .node__header {
+    grid-template-columns: repeat(12, 1fr);
+  }
+}
+.node--publication.node--full .node__header-content {
+  --heading-color: currentColor;
+  --header-link-color: #63aaff;
+  --header-link-color-hover: #ffffff;
+  color: #dddddd;
+  text-align: center;
+  grid-column: 3/-3;
+  justify-self: center;
+  grid-row: 1/-1;
+  position: relative;
+  margin-block: 84.1745382584px 47.37186074px;
+}
+.node--publication.node--full .node__header-content > * + * {
+  margin-top: 26.66px;
+}
+.node--publication.node--full .node__metadata > * + * {
+  margin-top: 0.25em;
+}
+.node--publication.node--full .node__metadata .node__dates, .node--publication.node--full .node__metadata .node__publish-tags, .node--publication.node--full .node__metadata .node__file_downloads {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.node--publication.node--full .node__metadata .node__publish-tags {
+  margin-top: 15px;
+}
+.node--publication.node--full .node__metadata .node__publish-tags h2 {
+  --heading-line-height:.9;
+}
+.node--publication.node--full .node__metadata .node__publish-tags a {
+  --a-color-hover:#ffffff;
+  --a-font-size: 20px;
+  font-weight: 700;
+  --a-color: #63aaff;
+  --animate-underline-gradient-color-1: #286dc0;
+  --animate-underline-background-size-width: 100%;
+  --animate-underline-background-size-height-hover: 7px;
+  --animate-underline-background-size-height:0;
+  font-family: Mallory, arial, sans-serif;
+}
+.node--publication.node--full .node__metadata .node__publish-tags .svg-inline--fa {
+  color: #63aaff;
+  place-self: flex-end;
+}
+.node--publication.node--full .node__metadata .node__dates {
+  margin-top: 20px;
+}
+.node--publication.node--full .node__metadata .node__file_downloads {
+  margin-top: 20px;
+  gap: 50px;
+}
+.node--publication.node--full .node__metadata .node__file_downloads a {
+  --a-color-hover:#ffffff;
+  font-weight: 700;
+  --a-color: #63aaff;
+  --animate-underline-gradient-color-1: #286dc0;
+}
+.node--publication.node--full .node__authors a {
+  --a-color: currentColor;
+  --animate-underline-background-size-width: 100%;
+  --animate-underline-background-size-height-hover: 4px;
+}
+.node--publication.node--full .node__hero-header {
+  grid-column: 1/-1;
+  grid-row: 1/-1;
+}

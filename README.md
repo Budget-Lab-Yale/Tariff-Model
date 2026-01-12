@@ -62,6 +62,35 @@ Results are written to `output/{scenario}/`:
 
 ## Requirements
 
+Core model:
 - R 4.0+
-- tidyverse, yaml packages
+- R packages: tidyverse, yaml, HARr
 - External: Tariff-ETRs repo at `../Tariff-ETRs`
+- GTAP + GEMPACK tools: `gtapv7.exe` and `sltoht.exe` (paths set in `config/scenarios/*/model_params.yaml`)
+- MAUS: uses the included surrogate at `resources/maus_surrogate/interpolators.rds` (for manual runs, install MAUS and write `config/scenarios/{scenario}/maus_outputs/quarterly.csv`)
+
+Report generation (optional, for `--report` or `generate_report()`):
+- R packages: openxlsx, httr2, jsonlite
+- Pandoc installed and on PATH (used to convert Markdown to Word)
+- Anthropic/Claude API key set in `ANTHROPIC_API_KEY` (e.g., `Sys.setenv()` or `.Renviron`)
+- `reports/ybl_style.docx` for Word styling (recommended)
+
+API key example (set once in `.Renviron`, or at session start via `Sys.setenv()`):
+```
+ANTHROPIC_API_KEY=your-api-key-here
+```
+
+Pandoc install: https://pandoc.org/installing.html
+
+## Setup Checklist
+
+- Install required R packages:
+```r
+install.packages(c('tidyverse', 'yaml', 'HARr'))
+```
+- For report generation:
+```r
+install.packages(c('openxlsx', 'httr2', 'jsonlite'))
+```
+- Confirm GTAP paths in `config/scenarios/*/model_params.yaml`
+- Confirm Tariff-ETRs repo is available at `../Tariff-ETRs`

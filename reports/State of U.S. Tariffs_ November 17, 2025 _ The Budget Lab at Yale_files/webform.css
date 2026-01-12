@@ -1,0 +1,67 @@
+/*!*************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ../node_modules/css-loader/dist/cjs.js!../node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[0].use[2]!../node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[0].use[3]!./src/templates/form/webform/component/webform.scss ***!
+  \*************************************************************************************************************************************************************************************************************************************************/
+.form--webform {
+  /*
+   * Make sure flexbox is always using 'display: flex' when toggled via #states.
+   * @see https://stackoverflow.com/questions/38491653/jquery-show-a-flex-box/4121
+   */
+}
+.form--webform .webform-flexbox {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.form--webform .webform-flexbox--flex-start {
+  align-items: flex-start;
+}
+.form--webform .webform-flexbox--flex-end {
+  align-items: flex-end;
+}
+.form--webform .webform-flexbox--center {
+  align-items: center;
+}
+@media (width <= 64em) {
+  .form--webform .webform-flexbox {
+    flex-direction: column;
+  }
+}
+.form--webform .webform-flex--1 {
+  flex: 1;
+}
+.form--webform .webform-flex--2 {
+  flex: 2;
+}
+.form--webform .webform-flex--3 {
+  flex: 3;
+}
+.form--webform .webform-flex--4 {
+  flex: 4;
+}
+.form--webform .webform-flex--5 {
+  flex: 5;
+}
+.form--webform .webform-flex--6 {
+  flex: 6;
+}
+.form--webform .webform-flex--7 {
+  flex: 7;
+}
+.form--webform .webform-flex--8 {
+  flex: 8;
+}
+.form--webform .webform-flex--9 {
+  flex: 9;
+}
+.form--webform .webform-flex--10 {
+  flex: 10;
+}
+.form--webform .webform-flex--11 {
+  flex: 11;
+}
+.form--webform .webform-flex--12 {
+  flex: 12;
+}
+.form--webform .webform-flexbox.js-webform-states-hidden[style*="display: block"] {
+  display: flex !important;
+}

@@ -1,0 +1,33 @@
+/*!**************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ../node_modules/css-loader/dist/cjs.js!../node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[0].use[2]!../node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[0].use[3]!./src/templates/paragraph/hero-header/component/hero-header.scss ***!
+  \**************************************************************************************************************************************************************************************************************************************************************/
+.paragraph--hero-header {
+  margin-left: calc(-50vw + 50% - var(--scrollbar-width, 0px) / 2 * -1);
+  margin-right: calc(-50vw + 50% - var(--scrollbar-width, 0px) / 2 * -1);
+}
+
+.paragraph--hero-header {
+  background-image: radial-gradient(rgba(99, 170, 255, 0.2) 1px, transparent 2px), radial-gradient(rgba(99, 170, 255, 0.2) 1px, transparent 2px);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  background-color: #101f5b;
+  height: 100%;
+  min-height: 300px;
+  position: relative;
+}
+.paragraph--hero-header.paragraph--has-image {
+  min-height: 550px;
+}
+.paragraph--hero-header.paragraph--has-image img {
+  --img-width: 100%;
+  --img-height: 100%;
+  --img-object-fit: cover;
+  --img-position: absolute;
+  inset: 0;
+}
+.paragraph--hero-header.paragraph--has-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(27, 52, 153, 0.8);
+}

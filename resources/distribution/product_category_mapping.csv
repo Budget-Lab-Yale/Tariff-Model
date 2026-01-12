@@ -1,0 +1,66 @@
+row,gtap_code,category,price_effect,share
+2,pdr,Other food from home,1.55,2.5603904481516453e-06
+3,wht,Cereals and bakery products,1.12,0.00015558846853295399
+4,gro,Cereals and bakery products,1.61,0.0001591902311515276
+5,v_f,Fruits and vegetables,1.54,0.0037756630578797685
+6,osd,Other food from home,0.28,1.726181033501715e-05
+7,c_b,Other food from home,0.05,2.919117021399001e-05
+8,pfb,Other food from home,1.18,0.000538809746691672
+9,ocr,Other food from home,3.6,0.0005115919557088798
+10,ctl,"Meats, poultry, fish, and eggs",0.94,0.0002637021889437437
+11,oap,"Meats, poultry, fish, and eggs",1.25,0.0008579879884106282
+12,rmk,Dairy products,1.57,0.00019362732118535837
+13,wol,Apparel and services,6.6,3.74948062999544e-05
+14,frs,Household furnishings and equipment,1.72,4.45462269031501e-05
+15,fsh,"Meats, poultry, fish, and eggs",3.07,0.00033342252145657274
+16,coa,"Utilities, fuels, and public services",0.47,1.2158605974192707e-06
+17,oil,"Utilities, fuels, and public services",0.38,7.811793546154577e-09
+18,gas,"Utilities, fuels, and public services",0.8,4.598968110100061e-06
+19,oxt,"Utilities, fuels, and public services",1.01,1.9565162730140516e-05
+20,cmt,"Meats, poultry, fish, and eggs",1.32,0.005482903045887641
+21,omt,"Meats, poultry, fish, and eggs",1.41,0.004378222147619227
+22,vol,Other food from home,2.17,0.0007356893278478131
+23,mil,Dairy products,2.06,0.005225504899222244
+24,pcr,Other food from home,7.52,0.00011074426677405778
+25,sgr,Other food from home,2.17,0.0017867765151320402
+26,ofd,Other food from home,2.59,0.02092886061905997
+27,b_t,Alcoholic beverages + Tobacco products and smoking supplies,3.4,0.014174974256409007
+28,tex,Apparel and services,10.26,0.0020134927910573216
+29,wap,Apparel and services,15.04,0.00869826693927766
+30,lea,Apparel and services,15.41,0.00348174905784987
+31,lum,Household furnishings and equipment,3.74,0.0003782977450494551
+32,ppp,Housekeeping supplies,2.7,0.002496889880682944
+33,p_c,"Utilities, fuels, and public services",0.56,0.010306476069366938
+34,chm,Household supplies,3.06,0.00552816179849828
+35,bph,Healthcare,1.04,0.013381526630256112
+36,rpp,Housekeeping supplies,6.41,0.003125833378237939
+37,nmm,"Utilities, fuels, and public services",6.01,0.0008577415413469271
+38,i_s,Household furnishings and equipment,6.81,5.1536955879564144e-05
+39,nfm,Household furnishings and equipment,12.06,8.49224583206433e-06
+40,fmp,Household furnishings and equipment,11.59,0.0013597960482699468
+41,ele,Entertainment,12.22,0.007153011250655257
+42,eeq,Entertainment,13.07,0.004657647674249792
+43,ome,Household furnishings and equipment,9.57,0.0007694051790198152
+44,mvh,Transportation,12.22,0.017836159085313056
+45,otn,Transportation,7.7,0.0016305339591163948
+46,omf,Household furnishings and equipment,6.4,0.02626482435413824
+47,ely,"Utilities, fuels, and public services",1.19,0.01112163785260916
+48,gdt,"Utilities, fuels, and public services",1.3,0.0011832677666829276
+49,wtr,"Utilities, fuels, and public services",1.93,0.0053695945578820575
+50,cns,Shelter,2.16,0.00015731164503047642
+51,trd,Miscellaneous,1.46,0.14561849673759758
+52,afs,Food Away from Home,1.34,0.06859984482588703
+53,otp,Transportation,1.37,0.014464010016709532
+54,wtp,Transportation,1.34,0.0016963104625894079
+55,atp,Transportation,0.86,0.011095887627225453
+56,whs,Miscellaneous,1.84,0.00037017325442125594
+57,cmn,Entertainment,1.57,0.04022724293803256
+58,ofi,Personal insurance and pensions,1.24,0.036348487790950984
+59,ins,Personal insurance and pensions,1.15,0.0374836924462536
+60,rsa,Shelter,1.32,0.04012765113324662
+61,obs,Household operations + Personal care products and services,1.47,0.023963419649463445
+62,ros,Entertainment,1.45,0.0538672938150391
+63,osg,Miscellaneous,1.55,0.005332660923789635
+64,edu,Education,1.31,0.02878630531022408
+65,hht,Miscellaneous,1.53,0.1855707945881653
+66,dwe,Shelter,1.21,0.11884637360921127
