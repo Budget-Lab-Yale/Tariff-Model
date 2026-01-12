@@ -4,17 +4,6 @@ An R-based pipeline that automates tariff impact analysis, calculating effective
 
 ## Quick Start
 
-### From R Console
-
-```r
-# Set working directory to project root
-setwd('C:/Users/jar335/Documents/Repositories/Tariff-Model')
-
-# Load and run
-source('src/run_model.R')
-run_scenario('11-17')
-```
-
 ### From Command Line
 
 ```bash
