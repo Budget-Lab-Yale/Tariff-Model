@@ -114,6 +114,8 @@ This section requires comparing current results to the previous report. Structur
 - Trade deals announced
 - Note which changes are/aren't reflected in this report
 
+**Note:** The policy changes input may be provided as brief shorthand notes (e.g., "doubled China IEEPA tariffs", "added steel exemptions for Canada"). Expand these into clear, professional prose suitable for publication. Infer reasonable context and phrasing based on the tariff policy domain.
+
 **Refinements to Methodology.** (If applicable)
 - Changes to ETR calculation methodology
 - Data updates

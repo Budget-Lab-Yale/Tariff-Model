@@ -1,9 +1,9 @@
 # =============================================================================
-# 12_export_excel.R - Export model results to Excel tables
+# 12_export_excel.R - Export model results to Excel data download
 # =============================================================================
 #
 # Exports model outputs to an Excel workbook matching the structure of
-# TBL Data TEMPLATE.xlsx for a single "current policy" scenario.
+# reports/data_download_template.xlsx for the "State of Tariffs" report.
 #
 # =============================================================================
 
@@ -211,6 +211,43 @@ BASELINE_ETR <- 0.02418  # 2.418% baseline ETR
 
 
 # =============================================================================
+# Data TOC: Table of Contents sheet
+# =============================================================================
+
+build_data_toc <- function(report_date) {
+  report_date_obj <- as.Date(report_date, format = '%B %d, %Y')
+  if (is.na(report_date_obj)) {
+    stop('Invalid report_date format. Expected "Month DD, YYYY".')
+  }
+
+  date_md <- format(report_date_obj, '%B %d')
+  date_my <- format(report_date_obj, '%B %Y')
+
+  # Create a data frame for the TOC content
+  # The hyperlinks will be added separately when writing to Excel
+  tibble(
+    row = 1:14,
+    content = c(
+      sprintf('State of U.S. Tariffs: %s', report_date),
+      date_my,
+      'The Budget Lab at Yale',
+      '',
+      'Tables and Figures',
+      sprintf('Table 1. Summary Economic & Fiscal Effects of 2025 Tariffs through %s', date_md),
+      sprintf('Table 2. Average Effective US Tariff Rate, New 2025 Policy through %s', date_md),
+      'Figure 1. US Average Effective Tariff Rate Since 1790',
+      'Figure 2. US Real GDP Level Effects of 2025 Tariffs to Date',
+      'Figure 3. Change in Long-Run Real US GDP by Sector from 2025 Tariffs',
+      'Figure 4. Long-Run Change in Real GDP Level from 2025 Tariffs to Date',
+      'Table 3. Estimated Revenue Effects of All 2025 Tariffs',
+      'Figure 5. Short-Run Distributional Effects of 2025 Tariffs',
+      sprintf('Figure 6. Commodity Price Effects from 2025 Tariffs through %s', date_md)
+    )
+  )
+}
+
+
+# =============================================================================
 # T1: Summary Table
 # =============================================================================
 
@@ -230,36 +267,20 @@ build_t1 <- function(outputs) {
   post_sub_etr_level <- BASELINE_ETR + key['post_sub_etr_increase'] / 100
 
   tibble(
-    metric = c(
-      'Effective Tariff Rates',
-      'Overall, Pre-Substitution',
-      'Overall, Post-Substitution',
-      'Fiscal',
-      'Conventional Revenue, 2026-2035 (Trillions)',
-      'Dynamic Revenue, 2026-2035 (Trillions)',
-      'Prices',
-      'Percent Change in PCE Price Level, pre-substitution',
-      'Percent Change in PCE Price Level, post-substitution',
-      'Average Household Real Income Loss, Pre-Substitution (2025$)',
-      'Average Household Real Income Loss, Post-Substitution (2025$)',
-      'Output and Employment',
-      'Percentage Point Change in Q4-Q4 GDP Growth, 2026',
-      'Percent change in long-run GDP',
-      'Change in the Unemployment Rate, End of 2026'
-    ),
     value = c(
-      NA,
+      NA,  # Section header
       pre_sub_etr_level,  # LEVEL (baseline + increase)
       post_sub_etr_level,  # LEVEL (baseline + increase)
-      NA,
+      NA,  # Section header
       key['conventional_revenue_10yr'] / 1000,  # Billions to trillions
       key['dynamic_revenue_10yr'] / 1000,
-      NA,
+      NA,  # Section header
       key['pre_sub_price_increase'] / 100,
       key['post_sub_price_increase'] / 100,
       key['pre_sub_per_hh_cost'],
       key['post_sub_per_hh_cost'],
-      NA,
+      NA,  # Section header
+      key['gdp_2025_q4q4'],  # Percentage points
       key['gdp_2026_q4q4'],  # Percentage points
       lr_gdp / 100,
       key['urate_2026_q4']  # Already in percentage points
@@ -402,20 +423,37 @@ build_f1 <- function(outputs) {
   pre_sub_etr_level <- (BASELINE_ETR + key['pre_sub_etr_increase'] / 100) * 100  # Back to %
   post_sub_etr_level <- (BASELINE_ETR + key['post_sub_etr_increase'] / 100) * 100  # Back to %
 
+  last_year <- max(HISTORICAL_ETR$year)
+  last_etr <- HISTORICAL_ETR %>%
+    filter(year == last_year) %>%
+    pull(etr)
+
   # Start with historical data
   result <- HISTORICAL_ETR %>%
-    rename(`Historical ETR` = etr) %>%
+    rename(`Effective Tariff Rate` = etr) %>%
     mutate(
-      `Current Post-Sub` = NA_real_,
-      `Current Pre-Sub` = NA_real_
+      `Projected Post-Substitution Rate` = NA_real_,
+      `Current Post-Substitution Rate` = post_sub_etr_level,
+      `Projected Pre-Substitution Rate` = NA_real_,
+      `Current Pre-Substituton Rate` = pre_sub_etr_level
+    ) %>%
+    mutate(
+      `Projected Post-Substitution Rate` = if_else(
+        year == last_year, last_etr, `Projected Post-Substitution Rate`
+      ),
+      `Projected Pre-Substitution Rate` = if_else(
+        year == last_year, last_etr, `Projected Pre-Substitution Rate`
+      )
     )
 
   # Add 2025 row with scenario LEVEL values
   row_2025 <- tibble(
-    year = 2025,
-    `Historical ETR` = NA_real_,
-    `Current Post-Sub` = post_sub_etr_level,
-    `Current Pre-Sub` = pre_sub_etr_level
+    year = last_year + 1,
+    `Effective Tariff Rate` = NA_real_,
+    `Projected Post-Substitution Rate` = post_sub_etr_level,
+    `Current Post-Substitution Rate` = post_sub_etr_level,
+    `Projected Pre-Substitution Rate` = pre_sub_etr_level,
+    `Current Pre-Substituton Rate` = pre_sub_etr_level
   )
 
   result <- bind_rows(result, row_2025)
@@ -439,22 +477,19 @@ build_f2 <- function(outputs) {
   # Calculate GDP deviation as percentage with GTAP floor for 2026+
   # This matches the "blended" approach: MIN(maus_deviation, gtap_long_run) for 2026 Q1+
   result <- macro %>%
+    filter(year >= 2025) %>%
     mutate(
-      date = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),  # Mid-quarter date
+      Date = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),  # Mid-quarter date
       raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
       # Apply GTAP floor for 2026+: use MIN (more negative = worse)
-      gdp_deviation = case_when(
+      `All 2025 Tariffs to Date` = case_when(
         year < 2026 ~ raw_deviation,
         TRUE ~ pmin(raw_deviation, gtap_lr_gdp)
       )
     ) %>%
     select(
-      Date = date,
-      Baseline = gdp_baseline,
-      Current = gdp_deviation
-    ) %>%
-    mutate(
-      Baseline = 0  # Baseline is always 0 (reference line)
+      Date,
+      `All 2025 Tariffs to Date`
     )
 
   return(result)
@@ -473,10 +508,9 @@ build_f3 <- function(outputs) {
     left_join(SECTOR_NAMES, by = 'sector') %>%
     mutate(
       Sector = coalesce(display_name, sector),
-      Baseline = 0,
-      Current = output_change_pct
+      `All 2025 Tariffs to Date` = output_change_pct
     ) %>%
-    select(Sector, Baseline, Current)
+    select(Sector, `All 2025 Tariffs to Date`)
 
   # Order sectors as in template
   sector_order <- c(
@@ -506,10 +540,9 @@ build_f4 <- function(outputs) {
     left_join(REGION_NAMES, by = 'region') %>%
     mutate(
       Region = coalesce(display_name, region),
-      Baseline = 0,
-      Current = gdp_change_pct
+      `All 2025 Tariffs to Date` = gdp_change_pct
     ) %>%
-    select(Region, Baseline, Current)
+    select(Region, `All 2025 Tariffs to Date`)
 
   # Order as in template
   region_order <- c('USA', 'China', 'ROW', 'Canada', 'Mexico', 'FTROW', 'Japan', 'EU', 'UK', 'World Total', 'World ex USA')
@@ -531,22 +564,18 @@ build_f4 <- function(outputs) {
 build_f5 <- function(outputs) {
   dist <- outputs$distribution
 
-  # Transpose: deciles become columns
+  dist <- dist %>%
+    arrange(decile)
+
   # Percent should be NEGATIVE (burden/cost)
-  pct_row <- dist %>%
-    mutate(pct_of_income = -abs(pct_of_income)) %>%  # Make negative
-    select(decile, pct_of_income) %>%
-    pivot_wider(names_from = decile, values_from = pct_of_income, names_prefix = 'D') %>%
-    mutate(Measure = 'Percent of post-tax-and-transfer income', .before = 1)
+  pct <- dist %>%
+    mutate(pct_of_income = -abs(pct_of_income)) %>%
+    pull(pct_of_income)
 
-  cost_row <- dist %>%
-    select(decile, cost_per_hh) %>%
-    pivot_wider(names_from = decile, values_from = cost_per_hh, names_prefix = 'D') %>%
-    mutate(Measure = 'In 2025 USD', .before = 1)
+  cost <- dist %>%
+    pull(cost_per_hh)
 
-  result <- bind_rows(pct_row, cost_row)
-
-  return(result)
+  return(list(pct = pct, cost = cost))
 }
 
 
@@ -577,71 +606,290 @@ build_f6 <- function(outputs) {
 # Main export function
 # =============================================================================
 
-#' Export model results to Excel tables
+#' Export model results to Excel data download
+#'
+#' Creates an Excel workbook matching the structure of the data download
+#' template for the State of Tariffs report.
 #'
 #' @param scenario Name of the scenario
+#' @param report_date Date string for the report (e.g., 'November 17, 2025')
 #' @return Path to the exported Excel file (invisibly)
 #'
 #' @export
-export_excel_tables <- function(scenario) {
-  message('Exporting Excel tables...')
+export_excel_tables <- function(scenario, report_date) {
+  message('Exporting Excel data download...')
 
   # Load outputs
   outputs <- load_model_outputs(scenario)
 
-  # Create workbook
+  report_date_obj <- as.Date(report_date, format = '%B %d, %Y')
+  if (is.na(report_date_obj)) {
+    stop('Invalid report_date format. Expected "Month DD, YYYY".')
+  }
 
-wb <- createWorkbook()
+  date_md <- format(report_date_obj, '%B %d')
+  date_my <- format(report_date_obj, '%B %Y')
 
-  # Build and add each sheet
+  template_path <- file.path('reports', 'data_download_template.xlsx')
+  if (!file.exists(template_path)) {
+    stop('Template not found: ', template_path)
+  }
+
+  suppress_openxlsx_external_link_warning <- function(expr) {
+    withCallingHandlers(
+      expr,
+      warning = function(w) {
+        msg <- conditionMessage(w)
+        if (grepl('externalLink', msg, fixed = TRUE) ||
+            grepl('one argument not used by format', msg, fixed = TRUE)) {
+          invokeRestart('muffleWarning')
+        }
+      }
+    )
+  }
+
+  apply_white_background <- function(sheet, max_rows = 500, max_cols = 50) {
+    white_style <- createStyle(fgFill = 'white')
+    addStyle(
+      wb,
+      sheet = sheet,
+      style = white_style,
+      rows = 1:max_rows,
+      cols = 1:max_cols,
+      gridExpand = TRUE,
+      stack = TRUE
+    )
+  }
+
+  # Load template workbook to preserve formatting
+  wb <- suppress_openxlsx_external_link_warning(loadWorkbook(template_path))
+
+  write_block <- function(sheet, data, start_row, start_col) {
+    if (is.null(dim(data))) {
+      data <- as.data.frame(data)
+    }
+    if (nrow(data) == 0 || ncol(data) == 0) {
+      return(invisible(NULL))
+    }
+
+    deleteData(
+      wb,
+      sheet = sheet,
+      cols = start_col:(start_col + ncol(data) - 1),
+      rows = start_row:(start_row + nrow(data) - 1),
+      gridExpand = TRUE
+    )
+
+    writeData(
+      wb,
+      sheet = sheet,
+      x = data,
+      startCol = start_col,
+      startRow = start_row,
+      colNames = FALSE
+    )
+  }
+
+  # ==========================================================================
+  # Sheet order matches template: Data TOC, T1, T2, F1, F2, F3, F4, T3, F5, F6
+  # ==========================================================================
+
+  # Data TOC (Table of Contents)
+  message('  Building Data TOC...')
+  toc <- build_data_toc(report_date)
+  writeData(wb, 'Data TOC', toc$content[1], startCol = 1, startRow = 1, colNames = FALSE)
+  writeData(wb, 'Data TOC', date_my, startCol = 1, startRow = 2, colNames = FALSE)
+  writeData(wb, 'Data TOC', toc$content[3], startCol = 1, startRow = 3, colNames = FALSE)
+  writeData(wb, 'Data TOC', toc$content[5], startCol = 1, startRow = 5, colNames = FALSE)
+
+  # Add hyperlinks to TOC entries
+  toc_links <- list(
+    list(row = 6, sheet = 'T1', label = toc$content[6]),
+    list(row = 7, sheet = 'T2', label = toc$content[7]),
+    list(row = 8, sheet = 'F1', label = toc$content[8]),
+    list(row = 9, sheet = 'F2', label = toc$content[9]),
+    list(row = 10, sheet = 'F3', label = toc$content[10]),
+    list(row = 11, sheet = 'F4', label = toc$content[11]),
+    list(row = 12, sheet = 'T3', label = toc$content[12]),
+    list(row = 13, sheet = 'F5', label = toc$content[13]),
+    list(row = 14, sheet = 'F6', label = toc$content[14])
+  )
+
+  suppress_openxlsx_external_link_warning({
+    for (link in toc_links) {
+      writeFormula(
+        wb, 'Data TOC',
+        x = makeHyperlinkString(sheet = link$sheet, row = 1, col = 1, text = link$label),
+        startCol = 1, startRow = link$row
+      )
+    }
+  })
+
+  # T1: Summary Table
   message('  Building T1 (Summary)...')
   t1 <- build_t1(outputs)
-  addWorksheet(wb, 'T1')
-  writeData(wb, 'T1', t1)
+  writeData(
+    wb,
+    'T1',
+    sprintf('Table 1. Summary Economic & Fiscal Effects of 2025 Tariffs through %s', date_md),
+    startCol = 1,
+    startRow = 1,
+    colNames = FALSE
+  )
+  writeData(
+    wb,
+    'T1',
+    sprintf('Summary Economic & Fiscal Effects of 2025 Tariffs Through %s', date_md),
+    startCol = 1,
+    startRow = 4,
+    colNames = FALSE
+  )
+  write_block('T1', t1, start_row = 6, start_col = 2)
+  deleteData(
+    wb,
+    sheet = 'T1',
+    cols = 3,
+    rows = 5:(6 + nrow(t1) - 1),
+    gridExpand = TRUE
+  )
+  writeData(wb, 'T1', '', startCol = 3, startRow = 5, colNames = FALSE)
+  setColWidths(wb, 'T1', cols = 3, widths = 0)
 
+  t1_pct_style <- createStyle(numFmt = '0.0%')
+  t1_pct2_style <- createStyle(numFmt = '0.00%')
+  t1_currency1_style <- createStyle(numFmt = '"$"#,##0.0')
+  t1_currency0_style <- createStyle(numFmt = '"$"#,##0')
+  t1_decimal1_style <- createStyle(numFmt = '0.0')
+
+  addStyle(wb, 'T1', t1_pct_style, rows = c(7, 8, 13, 14), cols = 2, stack = TRUE)
+  addStyle(wb, 'T1', t1_pct2_style, rows = 20, cols = 2, stack = TRUE)
+  addStyle(wb, 'T1', t1_currency1_style, rows = c(10, 11), cols = 2, stack = TRUE)
+  addStyle(wb, 'T1', t1_currency0_style, rows = c(15, 16), cols = 2, stack = TRUE)
+  addStyle(wb, 'T1', t1_decimal1_style, rows = c(18, 19, 21), cols = 2, stack = TRUE)
+
+  # T2: ETR by Region
   message('  Building T2 (ETR by Region)...')
   t2 <- build_t2(outputs)
-  addWorksheet(wb, 'T2')
-  writeData(wb, 'T2', t2)
+  writeData(
+    wb,
+    'T2',
+    sprintf('Table 2. Average Effective US Tariff Rate, New 2025 Policy through %s', date_md),
+    startCol = 1,
+    startRow = 1,
+    colNames = FALSE
+  )
+  write_block('T2', t2, start_row = 8, start_col = 1)
 
-  message('  Building T3 (Revenue)...')
-  t3 <- build_t3(outputs)
-  addWorksheet(wb, 'T3')
-  writeData(wb, 'T3', t3)
-
+  # F1: Historical ETR
   message('  Building F1 (Historical ETR)...')
   f1 <- build_f1(outputs)
-  addWorksheet(wb, 'F1')
-  writeData(wb, 'F1', f1)
+  write_block('F1', f1, start_row = 6, start_col = 1)
 
+  # F2: GDP Level Effects
   message('  Building F2 (GDP Effects)...')
   f2 <- build_f2(outputs)
-  addWorksheet(wb, 'F2')
-  writeData(wb, 'F2', f2)
+  writeData(
+    wb,
+    'F2',
+    sprintf(
+      'Subtitle: US tariffs implemented through %s. Percentage point change against baseline',
+      date_md
+    ),
+    startCol = 1,
+    startRow = 2,
+    colNames = FALSE
+  )
+  write_block('F2', f2, start_row = 6, start_col = 1)
 
+  # F3: Sector Output Changes
   message('  Building F3 (Sectors)...')
   f3 <- build_f3(outputs)
-  addWorksheet(wb, 'F3')
-  writeData(wb, 'F3', f3)
+  writeData(
+    wb,
+    'F3',
+    sprintf(
+      'Subtitle: U.S. tariffs implemented through %s, plus foreign retaliation. Percentage points.',
+      date_md
+    ),
+    startCol = 1,
+    startRow = 2,
+    colNames = FALSE
+  )
+  write_block('F3', f3, start_row = 7, start_col = 1)
 
+  # F4: International GDP Effects
   message('  Building F4 (International GDP)...')
   f4 <- build_f4(outputs)
-  addWorksheet(wb, 'F4')
-  writeData(wb, 'F4', f4)
+  writeData(
+    wb,
+    'F4',
+    sprintf(
+      'Subtitle: U.S. tariffs implemented through %s. Percentage point change',
+      date_md
+    ),
+    startCol = 1,
+    startRow = 2,
+    colNames = FALSE
+  )
+  write_block('F4', f4, start_row = 7, start_col = 1)
 
+  # T3: Revenue Table
+  message('  Building T3 (Revenue)...')
+  t3 <- build_t3(outputs)
+  writeData(
+    wb,
+    'T3',
+    sprintf('Subtitle: Through %s.', date_md),
+    startCol = 1,
+    startRow = 2,
+    colNames = FALSE
+  )
+  write_block('T3', t3, start_row = 6, start_col = 1)
+
+  # F5: Distribution by Decile
   message('  Building F5 (Distribution)...')
   f5 <- build_f5(outputs)
-  addWorksheet(wb, 'F5')
-  writeData(wb, 'F5', f5)
+  if (length(f5$pct) != 10 || length(f5$cost) != 10) {
+    stop('Expected 10 deciles for distribution output.')
+  }
+  writeData(
+    wb,
+    'F5',
+    sprintf('Subtitle: Through %s. By household income decile', date_md),
+    startCol = 1,
+    startRow = 2,
+    colNames = FALSE
+  )
+  pct_row <- as.data.frame(as.list(f5$pct))
+  cost_row <- as.data.frame(as.list(f5$cost))
+  write_block('F5', pct_row, start_row = 8, start_col = 2)
+  write_block('F5', cost_row, start_row = 12, start_col = 2)
 
+  # F6: Commodity Price Effects
   message('  Building F6 (Commodities)...')
   f6 <- build_f6(outputs)
-  addWorksheet(wb, 'F6')
-  writeData(wb, 'F6', f6)
+  writeData(
+    wb,
+    'F6',
+    sprintf('Figure 6. Commodity Price Effects from 2025 Tariffs through %s', date_md),
+    startCol = 1,
+    startRow = 1,
+    colNames = FALSE
+  )
+  write_block('F6', f6, start_row = 7, start_col = 1)
 
   # Save workbook
-  output_path <- file.path('output', scenario, 'tables.xlsx')
-  saveWorkbook(wb, output_path, overwrite = TRUE)
+  output_dir <- file.path('output', scenario, 'report')
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  output_path <- file.path(output_dir, 'data_download.xlsx')
+
+  for (sheet_name in c('Data TOC', 'T1', 'T2', 'F1', 'F2', 'F3', 'F4', 'T3', 'F5', 'F6')) {
+    apply_white_background(sheet_name)
+  }
+
+  suppress_openxlsx_external_link_warning(saveWorkbook(wb, output_path, overwrite = TRUE))
 
   message(sprintf('  Exported to: %s', output_path))
 
