@@ -22,6 +22,10 @@ suppressPackageStartupMessages({
   library(jsonlite)
 })
 
+# Source export functions (for data download generation)
+source('src/12_export_excel.R')
+source('reports/figure_mockups.R')
+
 
 #' Load model outputs for report generation
 #'
@@ -381,11 +385,28 @@ convert_to_word <- function(md_path, docx_path, reference_doc = NULL) {
     return(FALSE)
   }
 
+  md_path_abs <- normalizePath(md_path, mustWork = FALSE)
+  docx_path_abs <- normalizePath(docx_path, mustWork = FALSE)
+  md_dir <- dirname(md_path_abs)
+  images_dir <- normalizePath(file.path(md_dir, '..', 'images'), mustWork = FALSE)
+
+  resource_paths <- c(md_dir)
+  if (dir.exists(images_dir)) {
+    resource_paths <- c(resource_paths, images_dir)
+  }
+
+  resource_arg <- sprintf('--resource-path="%s"', paste(resource_paths, collapse = ';'))
+
   # Build command
-  cmd <- sprintf('"%s" "%s" -o "%s"', pandoc_path, md_path, docx_path)
+  cmd <- sprintf('"%s" "%s" -o "%s" %s',
+                 pandoc_path,
+                 md_path_abs,
+                 docx_path_abs,
+                 resource_arg)
 
   if (!is.null(reference_doc) && file.exists(reference_doc)) {
-    cmd <- sprintf('%s --reference-doc="%s"', cmd, reference_doc)
+    reference_abs <- normalizePath(reference_doc, mustWork = FALSE)
+    cmd <- sprintf('%s --reference-doc="%s"', cmd, reference_abs)
   }
 
   message('  Converting to Word via Pandoc...')
@@ -397,6 +418,124 @@ convert_to_word <- function(md_path, docx_path, reference_doc = NULL) {
   }
 
   return(TRUE)
+}
+
+insert_report_figures <- function(md_path, scenario) {
+  img_dir <- file.path("..", "images")
+  img_path <- function(filename) {
+    gsub("\\\\", "/", file.path(img_dir, filename))
+  }
+
+  insert_after_match <- function(lines, pattern, insert_lines) {
+    idx <- grep(pattern, lines, ignore.case = TRUE)
+    if (length(idx) == 0) {
+      return(list(lines = lines, inserted = FALSE))
+    }
+    lines <- append(lines, insert_lines, after = idx[1])
+    list(lines = lines, inserted = TRUE)
+  }
+
+  insert_at_section_end <- function(lines, heading_pattern, insert_lines) {
+    idx <- grep(heading_pattern, lines, ignore.case = TRUE)
+    if (length(idx) == 0) {
+      return(list(lines = lines, inserted = FALSE))
+    }
+    start <- idx[1]
+    next_idx <- grep("^##+\\s", lines)
+    next_idx <- next_idx[next_idx > start]
+    end <- if (length(next_idx) == 0) length(lines) else next_idx[1] - 1
+    lines <- append(lines, insert_lines, after = end)
+    list(lines = lines, inserted = TRUE)
+  }
+
+  lines <- readLines(md_path, warn = FALSE)
+
+  table_summary <- c(
+    "",
+    sprintf("![Summary economic and fiscal effects](%s)", img_path("T1.png")),
+    ""
+  )
+  t1_insert <- insert_after_match(lines, "table below summarizes", table_summary)
+  lines <- t1_insert$lines
+
+  insert_map <- list(
+    list(
+      pattern = "^###\\s+Average Effective Tariff Rate",
+      images = c(
+        "",
+        sprintf("![Average effective tariff rate since 1790](%s)", img_path("F1.png")),
+        "",
+        sprintf("![Average effective tariff rate, new 2025 policy](%s)", img_path("T2.png")),
+        ""
+      )
+    ),
+    list(
+      pattern = "^###\\s+US Real GDP & Labor Market Effects",
+      images = c(
+        "",
+        sprintf("![Real GDP level effects of 2025 tariffs](%s)", img_path("F2.png")),
+        ""
+      )
+    ),
+    list(
+      pattern = "^###\\s+Long-Run US Sectoral Output & Employment Effects",
+      images = c(
+        "",
+        sprintf("![Long-run real GDP change by sector](%s)", img_path("F3.png")),
+        ""
+      )
+    ),
+    list(
+      pattern = "^###\\s+Global Long-Run Real GDP Effects",
+      images = c(
+        "",
+        sprintf("![Long-run real GDP change by region](%s)", img_path("F4.png")),
+        ""
+      )
+    ),
+    list(
+      pattern = "^###\\s+Fiscal Impact",
+      images = c(
+        "",
+        sprintf("![Estimated revenue effects of 2025 tariffs](%s)", img_path("T3.png")),
+        ""
+      )
+    ),
+    list(
+      pattern = "^###\\s+Distributional Impact",
+      images = c(
+        "",
+        sprintf("![Short-run distributional effects, percent of after-tax income](%s)", img_path("F5_percent.png")),
+        "",
+        sprintf("![Short-run distributional effects, 2025 dollars](%s)", img_path("F5_dollars.png")),
+        ""
+      )
+    ),
+    list(
+      pattern = "^###\\s+Commodity Price Effects",
+      images = c(
+        "",
+        sprintf("![Commodity price effects from 2025 tariffs](%s)", img_path("F6.png")),
+        ""
+      )
+    )
+  )
+
+  for (item in insert_map) {
+    result <- insert_at_section_end(lines, item$pattern, item$images)
+    lines <- result$lines
+  }
+
+  if (!t1_insert$inserted) {
+    result <- insert_at_section_end(
+      lines,
+      "^##\\s+Results",
+      table_summary
+    )
+    lines <- result$lines
+  }
+
+  writeLines(lines, md_path)
 }
 
 
@@ -466,7 +605,8 @@ generate_report <- function(baseline_scenario,
   baseline_yaml <- results_to_yaml(baseline_data, baseline_scenario)
 
   # Handle policy changes input
-  if (is.null(policy_changes)) {
+  # Only prompt interactively if NULL and running in interactive mode
+  if (is.null(policy_changes) && interactive()) {
     message('\nNo policy changes provided. Enter policy changes (end with empty line):')
     lines <- c()
     repeat {
@@ -475,6 +615,8 @@ generate_report <- function(baseline_scenario,
       lines <- c(lines, line)
     }
     policy_changes <- paste(lines, collapse = '\n')
+  } else if (is.null(policy_changes)) {
+    policy_changes <- ''
   }
 
   # Build prompt
@@ -500,6 +642,10 @@ generate_report <- function(baseline_scenario,
   writeLines(report_md, md_path)
   message(sprintf('  Saved Markdown to: %s', md_path))
 
+  # Build mockup figures and insert into Markdown
+  save_mockups(scenario = baseline_scenario)
+  insert_report_figures(md_path, baseline_scenario)
+
   # Convert to Word
   docx_path <- file.path(output_dir, 'state_of_tariffs.docx')
   reference_doc <- 'reports/ybl_style.docx'
@@ -513,6 +659,11 @@ generate_report <- function(baseline_scenario,
   if (success) {
     message(sprintf('  Saved Word document to: %s', docx_path))
   }
+
+  # Export data download Excel
+  message('\nGenerating data download...')
+  excel_path <- export_excel_tables(baseline_scenario, report_date)
+  message(sprintf('  Saved data download to: %s', excel_path))
 
   message('\n==========================================================')
   message('Report generation complete!')
