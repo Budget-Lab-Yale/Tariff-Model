@@ -7,7 +7,7 @@ An R-based pipeline that automates tariff impact analysis, calculating effective
 ### From Command Line
 
 ```bash
-cd C:/Users/jar335/Documents/Repositories/Tariff-Model
+cd [REPO_ROOT]/Tariff-Model
 Rscript run.R 11-17
 ```
 
