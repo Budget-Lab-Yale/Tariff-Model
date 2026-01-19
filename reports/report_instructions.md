@@ -44,6 +44,9 @@ You will receive:
 | `urate_2026_q4` | Unemployment rate increase by Q4 2026 | percentage points |
 | `payroll_2025_q4` | Payroll employment change by Q4 2025 | thousands |
 | `payroll_2026_q4` | Payroll employment change by Q4 2026 | thousands |
+| `lr_gdp_pct` | Long-run GDP level effect (from GTAP) | percent |
+| `lr_gdp_dollar_2024` | Long-run GDP dollar loss (2024$) | billions |
+| `lr_gdp_dollar_2025` | Long-run GDP dollar loss (2025$) | billions |
 
 ---
 
@@ -84,8 +87,8 @@ A shaded box containing bullet points for each major finding. Each bullet has:
 
 **Real GDP Effects:**
 - Report GDP growth slowdown in 2025 and 2026 (from `gdp_2025_q4q4`, `gdp_2026_q4q4`)
-- Report long-run GDP level effect (from `sector_effects.csv`, `overall_gdp` row)
-- Convert to dollar terms (multiply by ~$29 trillion baseline GDP)
+- Report long-run GDP level effect (from `lr_gdp_pct`)
+- Report dollar equivalent using `lr_gdp_dollar_2024` (in 2024 dollars)
 - IEEPA parenthetical: report ex-IEEPA long-run GDP effect
 
 **Labor Market Effects:**
