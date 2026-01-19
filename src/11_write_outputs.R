@@ -47,6 +47,7 @@ write_outputs <- function(results, scenario) {
     metric = c(
       # ETR
       'pre_sub_etr_increase', 'post_sub_etr_increase',
+      'pre_sub_etr_total', 'post_sub_etr_total',
       # Prices
       'pre_sub_price_increase', 'post_sub_price_increase',
       'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
@@ -65,6 +66,7 @@ write_outputs <- function(results, scenario) {
     ),
     value = c(
       results$etr$pre_sub_increase, results$etr$post_sub_increase,
+      results$etr$pre_sub_all_in, results$etr$post_sub_all_in,
       results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
       abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
       results$revenue$gross_10yr, results$revenue$conventional_10yr,
@@ -76,6 +78,7 @@ write_outputs <- function(results, scenario) {
       results$products$food_sr, results$products$food_lr
     ),
     unit = c(
+      'pct', 'pct',
       'pct', 'pct',
       'pct', 'pct', 'dollars', 'dollars',
       'billions', 'billions',

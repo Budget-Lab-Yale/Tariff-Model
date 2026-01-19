@@ -135,9 +135,9 @@ results_to_yaml <- function(data, scenario_name) {
       select(sr_price_effect, lr_price_effect) %>% as.list(),
     textiles = data$product_prices %>% filter(gtap_sector == 'tex') %>%
       select(sr_price_effect, lr_price_effect) %>% as.list(),
-    electrical_equip = data$product_prices %>% filter(gtap_sector == 'ele') %>%
+    electrical_equip = data$product_prices %>% filter(gtap_sector == 'eeq') %>%
       select(sr_price_effect, lr_price_effect) %>% as.list(),
-    electronics = data$product_prices %>% filter(gtap_sector == 'eeq') %>%
+    computer_electronics = data$product_prices %>% filter(gtap_sector == 'ele') %>%
       select(sr_price_effect, lr_price_effect) %>% as.list(),
     motor_vehicles = data$product_prices %>% filter(gtap_sector == 'mvh') %>%
       select(sr_price_effect, lr_price_effect) %>% as.list(),
@@ -147,11 +147,11 @@ results_to_yaml <- function(data, scenario_name) {
     food_lr = round(food_prices$lr_weighted, 2)
   )
 
-  # Get 10-year revenue totals
+  # Get 10-year revenue totals (use key_results which has correct 2026-2035 window)
   revenue_10yr <- list(
-    gross = round(sum(data$dynamic_revenue$net_revenue), 1),
-    dynamic_effect = round(sum(data$dynamic_revenue$dynamic_effect), 1),
-    net_dynamic = round(sum(data$dynamic_revenue$dynamic_revenue), 1)
+    conventional = round(key_results$conventional_revenue_10yr, 1),
+    dynamic_effect = round(key_results$dynamic_effect_10yr, 1),
+    net_dynamic = round(key_results$dynamic_revenue_10yr, 1)
   )
 
   # Get foreign GDP effects

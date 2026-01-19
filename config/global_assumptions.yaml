@@ -21,6 +21,14 @@ gdp_base_2024: 29000  # Approximate 2024 real GDP
 gdp_base_2025: 30441  # CBO projected 2025 real GDP
 
 # -----------------------------------------------------------------------------
+# Reference Prices (for report narrative)
+# -----------------------------------------------------------------------------
+
+# Average new car price in 2025 dollars
+# Used to convert motor vehicle price effects to dollar amounts
+avg_new_car_price: 50000
+
+# -----------------------------------------------------------------------------
 # Price Effect Parameters
 # -----------------------------------------------------------------------------
 
