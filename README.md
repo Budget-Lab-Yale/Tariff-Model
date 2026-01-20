@@ -1,4 +1,4 @@
-# Yale Budget Lab Tariff Model
+# The Budget Lab Tariff Model
 
 An R-based pipeline that calculates the economic impacts of U.S. tariff policies, including effective tariff rates (ETRs), consumer price effects, revenue estimates, GDP/employment impacts, and distributional effects by income decile.
 
