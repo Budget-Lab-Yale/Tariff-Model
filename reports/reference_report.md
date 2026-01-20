@@ -10,7 +10,7 @@
 >
 > **Commodity Prices:** The 2025 tariffs fall most heavily on apparel, products with high metal content like electrical equipment and computers, and motor vehicles. *(If IEEPA tariffs are invalidated, the burden on apparel and related products would largely be relieved.)*
 >
-> **Real GDP Effects:** Tariffs slow US real GDP growth by 0.5 pp in 2025 and 0.4 pp in 2026. In the long run, the US economy is persistently 0.3% smaller, the equivalent of $90 billion annually in 2024 dollars. *(If IEEPA tariffs are invalidated, the long-run hit to output is instead 0.1%.)*
+> **Real GDP Effects:** Tariffs slow US real GDP growth by 0.5 pp in 2025 and 0.4 pp in 2026. In the long run, the US economy is persistently 0.3% smaller, the equivalent of $90 billion annually in 2025 dollars. *(If IEEPA tariffs are invalidated, the long-run hit to output is instead 0.1%.)*
 >
 > **Labor Market Effects:** The unemployment rate rises 0.3 percentage points by the end of 2025 and 0.6 percentage points by the end of 2026. Payroll employment is about 460,000 lower by the end of 2025. *(If IEEPA tariffs are struck down and collections are refunded, the 2026 hit to employment would be about half as large.)*
 >
@@ -86,7 +86,7 @@ The post-substitution price increase settles at 0.9%, a $1,300 loss per househol
 
 All 2025 US tariffs plus foreign retaliation lower real GDP growth by about 0.5 percentage points in 2025 and 0.4 percentage points in 2026. The unemployment rate ends 2025 0.3 percentage points higher and 2026 0.6 percentage points higher, and payroll employment is 490,000 lower by the end of 2025.
 
-The level of real GDP remains persistently 0.3% smaller in the long run (the equivalent of about $90 billion 2024 dollars annually) while exports are 16% lower.
+The level of real GDP remains persistently 0.3% smaller in the long run (the equivalent of about $90 billion 2025 dollars annually) while exports are 16% lower.
 
 ### Long-Run US Sectoral Output & Employment Effects
 
@@ -106,7 +106,7 @@ The 2025 tariffs to date, were they to remain in place, would raise more than $2
 
 One way to measure the distributional burden of tariffs is to look at the relationship between consumption, which gets more expensive under tariffs, and income for a given year. Under this view, tariffs are a regressive tax because lower-income households spend a larger fraction of their income than higher-income households do on average.
 
-TBL finds that the burden, expressed as a share of post-tax-and-transfer income, on the first decile is more than three times that of the top decile (2.4% versus 0.8%). The average annual cost to households in the first and top decile are about $900 and $3,900 respectively in 2024 dollars. The median cost is about $1,400 per household.
+TBL finds that the burden, expressed as a share of post-tax-and-transfer income, on the first decile is more than three times that of the top decile (2.4% versus 0.8%). The average annual cost to households in the first and top decile are about $900 and $3,900 respectively in 2025 dollars. The median cost is about $1,400 per household.
 
 ### Commodity Price Effects
 

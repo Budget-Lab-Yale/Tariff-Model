@@ -10,6 +10,11 @@
 #' @return Invisibly returns the output directory path
 write_outputs <- function(results, scenario) {
 
+  # Load global assumptions for GDP base values
+  global_assumptions <- yaml::read_yaml('config/global_assumptions.yaml')
+  gdp_base_2024 <- global_assumptions$gdp_base_2024 %||% 29000
+  gdp_base_2025 <- global_assumptions$gdp_base_2025 %||% 30441
+
   output_dir <- file.path('output', scenario, 'results')
 
   if (!dir.exists(output_dir)) {
@@ -32,10 +37,17 @@ write_outputs <- function(results, scenario) {
 
   # Per-HH costs come from distribution calculation (matches Excel: Key Results B13/B15
   # pull from F6 Distribution via ricco_price_effects_and_etr!I24/I25)
+
+  # Calculate long-run GDP dollar losses from GTAP percentage
+  lr_gdp_pct <- results$foreign_gdp$usa  # e.g., -0.33
+  lr_gdp_dollar_2024 <- lr_gdp_pct / 100 * gdp_base_2024  # e.g., -96B
+  lr_gdp_dollar_2025 <- lr_gdp_pct / 100 * gdp_base_2025  # e.g., -100B
+
   key_results <- tibble(
     metric = c(
       # ETR
       'pre_sub_etr_increase', 'post_sub_etr_increase',
+      'pre_sub_etr_total', 'post_sub_etr_total',
       # Prices
       'pre_sub_price_increase', 'post_sub_price_increase',
       'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
@@ -43,15 +55,18 @@ write_outputs <- function(results, scenario) {
       'gross_revenue_10yr', 'conventional_revenue_10yr',
       # Dynamic revenue
       'dynamic_effect_10yr', 'dynamic_revenue_10yr',
-      # Macro
+      # Macro (short-run from MAUS)
       'gdp_2025_q4q4', 'gdp_2026_q4q4',
       'urate_2025_q4', 'urate_2026_q4',
       'payroll_2025_q4', 'payroll_2026_q4',
+      # Macro (long-run from GTAP)
+      'lr_gdp_pct', 'lr_gdp_dollar_2024', 'lr_gdp_dollar_2025',
       # Products
       'food_price_sr', 'food_price_lr'
     ),
     value = c(
       results$etr$pre_sub_increase, results$etr$post_sub_increase,
+      results$etr$pre_sub_all_in, results$etr$post_sub_all_in,
       results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
       abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
       results$revenue$gross_10yr, results$revenue$conventional_10yr,
@@ -59,14 +74,17 @@ write_outputs <- function(results, scenario) {
       results$macro$gdp_2025, results$macro$gdp_2026,
       results$macro$urate_2025, results$macro$urate_2026,
       results$macro$payroll_2025, results$macro$payroll_2026,
+      lr_gdp_pct, lr_gdp_dollar_2024, lr_gdp_dollar_2025,
       results$products$food_sr, results$products$food_lr
     ),
     unit = c(
+      'pct', 'pct',
       'pct', 'pct',
       'pct', 'pct', 'dollars', 'dollars',
       'billions', 'billions',
       'billions', 'billions',
       'pct', 'pct', 'pp', 'pp', 'thousands', 'thousands',
+      'pct', 'billions', 'billions',
       'pct', 'pct'
     )
   )

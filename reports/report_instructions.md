@@ -30,6 +30,8 @@ You will receive:
 |-------|-------------|------|
 | `pre_sub_etr_increase` | ETR increase before substitution | percentage points |
 | `post_sub_etr_increase` | ETR increase after substitution | percentage points |
+| `pre_sub_etr_total` | Total ETR before substitution (USE THIS for headline rate) | percent |
+| `post_sub_etr_total` | Total ETR after substitution (USE THIS for post-sub rate) | percent |
 | `pre_sub_price_increase` | Price level increase (short-run) | percent |
 | `post_sub_price_increase` | Price level increase (long-run) | percent |
 | `pre_sub_per_hh_cost` | Cost per household (pre-substitution) | dollars |
@@ -44,6 +46,9 @@ You will receive:
 | `urate_2026_q4` | Unemployment rate increase by Q4 2026 | percentage points |
 | `payroll_2025_q4` | Payroll employment change by Q4 2025 | thousands |
 | `payroll_2026_q4` | Payroll employment change by Q4 2026 | thousands |
+| `lr_gdp_pct` | Long-run GDP level effect (from GTAP) | percent |
+| `lr_gdp_dollar_2024` | Long-run GDP dollar loss (2024$) - DO NOT USE | billions |
+| `lr_gdp_dollar_2025` | Long-run GDP dollar loss (2025$) | billions |
 
 ---
 
@@ -65,15 +70,16 @@ A shaded box containing bullet points for each major finding. Each bullet has:
 #### Summary Bullets
 
 **Current Tariff Rate:**
-- Report pre-substitution ETR as the "headline" rate consumers face
+- Use `pre_sub_etr_total` directly as the headline rate (do NOT calculate from increase + baseline)
+- Round to one decimal place (e.g., 17.5%, not 17.48%)
 - Note historical comparison (e.g., "highest since 1935")
-- Report post-substitution ETR as what the rate "will be" after consumption shifts
+- Use `post_sub_etr_total` directly as what the rate "will be" after consumption shifts
 - IEEPA parenthetical: report the ex-IEEPA pre-substitution rate
 
 **Overall Price Level & Distributional Effects:**
 - Brief note that TBL assumes Fed "looks through" tariffs (prices rise, not nominal incomes fall)
 - Report pre-substitution price increase percentage
-- Report per-household cost (use `pre_sub_per_hh_cost`, round to nearest $100)
+- Report per-household cost (use `pre_sub_per_hh_cost`, round to nearest dollar)
 - Report cost for bottom decile (from `distribution.csv`, decile 1)
 - IEEPA parenthetical: report ex-IEEPA price level impact
 
@@ -84,8 +90,8 @@ A shaded box containing bullet points for each major finding. Each bullet has:
 
 **Real GDP Effects:**
 - Report GDP growth slowdown in 2025 and 2026 (from `gdp_2025_q4q4`, `gdp_2026_q4q4`)
-- Report long-run GDP level effect (from `sector_effects.csv`, `overall_gdp` row)
-- Convert to dollar terms (multiply by ~$29 trillion baseline GDP)
+- Report long-run GDP level effect (from `lr_gdp_pct`)
+- Report dollar equivalent using `lr_gdp_dollar_2025` (in 2025 dollars)
 - IEEPA parenthetical: report ex-IEEPA long-run GDP effect
 
 **Labor Market Effects:**
@@ -95,13 +101,14 @@ A shaded box containing bullet points for each major finding. Each bullet has:
 
 **Long-Run Sectoral GDP & Employment Effects:**
 - Report manufacturing output expansion
-- Report the sectors that contract most (typically construction, agriculture)
+- Identify the 2-3 sectors with the largest contractions from `sector_effects` data (could be construction, agriculture, mining, services, or utilities - use whichever have the most negative values)
 - Note the trade-off framing: manufacturing gains are "more than crowded out"
 - IEEPA parenthetical: note patterns are similar
 
 **Fiscal Effects:**
-- Report gross revenue over 10-year window (round to $X.X trillion)
-- Report dynamic revenue (after GDP feedback effects)
+- Use `conventional_revenue_10yr` (or `revenue_10yr.conventional`) for "tariffs raise about $X.X trillion"
+- Use `dynamic_revenue_10yr` (or `revenue_10yr.net_dynamic`) for net dynamic revenue
+- Round to $X.X trillion (one decimal place)
 - IEEPA parenthetical: note revenue would be cut roughly in half
 
 ### 3. Changes Since the Last Report
@@ -169,6 +176,7 @@ Detailed exposition of results, organized by topic:
 - Discuss sector-by-sector effects from `sector_effects.csv`
 - Include: manufacturing (with durable/nondurable/advanced breakdown), construction, agriculture, mining, services, utilities
 - Emphasize the manufacturing vs. rest-of-economy trade-off
+- When summarizing contractions, highlight the 2-3 sectors with the largest negative changes (don't assume which sectors these are - check the data)
 
 #### Global Long-Run Real GDP Effects
 - Report world GDP effect
@@ -182,11 +190,11 @@ Detailed exposition of results, organized by topic:
 - Explain the pattern (countries with high tariff exposure lose, others may gain from trade diversion)
 
 #### Fiscal Impact
-- Report conventional 10-year revenue (gross tariff collections)
+- Use `conventional_revenue_10yr` for "tariffs raise about $X.X trillion" (this is after compliance/income effects)
 - Explain dynamic scoring: slower GDP growth reduces other tax revenues
-- Report dynamic effect (revenue lost to slower growth)
-- Report net dynamic revenue
-- Express in trillions, rounded to one decimal
+- Use `dynamic_effect_10yr` for revenue lost to slower growth
+- Use `dynamic_revenue_10yr` for net dynamic revenue
+- Express all values in trillions, rounded to one decimal (e.g., $2.8T not $2.81T)
 
 #### Distributional Impact
 - Explain methodology: comparing consumption burden to income by decile
@@ -207,11 +215,12 @@ Detailed exposition of results, organized by topic:
   - `lea` = leather products (shoes, handbags)
   - `wap` = wearing apparel
   - `tex` = textiles
-  - `ele` = electrical equipment
-  - `eeq` = electronic equipment
+  - `eeq` = electrical equipment
+  - `ele` = computer, electronic and optical products (consumer electronics)
   - `fmp` = fabricated metal products
   - `mvh` = motor vehicles
   - `nfm` = non-ferrous metals
+- For motor vehicles, calculate dollar equivalent using $50,000 average new car price (e.g., 12% increase = $6,000)
 
 ---
 
@@ -224,7 +233,7 @@ Detailed exposition of results, organized by topic:
 
 ### Numbers
 - Round ETRs to one decimal place (e.g., 16.8%, not 16.78%)
-- Round dollar amounts: per-household to nearest $100, aggregates to one decimal in billions/trillions
+- Round dollar amounts: per-household to nearest dollar, aggregates to one decimal in billions/trillions
 - Round percentage points to one decimal
 - Use "about" or "approximately" for rounded figures
 
