@@ -21,7 +21,7 @@ The model orchestrates multiple components to produce tariff impact estimates:
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Tariff-ETRs    │     │      GTAP       │     │      MAUS       │
+│  Tariff-ETRs    │ --> │      GTAP       │ --> │      MAUS       │
 │  (ETR Matrix)   │     │  (Trade Model)  │     │  (Macro Model)  │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
