@@ -22,7 +22,7 @@ gtap:
 # -----------------------------------------------------------------------------
 
 # Reference date for GTAP single-run (uses this date's shocks)
-gtap_reference_date: '2026-07-20'
+gtap_reference_date: '2026-02-20'
 
 # -----------------------------------------------------------------------------
 # Refund Parameters
