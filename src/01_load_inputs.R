@@ -206,9 +206,37 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   if (!file.exists(etr_file)) {
     stop('ETR matrix not found: ', etr_file)
   }
-  inputs$etr_matrix <- read_csv(etr_file, show_col_types = FALSE)
-  assert_has_columns(inputs$etr_matrix, 'gtap_code', 'ETR matrix')
-  message(sprintf('  Loaded ETR matrix: %d sectors', nrow(inputs$etr_matrix)))
+  etr_raw <- read_csv(etr_file, show_col_types = FALSE)
+  assert_has_columns(etr_raw, 'gtap_code', 'ETR matrix')
+
+  # Detect time-varying ETRs (stacked CSV with date column)
+  if ('date' %in% names(etr_raw)) {
+    inputs$is_time_varying <- TRUE
+    inputs$etr_matrix_by_date <- etr_raw %>%
+      mutate(date = as.Date(date))
+    inputs$etr_dates <- sort(unique(inputs$etr_matrix_by_date$date))
+
+    # Reference date for GTAP (from model_params, default: first date)
+    gtap_ref <- inputs$model_params$gtap_reference_date
+    if (!is.null(gtap_ref)) {
+      inputs$gtap_reference_date <- as.Date(gtap_ref)
+    } else {
+      inputs$gtap_reference_date <- inputs$etr_dates[1]
+    }
+
+    # Extract reference date rows as flat etr_matrix (no date column)
+    inputs$etr_matrix <- inputs$etr_matrix_by_date %>%
+      filter(date == inputs$gtap_reference_date) %>%
+      select(-date)
+
+    message(sprintf('  Loaded time-varying ETR matrix: %d dates, %d sectors each',
+                    length(inputs$etr_dates), nrow(inputs$etr_matrix)))
+    message(sprintf('  GTAP reference date: %s', inputs$gtap_reference_date))
+  } else {
+    inputs$is_time_varying <- FALSE
+    inputs$etr_matrix <- etr_raw
+    message(sprintf('  Loaded ETR matrix: %d sectors', nrow(inputs$etr_matrix)))
+  }
 
   # ============================
   # Mappings (load early for GTAP processing)

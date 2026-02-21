@@ -153,6 +153,46 @@ calculate_etr_increase <- function(post_sub_etr, baseline_etr) {
 
 
 # =============================================================================
+# Per-date weighted ETR calculation (time-varying support)
+# =============================================================================
+
+#' Calculate weighted ETR for each date in a time-varying ETR matrix
+#'
+#' For each unique date, computes the import-weighted average ETR using
+#' baseline VIWS/import weights (pre-substitution concept).
+#'
+#' @param etr_matrix_by_date Stacked ETR data with date, gtap_code, and country columns
+#' @param etr_dates Sorted vector of unique dates
+#' @param viws_baseline Matrix of baseline imports by commodity x source country
+#' @param import_baseline_dollars Matrix of baseline imports in dollars
+#'
+#' @return Tibble with date and weighted_etr columns
+calculate_per_date_weighted_etrs <- function(etr_matrix_by_date, etr_dates,
+                                              viws_baseline, import_baseline_dollars) {
+
+  results <- tibble(date = as.Date(character()), weighted_etr = numeric())
+
+  for (d in etr_dates) {
+    d_date <- as.Date(d, origin = '1970-01-01')
+    etr_slice <- etr_matrix_by_date %>%
+      filter(date == d_date) %>%
+      select(-date)
+
+    # Use baseline VIWS as both pre and post (pre-substitution weighting)
+    country_etrs <- calculate_country_etrs(
+      etr_slice, viws_baseline,
+      viws_baseline, import_baseline_dollars
+    )
+    weighted <- calculate_weighted_etr(country_etrs)
+
+    results <- bind_rows(results, tibble(date = d_date, weighted_etr = weighted))
+  }
+
+  return(results)
+}
+
+
+# =============================================================================
 # Main calculation function
 # =============================================================================
 
@@ -243,6 +283,48 @@ calculate_etr <- function(inputs) {
   post_sub_all_in <- baseline_etr + (post_sub_etr / 100)
 
   # -------------------------------------------------------------------------
+  # Time-varying: per-date ETR scaling
+  # -------------------------------------------------------------------------
+
+  etr_increase_by_date <- NULL
+
+  if (isTRUE(inputs$is_time_varying)) {
+    message('  Computing per-date weighted ETRs for time-varying scenario...')
+
+    per_date_etrs <- calculate_per_date_weighted_etrs(
+      inputs$etr_matrix_by_date,
+      inputs$etr_dates,
+      viws_baseline,
+      import_baseline_dollars
+    )
+
+    # Reference date weighted ETR
+    ref_date <- inputs$gtap_reference_date
+    ref_etr <- per_date_etrs %>%
+      filter(date == ref_date) %>%
+      pull(weighted_etr)
+
+    if (length(ref_etr) != 1 || ref_etr == 0) {
+      stop('Reference date weighted ETR is zero or missing for: ', ref_date)
+    }
+
+    # Scale GTAP etr_increase proportionally by each date's weighted ETR
+    etr_increase_by_date <- per_date_etrs %>%
+      mutate(
+        etr_increase = etr_increase * (weighted_etr / ref_etr)
+      ) %>%
+      select(date, etr_increase)
+
+    message(sprintf('  Scaled etr_increase for %d dates (ref=%.4f%%)',
+                    nrow(etr_increase_by_date), ref_etr))
+    for (i in seq_len(nrow(etr_increase_by_date))) {
+      message(sprintf('    %s: etr_increase=%.4f',
+                      etr_increase_by_date$date[i],
+                      etr_increase_by_date$etr_increase[i]))
+    }
+  }
+
+  # -------------------------------------------------------------------------
   # Compile results
   # -------------------------------------------------------------------------
 
@@ -254,6 +336,8 @@ calculate_etr <- function(inputs) {
     post_sub_all_in = post_sub_all_in * 100,
     # etr_increase for revenue calculations (from mtax, includes all imports)
     etr_increase = etr_increase,
+    # Per-date etr_increase (NULL for static scenarios)
+    etr_increase_by_date = etr_increase_by_date,
     # Country-level data for output
     postsim_country = postsim_country_etrs,
     presim_country = presim_country_etrs

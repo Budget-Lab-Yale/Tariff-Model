@@ -146,9 +146,34 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
   # Paths
   scenario_dir <- file.path('config', 'scenarios', scenario)
   output_dir <- file.path('output', scenario, 'gtap')
-  shocks_file <- file.path('output', scenario, 'tariff_etrs', 'shocks.txt')
   template_file <- 'resources/gtap/cmf_template.cmf'
   retaliation_file <- file.path(scenario_dir, 'retaliation', 'shocks.txt')
+
+  # Select shocks file: flat file for static, date subdirectory for time-varying
+  flat_shocks <- file.path('output', scenario, 'tariff_etrs', 'shocks.txt')
+  if (file.exists(flat_shocks)) {
+    shocks_file <- flat_shocks
+  } else {
+    # Time-varying: look for date subdirectories
+    tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
+    date_dirs <- sort(list.dirs(tariff_etrs_dir, recursive = FALSE, full.names = FALSE))
+    if (length(date_dirs) == 0) {
+      stop('No shocks.txt found (flat or date-subdirectory) in: ', tariff_etrs_dir)
+    }
+    # Use gtap_reference_date from model_params (default: first date)
+    params_check <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
+    ref_date <- params_check$gtap_reference_date %||% date_dirs[1]
+    ref_date <- as.character(ref_date)
+    if (!ref_date %in% date_dirs) {
+      stop('gtap_reference_date "', ref_date, '" not found in: ',
+           paste(date_dirs, collapse = ', '))
+    }
+    shocks_file <- file.path(tariff_etrs_dir, ref_date, 'shocks.txt')
+    if (!file.exists(shocks_file)) {
+      stop('Shocks file not found for reference date: ', shocks_file)
+    }
+    message(sprintf('  Using time-varying shocks for reference date: %s', ref_date))
+  }
 
   # Load scenario-specific params (for retaliation flag override)
   params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))

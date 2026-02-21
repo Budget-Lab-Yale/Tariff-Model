@@ -172,6 +172,19 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   message('\nStep 1: Loading inputs...')
   inputs <- load_inputs(scenario, skip_maus = TRUE)
 
+  # Guard: time-varying ETRs are not compatible with MAUS surrogate
+  if (isTRUE(inputs$is_time_varying)) {
+    message(sprintf('  Detected time-varying ETRs (%d dates)', length(inputs$etr_dates)))
+    if (use_maus_surrogate) {
+      stop(
+        'Time-varying ETR scenarios cannot use the MAUS surrogate model.\n',
+        'The surrogate interpolates on a single UTFIBC level, but time-varying\n',
+        'scenarios produce a varying UTFIBC path.\n\n',
+        'Use: run_scenario("', scenario, '", use_maus_surrogate = FALSE)'
+      )
+    }
+  }
+
   #---------------------------
   # Step 2: Calculate ETRs
   #---------------------------
