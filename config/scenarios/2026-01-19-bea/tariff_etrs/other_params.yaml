@@ -10,7 +10,7 @@ ieepa_usmca_exception: 1        # Apply USMCA exemption to IEEPA tariffs (1 = ye
 
 # Metal content share for Section 232 derivative products
 metal_content:
-  method: 'flat'
+  method: 'bea'
   flat_share: 1.0
   primary_chapters:
     - '72'
