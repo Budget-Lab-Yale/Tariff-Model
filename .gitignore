@@ -10,4 +10,38 @@
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
+nul
 .Renviron
+
+# Claude Code
+.claude/
+
+# Scratch/debug scripts
+scripts/
+
+# Stray data files
+decile_incomes.csv
+
+# Extra Excel files
+excel_model/61183-Rules-of-Thumb-2025.xlsx
+excel_model/TBL Data TEMPLATE.xlsx
+excel_model/desktop.ini
+
+# LaTeX build artifacts
+excel_model/*.aux
+excel_model/*.out
+excel_model/*.toc
+
+# Internal docs and specs
+metal-content-spec.md
+docs/distribution_implementation_plan.md
+
+# Local machine config
+config/gtap_config.yaml
+
+# Saved webpages
+reports/State of U.S. Tariffs_*
+
+# Archived scenarios
+config/scenarios/archive/
