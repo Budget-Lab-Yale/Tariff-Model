@@ -204,13 +204,6 @@ load_model_outputs <- function(scenario) {
 
 
 # =============================================================================
-# Constants
-# =============================================================================
-
-BASELINE_ETR <- 0.02418  # 2.418% baseline ETR
-
-
-# =============================================================================
 # Data TOC: Table of Contents sheet
 # =============================================================================
 
@@ -262,9 +255,9 @@ build_t1 <- function(outputs) {
     filter(sector == 'overall_gdp') %>%
     pull(output_change_pct)
 
-  # ETR LEVELS = baseline + increase (not just the increase)
-  pre_sub_etr_level <- BASELINE_ETR + key['pre_sub_etr_increase'] / 100
-  post_sub_etr_level <- BASELINE_ETR + key['post_sub_etr_increase'] / 100
+  # ETR LEVELS from key_results (computed from levels matrices in 02_calculate_etr.R)
+  pre_sub_etr_level <- key['pre_sub_all_in_etr'] / 100
+  post_sub_etr_level <- key['post_sub_all_in_etr'] / 100
 
   tibble(
     value = c(
@@ -419,9 +412,9 @@ build_f1 <- function(outputs) {
     select(metric, value) %>%
     deframe()
 
-  # ETR LEVELS = baseline + increase (convert increase from % to decimal first)
-  pre_sub_etr_level <- (BASELINE_ETR + key['pre_sub_etr_increase'] / 100) * 100  # Back to %
-  post_sub_etr_level <- (BASELINE_ETR + key['post_sub_etr_increase'] / 100) * 100  # Back to %
+  # ETR LEVELS from key_results (already in %, computed in 02_calculate_etr.R)
+  pre_sub_etr_level <- key['pre_sub_all_in_etr']
+  post_sub_etr_level <- key['post_sub_all_in_etr']
 
   last_year <- max(HISTORICAL_ETR$year)
   last_etr <- HISTORICAL_ETR %>%

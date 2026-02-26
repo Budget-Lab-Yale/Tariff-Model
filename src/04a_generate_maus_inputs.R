@@ -149,6 +149,62 @@ compute_utfibc_shocks <- function(baseline_utfibc,
 }
 
 
+#' Compute UTFIBC shock series for time-varying ETR schedule
+#'
+#' For each quarter, finds the active tariff regime (latest date <= quarter start).
+#' At the shock_start_quarter, applies an initial VIX-based shock (38% of active ETR).
+#' For subsequent quarters, applies the full etr_increase for the active regime.
+#'
+#' @param baseline_utfibc Vector of baseline UTFIBC rates by quarter
+#' @param etr_increase_by_date Tibble with date and etr_increase columns
+#' @param quarter_starts Vector of Date values for each quarter start
+#' @param shock_start_quarter Which quarter (1-indexed) the shock begins
+#' @param n_quarters Total number of quarters to generate
+#'
+#' @return Vector of UTFIBC values (baseline + shock)
+compute_utfibc_shocks_time_varying <- function(baseline_utfibc,
+                                                etr_increase_by_date,
+                                                quarter_starts,
+                                                shock_start_quarter = 4,
+                                                n_quarters = 46) {
+
+  schedule <- etr_increase_by_date %>% arrange(date)
+  sched_dates <- schedule$date
+  sched_increases <- schedule$etr_increase
+
+  utfibc <- numeric(n_quarters)
+
+  for (q in seq_len(n_quarters)) {
+    base <- baseline_utfibc[q]
+    q_start <- quarter_starts[q]
+
+    if (q < shock_start_quarter) {
+      # Before shock: baseline only
+      utfibc[q] <- base
+    } else {
+      # Find active regime: latest schedule date <= quarter start
+      # If before first schedule date, use first regime (tariffs were already active)
+      active_idx <- which(sched_dates <= q_start)
+      if (length(active_idx) == 0) {
+        active_etr <- sched_increases[1]
+      } else {
+        active_etr <- sched_increases[max(active_idx)]
+      }
+      shock <- active_etr * 100  # Convert to percentage points for MAUS
+
+      if (q == shock_start_quarter) {
+        # First shock quarter: use VIX-derived initial shock (38% of active ETR)
+        utfibc[q] <- base + shock * 0.38
+      } else {
+        utfibc[q] <- base + shock
+      }
+    }
+  }
+
+  return(utfibc)
+}
+
+
 #' Generate complete MAUS input shock series
 #'
 #' @param etr_results Results from calculate_etr() containing pre/post sub ETRs
@@ -201,14 +257,29 @@ generate_maus_inputs <- function(etr_results, inputs, scenario) {
   # Compute UTFIBC shock series
   # -------------------------------------------------------------------------
 
-  utfibc <- compute_utfibc_shocks(
-    baseline_utfibc = quarterly_utfibc$utfibc,
-    pre_sub_etr = pre_sub_etr,
-    post_sub_etr = post_sub_etr,
-    shock_start_quarter = shock_start_quarter,
-    interpolation_quarters = interpolation_quarters,
-    n_quarters = n_quarters
-  )
+  etr_increase_by_date <- etr_results$etr_increase_by_date
+
+  if (!is.null(etr_increase_by_date)) {
+    # Time-varying path: use per-date ETR schedule
+    message('    Using time-varying UTFIBC shock computation')
+    utfibc <- compute_utfibc_shocks_time_varying(
+      baseline_utfibc = quarterly_utfibc$utfibc,
+      etr_increase_by_date = etr_increase_by_date,
+      quarter_starts = quarterly_vix$quarter_start,
+      shock_start_quarter = shock_start_quarter,
+      n_quarters = n_quarters
+    )
+  } else {
+    # Static path: existing pre/post interpolation
+    utfibc <- compute_utfibc_shocks(
+      baseline_utfibc = quarterly_utfibc$utfibc,
+      pre_sub_etr = pre_sub_etr,
+      post_sub_etr = post_sub_etr,
+      shock_start_quarter = shock_start_quarter,
+      interpolation_quarters = interpolation_quarters,
+      n_quarters = n_quarters
+    )
+  }
 
   message(sprintf('    Computed UTFIBC shocks (starts Q%d)', shock_start_quarter))
 

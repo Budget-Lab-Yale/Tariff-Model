@@ -19,6 +19,67 @@
 
 library(tidyverse)
 
+#' Compute FY-weighted average etr_increase from time-varying date schedule
+#'
+#' For each fiscal year (Oct 1 – Sep 30), computes a day-weighted average
+#' etr_increase using step-function logic:
+#' - Before the first date: etr_increase = 0
+#' - Each date's etr_increase applies from that date until the next date
+#' - After the last date: last etr_increase continues
+#'
+#' @param etr_increase_by_date Tibble with date and etr_increase columns
+#' @param fiscal_years Integer vector of fiscal years to compute
+#'
+#' @return Named numeric vector keyed by fiscal year (as character)
+compute_fy_weighted_etr_increase <- function(etr_increase_by_date, fiscal_years) {
+
+  # Sort by date
+  schedule <- etr_increase_by_date %>%
+    arrange(date)
+
+  dates <- schedule$date
+  increases <- schedule$etr_increase
+
+  result <- numeric(length(fiscal_years))
+  names(result) <- as.character(fiscal_years)
+
+  for (fy in fiscal_years) {
+    # FY runs from Oct 1 of prior CY to Sep 30 of FY year
+    fy_start <- as.Date(paste0(fy - 1, '-10-01'))
+    fy_end <- as.Date(paste0(fy, '-09-30'))
+    fy_days <- as.integer(fy_end - fy_start) + 1L
+
+    # Build intervals within this FY
+    # Breakpoints are: fy_start, any schedule dates within [fy_start, fy_end], fy_end+1
+    breakpoints <- c(fy_start, dates[dates > fy_start & dates <= fy_end], fy_end + 1L)
+    breakpoints <- sort(unique(breakpoints))
+
+    weighted_sum <- 0
+
+    for (i in seq_len(length(breakpoints) - 1)) {
+      interval_start <- breakpoints[i]
+      interval_end <- breakpoints[i + 1] - 1L
+      n_days <- as.integer(interval_end - interval_start) + 1L
+
+      # Find active etr_increase: latest schedule date <= interval_start
+      # If before first date, use first regime (tariffs were already active)
+      active_idx <- which(dates <= interval_start)
+      if (length(active_idx) == 0) {
+        active_etr <- increases[1]
+      } else {
+        active_etr <- increases[max(active_idx)]
+      }
+
+      weighted_sum <- weighted_sum + active_etr * n_days
+    }
+
+    result[as.character(fy)] <- weighted_sum / fy_days
+  }
+
+  return(result)
+}
+
+
 #' Calculate tariff revenue estimates
 #'
 #' @param inputs List containing:
@@ -26,7 +87,7 @@ library(tidyverse)
 #'   - qmwreg: GTAP import change percentage
 #'   - etr_increase: GTAP-derived ETR increase from new tariff policy
 #'   - assumptions: Global assumptions (phase_in, compliance_effect, etc.)
-#' @param etr_results Results from calculate_etr() (optional, not used for revenue)
+#' @param etr_results Results from calculate_etr() (optional, contains etr_increase_by_date for time-varying)
 #'
 #' @return List containing revenue estimates by year and 10-year totals
 calculate_revenue <- function(inputs, etr_results = NULL) {
@@ -72,6 +133,23 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   }
 
   # -------------------------------------------------------------------------
+  # Time-varying: compute per-FY etr_increase if available
+  # -------------------------------------------------------------------------
+
+  etr_increase_by_date <- if (!is.null(etr_results)) etr_results$etr_increase_by_date else NULL
+  use_fy_etr <- !is.null(etr_increase_by_date)
+
+  if (use_fy_etr) {
+    fiscal_years <- cbo$fiscal_year
+    fy_etr_vec <- compute_fy_weighted_etr_increase(etr_increase_by_date, fiscal_years)
+    message('  Time-varying: using per-FY day-weighted etr_increase')
+    for (fy in fiscal_years) {
+      val <- fy_etr_vec[as.character(fy)]
+      message(sprintf('    FY%d: etr_increase=%.4f (%.2f%%)', fy, val, val * 100))
+    }
+  }
+
+  # -------------------------------------------------------------------------
   # Build revenue calculation table
   # -------------------------------------------------------------------------
 
@@ -101,7 +179,12 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
 
       # Step 2: Calculate total ETR (CBO baseline + policy increase)
       # baseline_etr already exists in CBO data (duties/imports)
-      total_etr = baseline_etr + etr_increase,
+      # Time-varying: use per-FY etr_increase; static: scalar etr_increase
+      total_etr = baseline_etr + if (use_fy_etr) {
+        fy_etr_vec[as.character(fiscal_year)]
+      } else {
+        etr_increase
+      },
 
       # Step 3: Calculate new duties
       new_duties = new_imports * total_etr,
