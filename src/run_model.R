@@ -364,8 +364,11 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   message('\n----------------------------------------------------------')
   message('KEY RESULTS')
   message('----------------------------------------------------------')
+  message(sprintf('Baseline ETR (from levels):     %.3f%%', etr_results$baseline_etr))
   message(sprintf('Pre-substitution ETR increase:  %.2f%%', etr_results$pre_sub_increase))
+  message(sprintf('Pre-sub all-in ETR:             %.3f%%', etr_results$pre_sub_all_in))
   message(sprintf('Post-substitution ETR increase: %.2f%%', etr_results$post_sub_increase))
+  message(sprintf('Post-sub all-in ETR:            %.3f%%', etr_results$post_sub_all_in))
   message(sprintf('Pre-sub price increase:         %.3f%%', price_results$pre_sub_price_increase))
   message(sprintf('Post-sub price increase:        %.3f%%', price_results$post_sub_price_increase))
 

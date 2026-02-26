@@ -202,12 +202,13 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
 
   tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
 
-  etr_file <- file.path(tariff_etrs_dir, 'etrs_by_sector_country.csv')
+  # ---- Deltas (tariff increases from baseline) ----
+  etr_file <- file.path(tariff_etrs_dir, 'gtap_deltas_by_sector_country.csv')
   if (!file.exists(etr_file)) {
-    stop('ETR matrix not found: ', etr_file)
+    stop('ETR delta matrix not found: ', etr_file)
   }
   etr_raw <- read_csv(etr_file, show_col_types = FALSE)
-  assert_has_columns(etr_raw, 'gtap_code', 'ETR matrix')
+  assert_has_columns(etr_raw, 'gtap_code', 'ETR delta matrix')
 
   # Detect time-varying ETRs (stacked CSV with date column)
   if ('date' %in% names(etr_raw)) {
@@ -229,13 +230,84 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
       filter(date == inputs$gtap_reference_date) %>%
       select(-date)
 
-    message(sprintf('  Loaded time-varying ETR matrix: %d dates, %d sectors each',
+    message(sprintf('  Loaded time-varying ETR deltas: %d dates, %d sectors each',
                     length(inputs$etr_dates), nrow(inputs$etr_matrix)))
     message(sprintf('  GTAP reference date: %s', inputs$gtap_reference_date))
   } else {
     inputs$is_time_varying <- FALSE
     inputs$etr_matrix <- etr_raw
-    message(sprintf('  Loaded ETR matrix: %d sectors', nrow(inputs$etr_matrix)))
+    message(sprintf('  Loaded ETR delta matrix: %d sectors', nrow(inputs$etr_matrix)))
+  }
+
+  # ---- Scenario levels (absolute tariff rates) ----
+  levels_file <- file.path(tariff_etrs_dir, 'gtap_levels_by_sector_country.csv')
+  if (!file.exists(levels_file)) {
+    stop('ETR levels matrix not found: ', levels_file)
+  }
+  levels_raw <- read_csv(levels_file, show_col_types = FALSE)
+  assert_has_columns(levels_raw, 'gtap_code', 'ETR levels matrix')
+
+  if ('date' %in% names(levels_raw)) {
+    # Time-varying levels
+    inputs$levels_matrix_by_date <- levels_raw %>%
+      mutate(date = as.Date(date))
+
+    # Extract reference date slice as flat levels_matrix
+    inputs$levels_matrix <- inputs$levels_matrix_by_date %>%
+      filter(date == inputs$gtap_reference_date) %>%
+      select(-date)
+
+    message(sprintf('  Loaded time-varying ETR levels: %d dates', length(inputs$etr_dates)))
+  } else {
+    inputs$levels_matrix <- levels_raw
+    inputs$levels_matrix_by_date <- NULL
+    message(sprintf('  Loaded ETR levels matrix: %d sectors', nrow(inputs$levels_matrix)))
+  }
+
+  # ---- Baseline levels (pre-existing tariff rates, always static) ----
+  baseline_levels_file <- file.path('output', scenario, 'baseline',
+                                     'gtap_levels_by_sector_country.csv')
+  if (!file.exists(baseline_levels_file)) {
+    stop('Baseline levels matrix not found: ', baseline_levels_file)
+  }
+  baseline_levels_raw <- read_csv(baseline_levels_file, show_col_types = FALSE)
+  assert_has_columns(baseline_levels_raw, 'gtap_code', 'baseline levels matrix')
+  if ('date' %in% names(baseline_levels_raw)) {
+    stop('Baseline levels must be static (no date column), found date column in: ',
+         baseline_levels_file)
+  }
+  inputs$baseline_levels_matrix <- baseline_levels_raw
+  message(sprintf('  Loaded baseline levels matrix: %d sectors',
+                  nrow(inputs$baseline_levels_matrix)))
+
+  # ---- Census-country files (optional passthrough data) ----
+  census_deltas_file <- file.path(tariff_etrs_dir, 'deltas_by_census_country.csv')
+  if (file.exists(census_deltas_file)) {
+    inputs$census_country_deltas <- read_csv(census_deltas_file, show_col_types = FALSE)
+    message(sprintf('  Loaded census-country deltas: %d rows',
+                    nrow(inputs$census_country_deltas)))
+  } else {
+    inputs$census_country_deltas <- NULL
+  }
+
+  census_levels_file <- file.path(tariff_etrs_dir, 'levels_by_census_country.csv')
+  if (file.exists(census_levels_file)) {
+    inputs$census_country_levels <- read_csv(census_levels_file, show_col_types = FALSE)
+    message(sprintf('  Loaded census-country levels: %d rows',
+                    nrow(inputs$census_country_levels)))
+  } else {
+    inputs$census_country_levels <- NULL
+  }
+
+  baseline_census_file <- file.path('output', scenario, 'baseline',
+                                     'levels_by_census_country.csv')
+  if (file.exists(baseline_census_file)) {
+    inputs$baseline_census_country_levels <- read_csv(baseline_census_file,
+                                                       show_col_types = FALSE)
+    message(sprintf('  Loaded baseline census-country levels: %d rows',
+                    nrow(inputs$baseline_census_country_levels)))
+  } else {
+    inputs$baseline_census_country_levels <- NULL
   }
 
   # ============================

@@ -36,6 +36,7 @@ write_outputs <- function(results, scenario) {
     metric = c(
       # ETR
       'pre_sub_etr_increase', 'post_sub_etr_increase',
+      'baseline_etr', 'pre_sub_all_in_etr', 'post_sub_all_in_etr',
       # Prices
       'pre_sub_price_increase', 'post_sub_price_increase',
       'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
@@ -52,6 +53,7 @@ write_outputs <- function(results, scenario) {
     ),
     value = c(
       results$etr$pre_sub_increase, results$etr$post_sub_increase,
+      results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$post_sub_all_in,
       results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
       abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
       results$revenue$gross_10yr, results$revenue$conventional_10yr,
@@ -63,6 +65,7 @@ write_outputs <- function(results, scenario) {
     ),
     unit = c(
       'pct', 'pct',
+      'pct', 'pct', 'pct',
       'pct', 'pct', 'dollars', 'dollars',
       'billions', 'billions',
       'billions', 'billions',
@@ -196,6 +199,11 @@ write_outputs <- function(results, scenario) {
   }
 
   # Actually, create a simpler format - one row per country with columns for pre/post
+  # Include both delta ETRs and level ETRs (if available)
+  has_levels <- !is.null(results$etr$baseline_country_levels) &&
+                !is.null(results$etr$presim_country_levels) &&
+                !is.null(results$etr$postsim_country_levels)
+
   goods_etrs <- tibble(
     country = country_names,
     country_code = country_codes,
@@ -209,6 +217,18 @@ write_outputs <- function(results, scenario) {
       results$etr$presim_country[[paste0('etr_', code)]])
   )
 
+  if (has_levels) {
+    goods_etrs <- goods_etrs %>%
+      mutate(
+        baseline_level = sapply(country_codes, function(code)
+          results$etr$baseline_country_levels[[paste0('etr_', code)]]),
+        presub_level = sapply(country_codes, function(code)
+          results$etr$presim_country_levels[[paste0('etr_', code)]]),
+        postsub_level = sapply(country_codes, function(code)
+          results$etr$postsim_country_levels[[paste0('etr_', code)]])
+      )
+  }
+
   # Add totals row
   total_row <- tibble(
     country = 'TOTAL',
@@ -219,10 +239,62 @@ write_outputs <- function(results, scenario) {
     presub_etr = results$etr$pre_sub_increase
   )
 
+  if (has_levels) {
+    total_row <- total_row %>%
+      mutate(
+        baseline_level = results$etr$baseline_etr,
+        presub_level = results$etr$pre_sub_all_in,
+        postsub_level = results$etr$post_sub_all_in
+      )
+  }
+
   goods_etrs <- bind_rows(goods_etrs, total_row)
 
   write_csv(goods_etrs, file.path(output_dir, 'goods_weighted_etrs.csv'))
   message('    goods_weighted_etrs.csv (8 countries + total)')
+
+  # ============================
+  # Census-Country Passthrough (optional)
+  # ============================
+
+  if (!is.null(results$inputs$census_country_deltas)) {
+    write_csv(results$inputs$census_country_deltas,
+              file.path(output_dir, 'census_country_deltas.csv'))
+    message(sprintf('    census_country_deltas.csv (%d rows)',
+                    nrow(results$inputs$census_country_deltas)))
+  }
+
+  if (!is.null(results$inputs$census_country_levels)) {
+    write_csv(results$inputs$census_country_levels,
+              file.path(output_dir, 'census_country_levels.csv'))
+    message(sprintf('    census_country_levels.csv (%d rows)',
+                    nrow(results$inputs$census_country_levels)))
+  }
+
+  if (!is.null(results$inputs$baseline_census_country_levels)) {
+    write_csv(results$inputs$baseline_census_country_levels,
+              file.path(output_dir, 'baseline_census_country_levels.csv'))
+    message(sprintf('    baseline_census_country_levels.csv (%d rows)',
+                    nrow(results$inputs$baseline_census_country_levels)))
+  }
+
+  # ============================
+  # Sector-Country Matrices (raw Tariff-ETRs output)
+  # ============================
+
+  if (!is.null(results$inputs$levels_matrix)) {
+    write_csv(results$inputs$levels_matrix,
+              file.path(output_dir, 'sector_country_levels.csv'))
+    message(sprintf('    sector_country_levels.csv (%d sectors)',
+                    nrow(results$inputs$levels_matrix)))
+  }
+
+  if (!is.null(results$inputs$etr_matrix)) {
+    write_csv(results$inputs$etr_matrix,
+              file.path(output_dir, 'sector_country_deltas.csv'))
+    message(sprintf('    sector_country_deltas.csv (%d sectors)',
+                    nrow(results$inputs$etr_matrix)))
+  }
 
   message(sprintf('  Done. All outputs written to %s/', output_dir))
 

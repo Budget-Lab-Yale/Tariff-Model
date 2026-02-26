@@ -1,0 +1,31 @@
+# =============================================================================
+# Model Parameters for Scenario: 2-20_with_s122-preempt-perm_annexnov
+# =============================================================================
+#
+# Time-varying scenario: Section 122 preemptive tariffs (permanent),
+# with November annex product exemptions applied to IEEPA.
+# Two tariff regimes:
+#   2026-01-01: Baseline tariffs (IEEPA w/ Nov annex exemptions, 232)
+#   2026-02-20: IEEPA repealed, + Section 122 tariffs (permanent)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GTAP Configuration
+# -----------------------------------------------------------------------------
+
+gtap:
+  include_retaliation: true
+
+# -----------------------------------------------------------------------------
+# Time-Varying ETR Configuration
+# -----------------------------------------------------------------------------
+
+# Reference date for GTAP single-run (uses this date's shocks)
+gtap_reference_date: '2026-02-24'
+
+# -----------------------------------------------------------------------------
+# Refund Parameters
+# -----------------------------------------------------------------------------
+
+refund_2026: 168.0

@@ -270,23 +270,52 @@ calculate_etr <- function(inputs) {
   pre_sub_etr <- calculate_weighted_etr(presim_country_etrs)
 
   # -------------------------------------------------------------------------
-  # Calculate all-in ETRs (baseline + increase)
+  # Calculate all-in ETRs from levels matrices
   # -------------------------------------------------------------------------
 
-  # Use baseline ETR from assumptions (goods-only concept, fixed 2.418%)
-  baseline_etr <- inputs$assumptions$baseline_etr
-  if (is.null(baseline_etr)) {
-    stop('assumptions$baseline_etr is required')
+  if (is.null(inputs$baseline_levels_matrix)) {
+    stop('baseline_levels_matrix is required for all-in ETR calculation')
+  }
+  if (is.null(inputs$levels_matrix)) {
+    stop('levels_matrix is required for all-in ETR calculation')
   }
 
-  pre_sub_all_in <- baseline_etr + (pre_sub_etr / 100)
-  post_sub_all_in <- baseline_etr + (post_sub_etr / 100)
+  # Compute baseline ETR from baseline levels (replaces hardcoded assumption)
+  baseline_country_levels <- calculate_country_etrs(
+    inputs$baseline_levels_matrix, viws_baseline,
+    viws_baseline, import_baseline_dollars
+  )
+  baseline_etr <- calculate_weighted_etr(baseline_country_levels) / 100
+  message(sprintf('  Computed baseline ETR from levels: %.3f%%', baseline_etr * 100))
+
+  # Compute all-in ETR from scenario levels (pre-substitution)
+  presim_levels_country <- calculate_country_etrs(
+    inputs$levels_matrix, viws_baseline,
+    viws_baseline, import_baseline_dollars
+  )
+  pre_sub_all_in <- calculate_weighted_etr(presim_levels_country) / 100
+
+  # Compute all-in ETR from scenario levels (post-substitution)
+  postsim_levels_country <- calculate_country_etrs(
+    inputs$levels_matrix, inputs$viws,
+    viws_baseline, import_baseline_dollars
+  )
+  post_sub_all_in <- calculate_weighted_etr(postsim_levels_country) / 100
+
+  # Sanity check: all-in should approximately equal baseline + delta
+  delta_check_pre <- baseline_etr + (pre_sub_etr / 100)
+  delta_check_post <- baseline_etr + (post_sub_etr / 100)
+  message(sprintf('  All-in pre-sub:  levels=%.3f%% vs baseline+delta=%.3f%%',
+                  pre_sub_all_in * 100, delta_check_pre * 100))
+  message(sprintf('  All-in post-sub: levels=%.3f%% vs baseline+delta=%.3f%%',
+                  post_sub_all_in * 100, delta_check_post * 100))
 
   # -------------------------------------------------------------------------
   # Time-varying: per-date ETR scaling
   # -------------------------------------------------------------------------
 
   etr_increase_by_date <- NULL
+  per_date_levels <- NULL
 
   if (isTRUE(inputs$is_time_varying)) {
     message('  Computing per-date weighted ETRs for time-varying scenario...')
@@ -322,6 +351,24 @@ calculate_etr <- function(inputs) {
                       etr_increase_by_date$date[i],
                       etr_increase_by_date$etr_increase[i]))
     }
+
+    # Compute per-date all-in levels (for output transparency)
+    if (!is.null(inputs$levels_matrix_by_date)) {
+      message('  Computing per-date all-in ETR levels...')
+      per_date_levels <- calculate_per_date_weighted_etrs(
+        inputs$levels_matrix_by_date,
+        inputs$etr_dates,
+        viws_baseline,
+        import_baseline_dollars
+      )
+      for (i in seq_len(nrow(per_date_levels))) {
+        message(sprintf('    %s: all-in level=%.4f%%',
+                        per_date_levels$date[i],
+                        per_date_levels$weighted_etr[i]))
+      }
+    } else {
+      per_date_levels <- NULL
+    }
   }
 
   # -------------------------------------------------------------------------
@@ -334,13 +381,21 @@ calculate_etr <- function(inputs) {
     pre_sub_all_in = pre_sub_all_in * 100,
     post_sub_increase = post_sub_etr,
     post_sub_all_in = post_sub_all_in * 100,
+    # Baseline ETR computed from levels (as percentage)
+    baseline_etr = baseline_etr * 100,
     # etr_increase for revenue calculations (from mtax, includes all imports)
     etr_increase = etr_increase,
     # Per-date etr_increase (NULL for static scenarios)
     etr_increase_by_date = etr_increase_by_date,
-    # Country-level data for output
+    # Country-level data for output (deltas)
     postsim_country = postsim_country_etrs,
-    presim_country = presim_country_etrs
+    presim_country = presim_country_etrs,
+    # Country-level data from levels
+    baseline_country_levels = baseline_country_levels,
+    presim_country_levels = presim_levels_country,
+    postsim_country_levels = postsim_levels_country,
+    # Per-date all-in levels (NULL for static scenarios)
+    per_date_levels = per_date_levels
   )
 
   message(sprintf('  Goods-weighted pre-sub ETR: %.2f%%', pre_sub_etr))
