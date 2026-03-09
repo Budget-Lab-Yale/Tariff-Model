@@ -17,6 +17,16 @@ gtap:
 gtap_reference_date: '2026-07-24'
 
 # -----------------------------------------------------------------------------
+# USMM Configuration
+# -----------------------------------------------------------------------------
+
+# Onset and offset dates for the temporary component (uses temp IRF instead of
+# shifted-perm). Exactly two dates: [onset, offset]. Only one pair is supported.
+temp_component_dates:
+  - '2026-02-24'
+  - '2026-07-24'
+
+# -----------------------------------------------------------------------------
 # Refund Parameters
 # -----------------------------------------------------------------------------
 
