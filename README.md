@@ -12,7 +12,7 @@ An R-based pipeline that calculates the economic impacts of U.S. tariff policies
 - [Directory Structure](#directory-structure)
 - [Scenarios](#scenarios)
 - [Outputs](#outputs)
-- [MAUS Integration](#maus-integration)
+- [USMM Integration](#usmm-integration)
 - [Report Generation](#report-generation)
 
 ## Overview
@@ -20,28 +20,33 @@ An R-based pipeline that calculates the economic impacts of U.S. tariff policies
 The model orchestrates multiple components to produce tariff impact estimates:
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Tariff-ETRs    │ --> │      GTAP       │ --> │      MAUS       │
-│  (ETR Matrix)   │     │  (Trade Model)  │     │  (Macro Model)  │
-└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │     Tariff Model        │
-                    │  (This Repository)      │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │   Key Results Output    │
-                    │  - ETRs & Price Effects │
-                    │  - Revenue Estimates    │
-                    │  - GDP/Employment       │
-                    │  - Sector Effects       │
-                    │  - Distribution         │
-                    └─────────────────────────┘
+┌─────────────────┐     ┌─────────────────┐
+│  Tariff-ETRs    │ --> │      GTAP       │
+│  (ETR Matrix)   │     │  (Trade Model)  │
+└────────┬────────┘     └────────┬────────┘
+         │                       │
+         └───────────┬───────────┘
+                     │
+                     ▼
+        ┌─────────────────────────┐
+        │     Tariff Model        │
+        │  (This Repository)      │
+        │                         │
+        │  ┌───────────────────┐  │
+        │  │ USMM Surrogate   │  │
+        │  │ (IRF-based macro) │  │
+        │  └───────────────────┘  │
+        └────────────┬────────────┘
+                     │
+                     ▼
+        ┌─────────────────────────┐
+        │   Key Results Output    │
+        │  - ETRs & Price Effects │
+        │  - Revenue Estimates    │
+        │  - GDP/Employment       │
+        │  - Sector Effects       │
+        │  - Distribution         │
+        └─────────────────────────┘
 ```
 
 ## Prerequisites
@@ -53,6 +58,7 @@ The model orchestrates multiple components to produce tariff impact estimates:
 | R | 4.0+ | Core runtime |
 | Tariff-ETRs repo | - | ETR calculations (sibling directory) |
 | GTAP + GEMPACK | v7 | Trade model simulations |
+| USMM IRFs | - | Pre-computed impulse response functions (included) |
 
 ### Required R Packages
 
@@ -68,7 +74,7 @@ install.packages(c('openxlsx', 'httr2', 'jsonlite'))
 
 1. **Tariff-ETRs**: Clone to `../Tariff-ETRs` (sibling directory)
 2. **GTAP + GEMPACK**: See [GTAP Setup](#gtap-setup) section below
-3. **MAUS surrogate**: Pre-trained model at `resources/maus_surrogate/interpolators.rds`
+3. **USMM IRFs**: Included in `resources/usmm/` (no external setup needed)
 
 ### For Report Generation (Optional)
 
@@ -176,7 +182,6 @@ Rscript run.R <scenario_name> [options]
 
 | Option | Description |
 |--------|-------------|
-| `--manual-maus` | Use manual MAUS workflow instead of surrogate model |
 | `--report` | Generate State of Tariffs report after model run |
 | `--report-date YYYY-MM-DD` | Date for report header (required with `--report`) |
 | `--policy-changes "text"` | Policy changes description for report (optional) |
@@ -184,11 +189,8 @@ Rscript run.R <scenario_name> [options]
 ### Examples
 
 ```bash
-# Run model with default settings (uses MAUS surrogate)
+# Run model
 Rscript run.R 11-17
-
-# Run with manual MAUS workflow (pauses for external MAUS run)
-Rscript run.R 11-17 --manual-maus
 
 # Run and generate report
 Rscript run.R 11-17 --report --report-date 2025-11-17
@@ -204,12 +206,7 @@ Rscript run.R
 
 ```r
 source('src/run_model.R')
-
-# Basic run
 run_scenario('11-17')
-
-# With manual MAUS
-run_scenario('11-17', use_maus_surrogate = FALSE)
 ```
 
 ## Pipeline Steps
@@ -220,15 +217,14 @@ The model executes these steps in sequence:
 |------|--------|-------------|
 | 0 | `00_run_tariff_etrs.R` | Calls Tariff-ETRs to generate ETR matrix |
 | 0b | `00b_run_gtap.R` | Runs GTAP trade model simulation |
-| 1 | `01_load_inputs.R` | Loads all inputs (baselines, parameters) |
+| 1 | `01_load_inputs.R` | Loads all inputs (baselines, parameters, USMM IRFs) |
 | 2 | `02_calculate_etr.R` | Calculates weighted effective tariff rates |
 | 3 | `03_calculate_prices.R` | Computes consumer price effects |
-| 4a | `04a_generate_maus_inputs.R` | Generates MAUS shock inputs |
+| 4a | `05a_usmm_surrogate.R` | Decomposes tariff shocks and constructs USMM macro response |
 | 4 | `04_calculate_revenue.R` | Estimates tariff revenue (conventional) |
-| 5a | `05a_predict_maus.R` | Predicts GDP/employment via surrogate |
-| 5 | `05_calculate_macro.R` | Computes macro effects (GDP, unemployment) |
+| 5 | `05_calculate_macro.R` | Computes macro effects (GDP, unemployment, PCE, fed funds) |
 | 6 | `06_calculate_sectors.R` | Calculates sector output effects |
-| 7 | `07_calculate_dynamic_revenue.R` | Adjusts revenue for GDP feedback |
+| 7 | `07_calculate_dynamic_revenue.R` | Adjusts revenue for GDP feedback (USMM→GTAP blend) |
 | 8 | `08_calculate_foreign_gdp.R` | Estimates foreign country GDP impacts |
 | 9 | `09_calculate_distribution.R` | Distributes costs by income decile |
 | 10 | `10_calculate_products.R` | Product-level price effects |
@@ -245,8 +241,11 @@ Tariff-Model/
 │   ├── 00b_run_gtap.R         # Step 0b: GTAP simulation
 │   ├── 01_load_inputs.R       # Step 1: Load inputs
 │   ├── ...                    # Steps 2-11
+│   ├── 05a_usmm_surrogate.R  # USMM IRF-based macro surrogate
 │   ├── helpers.R              # Shared utilities
-│   └── read_gtap.R            # GTAP HAR file reader
+│   ├── read_gtap.R            # GTAP HAR file reader
+│   └── util/
+│       └── extract_usmm_irfs.R  # Extract IRFs from USMM Excel output
 ├── config/
 │   ├── gtap_config.yaml       # Global GTAP installation paths
 │   ├── global_assumptions.yaml # Model-wide parameters
@@ -254,21 +253,19 @@ Tariff-Model/
 │       ├── 11-17/             # Example scenario
 │       │   ├── tariff_etrs/   # Tariff-ETRs config (232.yaml, ieepa_*.yaml)
 │       │   ├── retaliation/   # Retaliation shock definitions
-│       │   ├── maus_outputs/  # MAUS output (quarterly.csv)
 │       │   └── model_params.yaml  # Scenario-specific settings
 │       └── {other-scenarios}/
 ├── resources/
 │   ├── baselines/             # CBO baseline projections
 │   ├── mappings/              # GTAP sector crosswalks
 │   ├── gtap/                  # GTAP CMF template and mappings
-│   ├── maus_surrogate/        # Pre-trained MAUS surrogate
+│   ├── usmm/                  # USMM impulse response functions
 │   └── distribution/          # Consumption weight data
 ├── output/
 │   └── {scenario}/
 │       ├── results/           # CSV output files
 │       ├── gtap/              # GTAP run outputs
 │       ├── tariff_etrs/       # ETR matrix outputs
-│       ├── maus_inputs/       # Generated MAUS shocks
 │       ├── images/            # Generated figures
 │       └── report/            # Generated reports
 └── reports/
@@ -358,42 +355,57 @@ Post-sub per-HH cost:           $2,700
 ----------------------------------------------------------
 ```
 
-## MAUS Integration
+## USMM Integration
 
-### Default: Surrogate Model
+The model uses a USMM (US Macro Model) surrogate based on pre-computed impulse response functions (IRFs) to generate quarterly macroeconomic projections. This replaces the previous MAUS surrogate and runs entirely within the pipeline — no external model run is needed.
 
-By default, the model uses a pre-trained MAUS surrogate (`resources/maus_surrogate/interpolators.rds`) to predict GDP and employment effects without requiring an external MAUS run.
+### How It Works
 
-### Manual MAUS Workflow
+1. **Shock decomposition**: The ETR schedule is decomposed into permanent, temporary, and refund components (`decompose_shocks()`)
+2. **IRF interpolation**: Each component is matched to the appropriate IRF type (permanent or temporary) and linearly interpolated between pre-computed 2pp, 5pp, and 10pp brackets
+3. **Response construction**: Component IRFs are shifted, scaled, and summed to build the composite macro response
+4. **Conversion to levels**: Diffs are applied to the USMM baseline to produce quarterly time series
 
-For custom MAUS runs, use `--manual-maus`:
+The surrogate produces two variants:
+- **Base case**: Respects temp/perm IRF assignments from `model_params.yaml`
+- **All-perm variant**: Treats all components as permanent (for comparison)
 
-```bash
-Rscript run.R 11-17 --manual-maus
+### IRF Data
+
+Pre-computed IRFs are stored in `resources/usmm/`:
+
+| File | Description |
+|------|-------------|
+| `perm2_fed.csv`, `perm5_fed.csv`, `perm10_fed.csv` | Permanent tariff shock IRFs (2, 5, 10 pp) |
+| `temp2_fed.csv`, `temp5_fed.csv`, `temp10_fed.csv` | Temporary tariff shock IRFs (2, 5, 10 pp) |
+| `refund_fed.csv` | Tariff revenue refund IRF |
+| `baseline.csv` | USMM baseline levels |
+
+### USMM Variables
+
+| Variable | Description | Diff Type |
+|----------|-------------|-----------|
+| `gdpr` | Real GDP | % deviation from baseline |
+| `jpc` | PCE price level | % deviation from baseline |
+| `ruc` | Unemployment rate | Percentage point diff |
+| `ehhc` | Employment | % deviation from baseline |
+| `rmff` | Federal funds rate | Percentage point diff |
+
+### Scenario Configuration
+
+Time-varying scenarios can specify which date window uses the temporary IRF in `model_params.yaml`:
+
+```yaml
+temp_component_dates:
+  - '2026-02-24'  # onset date
+  - '2026-07-24'  # offset date
+
+refund_2026: 0.0  # Refund amount in billions (optional)
 ```
 
-The model will:
-1. Generate shock inputs at `output/{scenario}/maus_inputs/shocks.csv`
-2. Pause and display instructions
-3. Wait for you to run MAUS externally
-4. Resume when you save MAUS output to `config/scenarios/{scenario}/maus_outputs/quarterly.csv`
+### GDP Blending
 
-#### Required MAUS Output Format
-
-```csv
-year,quarter,GDP,LEB,LURC
-2025,1,21500.5,158.2,4.1
-2025,2,21550.0,158.5,4.0
-...
-```
-
-| Column | Description | Units |
-|--------|-------------|-------|
-| `year` | Calendar year | Integer |
-| `quarter` | Quarter (1-4) | Integer |
-| `GDP` | Real GDP | Billions USD |
-| `LEB` | Employment | Millions |
-| `LURC` | Unemployment rate | Percent |
+For GDP Q4-Q4 growth calculations, the model linearly blends from the USMM short-run response to the GTAP long-run equilibrium over 16 quarters (2025Q1 through 2028Q4).
 
 ## Report Generation
 
