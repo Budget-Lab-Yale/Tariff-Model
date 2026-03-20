@@ -394,6 +394,13 @@ read_nvpp_adjustment <- function(slc_path, goods_indices = 1:45, target_region =
   import_share_postsim <- goods_imp_postsim / goods_total_postsim
   import_adjustment <- import_share_postsim / import_share_baseline
 
+  # Per-commodity import share ratio (for post-substitution omega_M adjustment)
+  imp_share_bl <- imp_bl / (imp_bl + dom_bl)
+  imp_share_ps <- imp_ps / (imp_ps + dom_ps)
+  commodity_ratio <- imp_share_ps / imp_share_bl
+  # Handle NaN from zero totals
+  commodity_ratio[is.nan(commodity_ratio) | is.infinite(commodity_ratio)] <- 1.0
+
   return(list(
     goods_adjustment = goods_adjustment,
     import_adjustment = import_adjustment,
@@ -401,7 +408,9 @@ read_nvpp_adjustment <- function(slc_path, goods_indices = 1:45, target_region =
     goods_share_baseline = goods_share_baseline,
     goods_share_postsim = goods_share_postsim,
     import_share_baseline = import_share_baseline,
-    import_share_postsim = import_share_postsim
+    import_share_postsim = import_share_postsim,
+    # Per-commodity data (names added by read_gtap_full)
+    commodity_ratio = commodity_ratio
   ))
 }
 
@@ -497,6 +506,9 @@ read_gtap_full <- function(sol_path, slc_path, sl4_path) {
   regions <- stel[1:9]
   commodities <- stel[10:74]
 
+  # Add commodity names to NVPP per-commodity data (now that commodities is available)
+  names(result$nvpp_adjustment$commodity_ratio) <- commodities
+
   if (!is.null(slc[[GTAP_SLC_HEADERS$vom]])) {
     vom <- slc[[GTAP_SLC_HEADERS$vom]]
     rownames(vom) <- commodities
@@ -591,139 +603,6 @@ get_sector_outputs_full <- function(gtap_data, sector_mapping, target_region = '
 }
 
 # ============================================================================
-# PRICE EFFECTS (SR AND LR)
-# ============================================================================
-
-#' Calculate product price effects (normalized)
-#'
-#' Calculates short-run and long-run price effects by product using the
-#' Excel model methodology:
-#' - SR: M = import_share * weighted_ETR, then normalized
-#' - LR: ppa, then normalized
-#'
-#' Both are normalized so consumption-weighted average equals overall effect.
-#'
-#' @param gtap_data List containing ppa matrix
-#' @param etr_matrix ETR matrix from Tariff-ETRs (gtap_sector x country)
-#' @param product_params Product parameters with is_food, weight columns
-#' @param import_shares Import share data with gtap_sector, import_share columns
-#' @param import_weights Import weights by country (from Excel) for weighted ETR calc
-#' @param overall_sr_effect Overall SR price effect for normalization (default 1.235)
-#' @param overall_lr_effect Overall LR price effect for normalization (default 0.929)
-#' @param target_region Region to extract (default 'usa')
-#' @return Data frame with gtap_sector, sr_price_effect, lr_price_effect, is_food, weight
-get_price_effects <- function(gtap_data, etr_matrix, product_params,
-                              import_shares, import_weights,
-                              overall_sr_effect = 1.235,
-                              overall_lr_effect = 0.929,
-                              target_region = 'usa') {
-  if (is.null(gtap_data$ppa)) {
-    stop('ppa not found in GTAP data')
-  }
-
-  ppa_full <- gtap_data$ppa
-
-  # Get all 65 commodities from ppa (includes services)
-  all_commodities <- rownames(ppa_full)
-  goods_sectors <- etr_matrix$gtap_code
-
-  # Get ppa (purchaser's price) for target region - this is raw LR effect
-  region_idx <- which(colnames(ppa_full) == target_region)
-  if (length(region_idx) == 0) {
-    stop('Region not found in ppa: ', target_region)
-  }
-  lr_raw <- ppa_full[, region_idx]
-
-  # Country columns - must match import_weights and etr_matrix columns
-  # Excel order: china, row, canada, mexico, ftrow, japan, eu, uk
-  weight_countries <- c('china', 'row', 'canada', 'mexico', 'ftrow', 'japan', 'eu', 'uk')
-
-  # Pre-join import_weights and etr_matrix for vectorized weighted ETR calculation
-  # Rename etr_matrix gtap_code to gtap_sector for joining
-  etr_for_join <- etr_matrix %>%
-    rename(gtap_sector = gtap_code)
-
-  # Join weights with ETRs - only goods sectors will match
-  weights_with_etrs <- import_weights %>%
-    inner_join(etr_for_join, by = 'gtap_sector', suffix = c('_wt', '_etr'))
-
-  # Calculate weighted ETR for each sector: SUMPRODUCT(ETRs, weights) / total
-  # Use rowwise vectorization across countries
-  weighted_etr_calc <- weights_with_etrs %>%
-    rowwise() %>%
-    mutate(
-      weighted_sum = sum(c_across(all_of(paste0(weight_countries, '_wt'))) *
-                         c_across(all_of(paste0(weight_countries, '_etr'))), na.rm = TRUE),
-      weighted_etr = if_else(is.na(total) | total == 0, 0, weighted_sum / total)
-    ) %>%
-    ungroup() %>%
-    select(gtap_sector, weighted_etr)
-
-  # Build named vector for all commodities (services get 0)
-  weighted_etrs <- setNames(rep(0, length(all_commodities)), all_commodities)
-  matched_sectors <- weighted_etr_calc$gtap_sector
-  weighted_etrs[matched_sectors] <- weighted_etr_calc$weighted_etr
-
-  # Build result data frame - all 65 sectors
-  result <- data.frame(
-    gtap_sector = all_commodities,
-    weighted_etr = weighted_etrs,
-    lr_raw = lr_raw,
-    stringsAsFactors = FALSE
-  )
-
-  # Add import_share, weight, is_food via joins; coalesce NAs to 0 for services
-
-  result <- result %>%
-    left_join(import_shares %>% select(gtap_sector, import_share), by = 'gtap_sector') %>%
-    left_join(product_params %>% select(gtap_sector, weight, is_food), by = 'gtap_sector') %>%
-    mutate(
-      import_share = coalesce(import_share, 0),
-      weight = coalesce(weight, 0),
-      is_food = coalesce(is_food, 0)
-    )
-
-  # Calculate M = import_share * weighted_ETR (raw SR effect)
-  result$M <- result$import_share * result$weighted_etr
-
-  # Calculate consumption-weighted averages for normalization
-  # Excel SR excludes dwe (rows 12-75 = 64 sectors)
-  # Excel LR includes dwe (rows 11-75 = 65 sectors)
-  sr_sectors <- result$gtap_sector != 'dwe'
-  sr_weight <- sum(result$weight[sr_sectors])
-  avg_M <- sum(result$M[sr_sectors] * result$weight[sr_sectors]) / sr_weight
-
-  lr_weight <- sum(result$weight)
-  avg_lr <- sum(result$lr_raw * result$weight) / lr_weight
-
-  # Normalize SR: SR = overall_sr * M / avg_M
-  # This ensures consumption-weighted average of SR = overall_sr
-  if (avg_M > 0) {
-    result$sr_price_effect <- overall_sr_effect * result$M / avg_M
-  } else {
-    result$sr_price_effect <- 0
-  }
-
-  # Normalize LR: LR = overall_lr * ppa / avg_ppa
-  # Excel formula: X = B9 * J / avg(J) where J = ppa
-  if (avg_lr > 0) {
-    result$lr_price_effect <- overall_lr_effect * result$lr_raw / avg_lr
-  } else {
-    result$lr_price_effect <- result$lr_raw
-  }
-
-  # Round and select final columns
-  result <- result %>%
-    mutate(
-      sr_price_effect = round(sr_price_effect, 2),
-      lr_price_effect = round(lr_price_effect, 2)
-    ) %>%
-    select(gtap_sector, sr_price_effect, lr_price_effect, is_food, weight)
-
-  return(result)
-}
-
-# ============================================================================
 # MASTER LOADING FUNCTION
 # ============================================================================
 
@@ -735,12 +614,9 @@ get_price_effects <- function(gtap_data, etr_matrix, product_params,
 #' @param solution_dir Directory containing GTAP solution files
 #' @param file_prefix Optional file prefix to filter files (e.g., '11-17')
 #' @param sector_mapping Data frame with sector classifications
-#' @param product_params Data frame with product parameters (is_food)
-#' @param etr_matrix ETR matrix from Tariff-ETRs (optional, for price effects)
 #' @return List containing all GTAP outputs
 load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
-                                 sector_mapping = NULL,
-                                 product_params = NULL, etr_matrix = NULL) {
+                                 sector_mapping = NULL) {
   # Build file pattern based on prefix
   if (!is.null(file_prefix)) {
     sol_pattern <- paste0('^', file_prefix, '\\.sol$')
@@ -803,9 +679,6 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$sector_outputs <- get_sector_outputs_full(gtap_data, sector_mapping, 'usa')
   message(sprintf('    - Sector outputs: %d sectors (with mappings)', nrow(result$sector_outputs)))
 
-  # Note: Product prices are calculated separately in run_model.R
-  # using get_price_effects() with import_shares data
-
   # Raw data for downstream calculations
   result$viws <- gtap_data$viws
   result$vgdp <- gtap_data$vgdp
@@ -833,6 +706,9 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   message(sprintf('    - NVPP adjustments: goods=%.4f, import=%.4f',
                   result$nvpp_adjustment$goods_adjustment,
                   result$nvpp_adjustment$import_adjustment))
+
+  # Per-commodity NVPP import share ratio (for post-substitution omega_M)
+  result$nvpp_commodity_ratio <- gtap_data$nvpp_adjustment$commodity_ratio
 
   return(result)
 }

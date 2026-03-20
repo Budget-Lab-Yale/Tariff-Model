@@ -47,7 +47,7 @@ ABBR_TO_GTAP <- c(
 #' @param context Optional context string for error message (e.g., 'sector_outputs')
 #'
 #' @examples
-#' assert_has_columns(maus, c('year', 'quarter', 'gdp_baseline'), 'MAUS data')
+#' assert_has_columns(macro, c('year', 'quarter', 'gdp_baseline'), 'USMM data')
 assert_has_columns <- function(data, required_cols, context = NULL) {
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {

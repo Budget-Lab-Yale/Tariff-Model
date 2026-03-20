@@ -1,0 +1,298 @@
+nipa_line,pce_category,bea_code,commodity_description,producers_value,purchasers_value
+5,New motor vehicles,3361MV,"Motor vehicles, bodies and trailers, and parts",200956,394880
+6,Net purchases of used motor vehicles,Used,"Scrap, used and secondhand goods",79857,211514
+7,Motor vehicle parts and accessories,325,Chemical products,219,392
+7,Motor vehicle parts and accessories,326,Plastics and rubber products,18719,54655
+7,Motor vehicle parts and accessories,327,Nonmetallic mineral products,174,497
+7,Motor vehicle parts and accessories,331,Primary metals,7,19
+7,Motor vehicle parts and accessories,332,Fabricated metal products,875,2792
+7,Motor vehicle parts and accessories,333,Machinery,0,1
+7,Motor vehicle parts and accessories,334,Computer and electronic products,11,36
+7,Motor vehicle parts and accessories,335,"Electrical equipment, appliances, and components",5194,14087
+7,Motor vehicle parts and accessories,3361MV,"Motor vehicles, bodies and trailers, and parts",18149,49243
+7,Motor vehicle parts and accessories,339,Miscellaneous manufacturing,166,491
+7,Motor vehicle parts and accessories,Used,"Scrap, used and secondhand goods",-1788,4172
+9,Furniture and furnishings,313TT,Textile mills and textile product mills,14637,40800
+9,Furniture and furnishings,315AL,Apparel and leather and allied products,0,0
+9,Furniture and furnishings,321,Wood products,1588,3917
+9,Furniture and furnishings,323,Printing and related support activities,379,924
+9,Furniture and furnishings,326,Plastics and rubber products,1669,4289
+9,Furniture and furnishings,327,Nonmetallic mineral products,2164,3787
+9,Furniture and furnishings,331,Primary metals,754,2568
+9,Furniture and furnishings,332,Fabricated metal products,4109,16100
+9,Furniture and furnishings,334,Computer and electronic products,798,2069
+9,Furniture and furnishings,335,"Electrical equipment, appliances, and components",2909,7864
+9,Furniture and furnishings,337,Furniture and related products,61710,151009
+9,Furniture and furnishings,339,Miscellaneous manufacturing,7473,19528
+9,Furniture and furnishings,532RL,Rental and leasing services and lessors of intangible assets,10797,10797
+9,Furniture and furnishings,Used,"Scrap, used and secondhand goods",7997,18246
+10,Household appliances,326,Plastics and rubber products,15,49
+10,Household appliances,331,Primary metals,33,58
+10,Household appliances,333,Machinery,8480,18095
+10,Household appliances,335,"Electrical equipment, appliances, and components",34661,69798
+10,Household appliances,Used,"Scrap, used and secondhand goods",-64,69
+11,"Glassware, tableware, and household utensils",321,Wood products,735,989
+11,"Glassware, tableware, and household utensils",326,Plastics and rubber products,23375,30598
+11,"Glassware, tableware, and household utensils",327,Nonmetallic mineral products,10059,18930
+11,"Glassware, tableware, and household utensils",331,Primary metals,502,624
+11,"Glassware, tableware, and household utensils",332,Fabricated metal products,5692,8115
+11,"Glassware, tableware, and household utensils",339,Miscellaneous manufacturing,148,241
+11,"Glassware, tableware, and household utensils",Used,"Scrap, used and secondhand goods",-559,-412
+12,Tools and equipment for house and garden,313TT,Textile mills and textile product mills,10,41
+12,Tools and equipment for house and garden,321,Wood products,49,173
+12,Tools and equipment for house and garden,325,Chemical products,4187,8513
+12,Tools and equipment for house and garden,326,Plastics and rubber products,70,254
+12,Tools and equipment for house and garden,327,Nonmetallic mineral products,284,589
+12,Tools and equipment for house and garden,331,Primary metals,31,105
+12,Tools and equipment for house and garden,332,Fabricated metal products,4517,17801
+12,Tools and equipment for house and garden,333,Machinery,7794,28556
+12,Tools and equipment for house and garden,334,Computer and electronic products,0,1
+12,Tools and equipment for house and garden,335,"Electrical equipment, appliances, and components",281,1003
+12,Tools and equipment for house and garden,337,Furniture and related products,100,388
+12,Tools and equipment for house and garden,339,Miscellaneous manufacturing,498,1907
+12,Tools and equipment for house and garden,532RL,Rental and leasing services and lessors of intangible assets,1431,1431
+12,Tools and equipment for house and garden,Used,"Scrap, used and secondhand goods",61,204
+14,"Video, audio, photographic, and information processing equipment and media",315AL,Apparel and leather and allied products,0,0
+14,"Video, audio, photographic, and information processing equipment and media",333,Machinery,912,2468
+14,"Video, audio, photographic, and information processing equipment and media",334,Computer and electronic products,96193,169401
+14,"Video, audio, photographic, and information processing equipment and media",335,"Electrical equipment, appliances, and components",2048,4355
+14,"Video, audio, photographic, and information processing equipment and media",339,Miscellaneous manufacturing,4,6
+14,"Video, audio, photographic, and information processing equipment and media",511,"Publishing industries, except internet (includes software)",110259,166546
+14,"Video, audio, photographic, and information processing equipment and media",512,Motion picture and sound recording industries,6506,15999
+14,"Video, audio, photographic, and information processing equipment and media",514,"Data processing, internet publishing, and other information services",43729,43729
+14,"Video, audio, photographic, and information processing equipment and media",Used,"Scrap, used and secondhand goods",27,225
+15,"Sporting equipment, supplies, guns, and ammunition",313TT,Textile mills and textile product mills,2671,6590
+15,"Sporting equipment, supplies, guns, and ammunition",315AL,Apparel and leather and allied products,494,1223
+15,"Sporting equipment, supplies, guns, and ammunition",325,Chemical products,2323,4849
+15,"Sporting equipment, supplies, guns, and ammunition",331,Primary metals,295,573
+15,"Sporting equipment, supplies, guns, and ammunition",332,Fabricated metal products,20612,45052
+15,"Sporting equipment, supplies, guns, and ammunition",3364OT,Other transportation equipment,7398,12230
+15,"Sporting equipment, supplies, guns, and ammunition",339,Miscellaneous manufacturing,20395,51389
+15,"Sporting equipment, supplies, guns, and ammunition",Used,"Scrap, used and secondhand goods",-125,-125
+16,Sports and recreational vehicles,326,Plastics and rubber products,1534,4491
+16,Sports and recreational vehicles,332,Fabricated metal products,74,162
+16,Sports and recreational vehicles,333,Machinery,194,334
+16,Sports and recreational vehicles,335,"Electrical equipment, appliances, and components",53,94
+16,Sports and recreational vehicles,3361MV,"Motor vehicles, bodies and trailers, and parts",24956,40799
+16,Sports and recreational vehicles,3364OT,Other transportation equipment,30215,49048
+16,Sports and recreational vehicles,Used,"Scrap, used and secondhand goods",207,4503
+17,Recreational books,323,Printing and related support activities,42,65
+17,Recreational books,511,"Publishing industries, except internet (includes software)",15679,23935
+17,Recreational books,514,"Data processing, internet publishing, and other information services",7078,7078
+18,Musical instruments,315AL,Apparel and leather and allied products,186,333
+18,Musical instruments,339,Miscellaneous manufacturing,4273,8230
+18,Musical instruments,Used,"Scrap, used and secondhand goods",31,150
+20,Jewelry and watches,334,Computer and electronic products,6059,18332
+20,Jewelry and watches,339,Miscellaneous manufacturing,22086,66933
+20,Jewelry and watches,Used,"Scrap, used and secondhand goods",8243,19317
+21,Therapeutic appliances and equipment,334,Computer and electronic products,4095,9933
+21,Therapeutic appliances and equipment,335,"Electrical equipment, appliances, and components",5962,12887
+21,Therapeutic appliances and equipment,339,Miscellaneous manufacturing,24058,56196
+21,Therapeutic appliances and equipment,621,Ambulatory health care services,16605,16605
+21,Therapeutic appliances and equipment,Used,"Scrap, used and secondhand goods",0,1
+22,Educational books,511,"Publishing industries, except internet (includes software)",3511,5348
+22,Educational books,514,"Data processing, internet publishing, and other information services",2851,2851
+22,Educational books,Used,"Scrap, used and secondhand goods",-5,302
+23,Luggage and similar personal items,315AL,Apparel and leather and allied products,17577,42978
+23,Luggage and similar personal items,321,Wood products,313,903
+23,Luggage and similar personal items,339,Miscellaneous manufacturing,1386,4130
+24,Telephone and related communication equipment,334,Computer and electronic products,12849,34837
+27,Food and nonalcoholic beverages purchased for off-premises consumption,111CA,Farms,80997,160079
+27,Food and nonalcoholic beverages purchased for off-premises consumption,113FF,"Forestry, fishing, and related activities",5379,9324
+27,Food and nonalcoholic beverages purchased for off-premises consumption,212,"Mining, except oil and gas",10,17
+27,Food and nonalcoholic beverages purchased for off-premises consumption,311FT,Food and beverage and tobacco products,609307,1079485
+27,Food and nonalcoholic beverages purchased for off-premises consumption,325,Chemical products,1353,2361
+27,Food and nonalcoholic beverages purchased for off-premises consumption,Used,"Scrap, used and secondhand goods",-1199,-1199
+28,Alcoholic beverages purchased for off-premises consumption,311FT,Food and beverage and tobacco products,90286,228733
+29,Food produced and consumed on farms,111CA,Farms,771,771
+32,Women's and girls' clothing,313TT,Textile mills and textile product mills,513,1599
+32,Women's and girls' clothing,315AL,Apparel and leather and allied products,72861,235623
+32,Women's and girls' clothing,339,Miscellaneous manufacturing,91,308
+32,Women's and girls' clothing,Used,"Scrap, used and secondhand goods",-287,3204
+33,Men's and boys' clothing,313TT,Textile mills and textile product mills,1,2
+33,Men's and boys' clothing,315AL,Apparel and leather and allied products,53059,144413
+33,Men's and boys' clothing,339,Miscellaneous manufacturing,38,109
+33,Men's and boys' clothing,Used,"Scrap, used and secondhand goods",-448,-415
+34,Children's and infants' clothing,313TT,Textile mills and textile product mills,333,1707
+34,Children's and infants' clothing,315AL,Apparel and leather and allied products,2311,7463
+34,Children's and infants' clothing,322,Paper products,3541,16563
+34,Children's and infants' clothing,Used,"Scrap, used and secondhand goods",-6,325
+35,Other clothing materials and footwear,313TT,Textile mills and textile product mills,1206,2580
+35,Other clothing materials and footwear,315AL,Apparel and leather and allied products,40571,116252
+35,Other clothing materials and footwear,339,Miscellaneous manufacturing,228,520
+35,Other clothing materials and footwear,Used,"Scrap, used and secondhand goods",-49,-49
+37,"Motor vehicle fuels, lubricants, and fluids",324,Petroleum and coal products,228014,414212
+37,"Motor vehicle fuels, lubricants, and fluids",325,Chemical products,29,51
+38,Fuel oil and other fuels,212,"Mining, except oil and gas",61,115
+38,Fuel oil and other fuels,321,Wood products,787,1382
+38,Fuel oil and other fuels,324,Petroleum and coal products,12303,24292
+38,Fuel oil and other fuels,325,Chemical products,297,474
+40,Pharmaceutical and other medical products,324,Petroleum and coal products,1766,8171
+40,Pharmaceutical and other medical products,325,Chemical products,267125,660802
+40,Pharmaceutical and other medical products,326,Plastics and rubber products,333,1312
+40,Pharmaceutical and other medical products,339,Miscellaneous manufacturing,1549,7391
+41,Recreational items,111CA,Farms,39489,83397
+41,Recreational items,212,"Mining, except oil and gas",34,89
+41,Recreational items,311FT,Food and beverage and tobacco products,31137,73365
+41,Recreational items,313TT,Textile mills and textile product mills,41,111
+41,Recreational items,315AL,Apparel and leather and allied products,1060,2918
+41,Recreational items,322,Paper products,1880,5018
+41,Recreational items,323,Printing and related support activities,611,1812
+41,Recreational items,325,Chemical products,1913,5048
+41,Recreational items,326,Plastics and rubber products,2945,6900
+41,Recreational items,335,"Electrical equipment, appliances, and components",44,97
+41,Recreational items,339,Miscellaneous manufacturing,29985,103354
+41,Recreational items,81,"Other services, except government",17030,17030
+41,Recreational items,Used,"Scrap, used and secondhand goods",-12945,14537
+42,Household supplies,212,"Mining, except oil and gas",75,166
+42,Household supplies,313TT,Textile mills and textile product mills,14236,51836
+42,Household supplies,315AL,Apparel and leather and allied products,658,2449
+42,Household supplies,321,Wood products,734,1947
+42,Household supplies,322,Paper products,17345,45899
+42,Household supplies,323,Printing and related support activities,3068,10679
+42,Household supplies,325,Chemical products,20226,37133
+42,Household supplies,326,Plastics and rubber products,4264,11937
+42,Household supplies,332,Fabricated metal products,965,2381
+42,Household supplies,335,"Electrical equipment, appliances, and components",4038,14411
+42,Household supplies,339,Miscellaneous manufacturing,3064,12287
+42,Household supplies,Used,"Scrap, used and secondhand goods",0,5
+43,Personal care products,313TT,Textile mills and textile product mills,749,2193
+43,Personal care products,315AL,Apparel and leather and allied products,383,1027
+43,Personal care products,322,Paper products,1602,7467
+43,Personal care products,325,Chemical products,47513,114051
+43,Personal care products,326,Plastics and rubber products,1249,4041
+43,Personal care products,332,Fabricated metal products,2281,6825
+43,Personal care products,333,Machinery,308,765
+43,Personal care products,335,"Electrical equipment, appliances, and components",31331,48099
+43,Personal care products,339,Miscellaneous manufacturing,6327,18953
+44,Tobacco,311FT,Food and beverage and tobacco products,45525,115212
+45,"Magazines, newspapers, and stationery",322,Paper products,1456,2975
+45,"Magazines, newspapers, and stationery",323,Printing and related support activities,450,917
+45,"Magazines, newspapers, and stationery",325,Chemical products,2580,5129
+45,"Magazines, newspapers, and stationery",326,Plastics and rubber products,504,1087
+45,"Magazines, newspapers, and stationery",339,Miscellaneous manufacturing,2771,6069
+45,"Magazines, newspapers, and stationery",511,"Publishing industries, except internet (includes software)",32916,55344
+45,"Magazines, newspapers, and stationery",512,Motion picture and sound recording industries,203,307
+45,"Magazines, newspapers, and stationery",514,"Data processing, internet publishing, and other information services",47124,47124
+45,"Magazines, newspapers, and stationery",Used,"Scrap, used and secondhand goods",0,24
+46,Net expenditures abroad by U.S. residents,Other,Noncomparable imports and rest-of-the-world adjustment,13051,13051
+51,Rental of tenant-occupied nonfarm housing,HS,Housing,740336,740336
+52,Imputed rental of owner-occupied nonfarm housing,HS,Housing,2374185,2374185
+53,Rental value of farm dwellings,HS,Housing,29170,29170
+54,Group housing,721,Accommodation,3290,3290
+56,Water supply and sanitation,22,Utilities,53300,53300
+56,Water supply and sanitation,562,Waste management and remediation services,40766,40766
+56,Water supply and sanitation,GSLE,State and local government enterprises,45552,45552
+58,Electricity,22,Utilities,253432,253432
+59,Natural gas,22,Utilities,63608,63608
+62,Physician services,621,Ambulatory health care services,793281,793281
+63,Dental services,621,Ambulatory health care services,185735,185735
+64,Paramedical services,532RL,Rental and leasing services and lessors of intangible assets,207,207
+64,Paramedical services,621,Ambulatory health care services,593447,593447
+66,Hospitals,622,Hospitals,1493606,1493606
+67,Nursing homes,623,Nursing and residential care facilities,248715,248715
+70,Motor vehicle maintenance and repair,487OS,Other transportation and support activities,10020,10020
+70,Motor vehicle maintenance and repair,61,Educational services,129,129
+70,Motor vehicle maintenance and repair,81,"Other services, except government",247331,247331
+71,Other motor vehicle services,532RL,Rental and leasing services and lessors of intangible assets,81808,81808
+71,Other motor vehicle services,81,"Other services, except government",16835,16835
+71,Other motor vehicle services,GSLE,State and local government enterprises,12450,12450
+73,Ground transportation,482,Rail transportation,1474,1474
+73,Ground transportation,485,Transit and ground passenger transportation,84240,84240
+73,Ground transportation,487OS,Other transportation and support activities,1878,1878
+73,Ground transportation,561,Administrative and support services,8376,8376
+74,Air transportation,481,Air transportation,189133,189133
+75,Water transportation,483,Water transportation,2604,2604
+75,Water transportation,487OS,Other transportation and support activities,4229,4229
+77,"Membership clubs, sports centers, parks, theaters, and museums",113FF,"Forestry, fishing, and related activities",3999,3999
+77,"Membership clubs, sports centers, parks, theaters, and museums",481,Air transportation,451,451
+77,"Membership clubs, sports centers, parks, theaters, and museums",512,Motion picture and sound recording industries,10526,10526
+77,"Membership clubs, sports centers, parks, theaters, and museums",514,"Data processing, internet publishing, and other information services",5549,5549
+77,"Membership clubs, sports centers, parks, theaters, and museums",532RL,Rental and leasing services and lessors of intangible assets,3495,3495
+77,"Membership clubs, sports centers, parks, theaters, and museums",561,Administrative and support services,4477,4477
+77,"Membership clubs, sports centers, parks, theaters, and museums",61,Educational services,30600,30600
+77,"Membership clubs, sports centers, parks, theaters, and museums",711AS,"Performing arts, spectator sports, museums, and related activities",96414,96414
+77,"Membership clubs, sports centers, parks, theaters, and museums",713,"Amusements, gambling, and recreation industries",124964,124964
+77,"Membership clubs, sports centers, parks, theaters, and museums",721,Accommodation,10744,10744
+78,"Audio-video, photographic, and information processing equipment services",513,Broadcasting and telecommunications,92417,92417
+78,"Audio-video, photographic, and information processing equipment services",514,"Data processing, internet publishing, and other information services",54999,54999
+78,"Audio-video, photographic, and information processing equipment services",532RL,Rental and leasing services and lessors of intangible assets,2129,2129
+78,"Audio-video, photographic, and information processing equipment services",5412OP,"Miscellaneous professional, scientific, and technical services",11415,11415
+78,"Audio-video, photographic, and information processing equipment services",81,"Other services, except government",10698,10698
+79,Gambling,711AS,"Performing arts, spectator sports, museums, and related activities",2277,2277
+79,Gambling,713,"Amusements, gambling, and recreation industries",155331,155331
+79,Gambling,GSLE,State and local government enterprises,49341,49341
+80,Other recreational services,113FF,"Forestry, fishing, and related activities",266,266
+80,Other recreational services,334,Computer and electronic products,16,34
+80,Other recreational services,5412OP,"Miscellaneous professional, scientific, and technical services",57992,57992
+80,Other recreational services,561,Administrative and support services,22183,22183
+80,Other recreational services,81,"Other services, except government",26750,26750
+83,Purchased meals and beverages,481,Air transportation,1186,1186
+83,Purchased meals and beverages,482,Rail transportation,106,106
+83,Purchased meals and beverages,512,Motion picture and sound recording industries,4597,4597
+83,Purchased meals and beverages,711AS,"Performing arts, spectator sports, museums, and related activities",1153,1153
+83,Purchased meals and beverages,722,Food services and drinking places,1188857,1188857
+84,Food furnished to employees,111CA,Farms,2092,2835
+84,Food furnished to employees,113FF,"Forestry, fishing, and related activities",200,251
+84,Food furnished to employees,311FT,Food and beverage and tobacco products,26890,31788
+85,Accommodations,721,Accommodation,198192,198192
+88,Financial services furnished without payment,521CI,"Federal Reserve banks, credit intermediation, and related activities",280000,280000
+88,Financial services furnished without payment,525,"Funds, trusts, and other financial vehicles",285522,285522
+89,"Financial service charges, fees, and commissions",521CI,"Federal Reserve banks, credit intermediation, and related activities",134809,134809
+89,"Financial service charges, fees, and commissions",523,"Securities, commodity contracts, and investments",341004,341004
+89,"Financial service charges, fees, and commissions",GFE,Federal government enterprises,200,200
+91,Life insurance,524,Insurance carriers and related activities,127570,127570
+92,Net household insurance,524,Insurance carriers and related activities,18286,18286
+93,Net health insurance,524,Insurance carriers and related activities,270143,270143
+94,Net motor vehicle and other transportation insurance,524,Insurance carriers and related activities,102888,102888
+97,Telecommunication services,513,Broadcasting and telecommunications,181244,181244
+97,Telecommunication services,532RL,Rental and leasing services and lessors of intangible assets,43,43
+97,Telecommunication services,561,Administrative and support services,42,42
+97,Telecommunication services,721,Accommodation,73,73
+98,Postal and delivery services,487OS,Other transportation and support activities,9765,9765
+98,Postal and delivery services,561,Administrative and support services,919,919
+98,Postal and delivery services,GFE,Federal government enterprises,6449,6449
+98,Postal and delivery services,Used,"Scrap, used and secondhand goods",1,2
+99,Internet access,513,Broadcasting and telecommunications,110570,110570
+101,Higher education,61,Educational services,206341,206341
+102,"Nursery, elementary, and secondary schools",61,Educational services,43024,43024
+102,"Nursery, elementary, and secondary schools",624,Social assistance,20018,20018
+103,Commercial and vocational schools,61,Educational services,82838,82838
+104,Professional and other services,323,Printing and related support activities,7,9
+104,Professional and other services,327,Nonmetallic mineral products,3274,5816
+104,Professional and other services,332,Fabricated metal products,10,19
+104,Professional and other services,481,Air transportation,34,34
+104,Professional and other services,4A0,Other retail,16101,16101
+104,Professional and other services,5411,Legal services,141177,141177
+104,Professional and other services,5412OP,"Miscellaneous professional, scientific, and technical services",47072,47072
+104,Professional and other services,561,Administrative and support services,12498,12498
+104,Professional and other services,81,"Other services, except government",55165,55165
+105,Personal care and clothing services,532RL,Rental and leasing services and lessors of intangible assets,1575,1575
+105,Personal care and clothing services,61,Educational services,24,24
+105,Personal care and clothing services,81,"Other services, except government",231463,231463
+106,Social services and religious activities,623,Nursing and residential care facilities,73984,73984
+106,Social services and religious activities,624,Social assistance,217822,217822
+106,Social services and religious activities,81,"Other services, except government",42942,42942
+107,Household maintenance,481,Air transportation,20,20
+107,Household maintenance,483,Water transportation,2,2
+107,Household maintenance,484,Truck transportation,13531,13531
+107,Household maintenance,493,Warehousing and storage,242,242
+107,Household maintenance,532RL,Rental and leasing services and lessors of intangible assets,5377,5377
+107,Household maintenance,561,Administrative and support services,52169,52169
+107,Household maintenance,81,"Other services, except government",36686,36686
+107,Household maintenance,ORE,Other real estate,8094,8094
+109,Foreign travel by U.S. residents,481,Air transportation,73125,73125
+109,Foreign travel by U.S. residents,483,Water transportation,28773,28773
+109,Foreign travel by U.S. residents,Other,Noncomparable imports and rest-of-the-world adjustment,167306,167306
+110,Less: Expenditures in the United States by nonresidents,Other,Noncomparable imports and rest-of-the-world adjustment,-216558,-216558
+111,Final consumption expenditures of nonprofit institutions serving households,513,Broadcasting and telecommunications,6346,6346
+111,Final consumption expenditures of nonprofit institutions serving households,5411,Legal services,667,667
+111,Final consumption expenditures of nonprofit institutions serving households,5412OP,"Miscellaneous professional, scientific, and technical services",8289,8289
+111,Final consumption expenditures of nonprofit institutions serving households,61,Educational services,113195,113195
+111,Final consumption expenditures of nonprofit institutions serving households,621,Ambulatory health care services,8019,8019
+111,Final consumption expenditures of nonprofit institutions serving households,622,Hospitals,53587,53587
+111,Final consumption expenditures of nonprofit institutions serving households,623,Nursing and residential care facilities,17136,17136
+111,Final consumption expenditures of nonprofit institutions serving households,624,Social assistance,119297,119297
+111,Final consumption expenditures of nonprofit institutions serving households,711AS,"Performing arts, spectator sports, museums, and related activities",26383,26383
+111,Final consumption expenditures of nonprofit institutions serving households,713,"Amusements, gambling, and recreation industries",9621,9621
+111,Final consumption expenditures of nonprofit institutions serving households,81,"Other services, except government",250574,250574

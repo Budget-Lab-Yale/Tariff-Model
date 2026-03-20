@@ -21,125 +21,24 @@ source('src/00_run_tariff_etrs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
 source('src/02_calculate_etr.R')
-source('src/03_calculate_prices.R')
-source('src/04a_generate_maus_inputs.R')
 source('src/04_calculate_revenue.R')
-source('src/05a_predict_maus.R')
+source('src/05a_usmm_surrogate.R')
 source('src/05_calculate_macro.R')
 source('src/06_calculate_sectors.R')
 source('src/07_calculate_dynamic_revenue.R')
 source('src/08_calculate_foreign_gdp.R')
 source('src/09_calculate_distribution.R')
-source('src/10_calculate_products.R')
 source('src/11_write_outputs.R')
 source('src/12_export_excel.R')
 source('src/13_generate_report.R')
 
 
-#' Load MAUS output levels after user runs MAUS
-#' @param scenario_dir Path to scenario directory
-#' @param maus_baseline Baseline MAUS data (from inputs$baselines$maus)
-#' @return Tibble with MAUS quarterly data (baseline + tariff)
-load_maus_levels <- function(scenario_dir, maus_baseline) {
-  maus_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
-  if (!file.exists(maus_file)) {
-    stop('MAUS output file not found: ', maus_file)
-  }
-  # Use shared loader that merges scenario data with baseline
-  maus <- load_maus_scenario(maus_file, maus_baseline)
-  message(sprintf('  Loaded MAUS output: %d quarters', nrow(maus)))
-  return(maus)
-}
-
-
-#' Pause and wait for user to run MAUS
-#' @param maus_inputs Results from generate_maus_inputs()
-#' @param scenario_dir Path to scenario directory
-wait_for_maus <- function(maus_inputs, scenario_dir) {
-  maus_output_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
-
-  # If MAUS output already exists, continue without pausing
-  if (file.exists(maus_output_file)) {
-    message('  MAUS output file found, continuing...')
-    return()
-  }
-
-  # Get date range from shock data
-  shocks <- maus_inputs$shocks
-  start_year <- min(shocks$year)
-  start_qtr <- shocks$quarter[shocks$year == start_year][1]
-  end_year <- max(shocks$year)
-  end_qtr <- shocks$quarter[shocks$year == end_year]
-  end_qtr <- end_qtr[length(end_qtr)]
-
-  # Build example rows from first few quarters
-  example_rows <- shocks %>%
-    head(4) %>%
-    mutate(row = sprintf('  %d,%d,<GDP>,<LEB>,<LURC>', year, quarter)) %>%
-    pull(row) %>%
-    paste(collapse = '\n')
-
-  msg <- sprintf('
-===========================================================
-MAUS INPUT REQUIRED
-===========================================================
-
-The model has generated MAUS input shocks.
-
-INPUT FILE (shocks for MAUS):
-  %s
-
-NEXT STEPS:
-  1. Open MAUS and load the shock series from the file above
-  2. Run MAUS to generate quarterly GDP/employment projections
-  3. Save MAUS output to:
-     %s
-
-REQUIRED OUTPUT FORMAT (CSV with columns):
-  year, quarter, GDP, LEB, LURC
-
-  Column mapping:
-    GDP  = Real GDP (billions)
-    LEB  = Employment (millions)
-    LURC = Unemployment rate (%%)
-
-  Example (first rows should look like):
-  year,quarter,GDP,LEB,LURC
-%s
-  ...
-  (%d quarters total, through %d Q%d)
-
-  NOTE: Only include tariff scenario values.
-        Baseline values are loaded from resources/baselines/maus_baseline.csv
-
-===========================================================
-
-', maus_inputs$output_file, maus_output_file, example_rows,
-   maus_inputs$n_quarters, end_year, end_qtr)
-
-  cat(msg)
-
-  # Wait for user to run MAUS and save output
-  cat('Press [Enter] when MAUS output file is ready...')
-  readLines(con = 'stdin', n = 1)
-
-  # Verify the file now exists
-  if (!file.exists(maus_output_file)) {
-    stop('MAUS output file still not found: ', maus_output_file)
-  }
-
-  message('  MAUS output file found, continuing...')
-}
-
-
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
-#' @param use_maus_surrogate If TRUE (default), use pre-estimated MAUS surrogate.
-#'   If FALSE, use manual MAUS workflow (generate shocks, pause, load output).
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
+run_scenario <- function(scenario) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -170,19 +69,10 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   #---------------------------
 
   message('\nStep 1: Loading inputs...')
-  inputs <- load_inputs(scenario, skip_maus = TRUE)
+  inputs <- load_inputs(scenario)
 
-  # Guard: time-varying ETRs are not compatible with MAUS surrogate
   if (isTRUE(inputs$is_time_varying)) {
     message(sprintf('  Detected time-varying ETRs (%d dates)', length(inputs$etr_dates)))
-    if (use_maus_surrogate) {
-      stop(
-        'Time-varying ETR scenarios cannot use the MAUS surrogate model.\n',
-        'The surrogate interpolates on a single UTFIBC level, but time-varying\n',
-        'scenarios produce a varying UTFIBC path.\n\n',
-        'Use: run_scenario("', scenario, '", use_maus_surrogate = FALSE)'
-      )
-    }
   }
 
   #---------------------------
@@ -201,70 +91,88 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   }
 
   #---------------------------
-  # Step 3: Calculate price effects
+  # Step 3: Calculate consumer price effects (Boston Fed)
   #---------------------------
 
-  message('\nStep 3: Calculating price effects...')
-  price_results <- calculate_prices(etr_results, inputs)
+  message('\nStep 3: Calculating consumer price effects...')
 
-  #---------------------------
-  # Step 3b: Calculate product price effects (if GTAP data available)
-  #---------------------------
-
-  if (is.null(inputs$etr_matrix) || is.null(inputs$ppa) || is.null(inputs$import_weights)) {
-    stop('Product price effects require etr_matrix, ppa, and import_weights inputs')
-  }
-
-  message('\nStep 3b: Calculating product price effects from GTAP...')
-
-  # SR = import_share * weighted_ETR, normalized by consumption weights
-  # LR = ppa (purchaser's price), normalized by consumption weights
-  inputs$product_prices <- get_price_effects(
-    gtap_data = list(ppa = inputs$ppa),
-    etr_matrix = inputs$etr_matrix,
-    product_params = inputs$product_params,
-    import_shares = inputs$import_shares,
-    import_weights = inputs$import_weights,
-    overall_sr_effect = price_results$pre_sub_price_increase,
-    overall_lr_effect = price_results$post_sub_price_increase,
-    target_region = 'usa'
+  # Pre-substitution
+  message('  Pre-substitution (Boston Fed):')
+  presub_results <- compute_boston_fed_prices(
+    tau_M = inputs$tau_M,
+    B_MD = inputs$boston_fed_matrices$B_MD,
+    leontief_domestic = inputs$bea_leontief_domestic,
+    omega_M = inputs$boston_fed_matrices$omega_M,
+    omega_D = inputs$boston_fed_matrices$omega_D,
+    pce_bridge = inputs$pce_bridge,
+    usd_offset = inputs$assumptions$usd_offset
   )
 
-  message(sprintf('  Calculated price effects for %d products', nrow(inputs$product_prices)))
+  # Post-substitution (adjust tau_M and omega_M using GTAP)
+  message('  Post-substitution (GTAP-adjusted):')
+  tau_M_post <- compute_postsub_tau_M(
+    inputs$tau_M, inputs$gtap_bea_crosswalk,
+    inputs$viws, inputs$baselines$viws_baseline
+  )
+  omega_M_post <- compute_postsub_omega_M(
+    inputs$boston_fed_matrices$omega_M, inputs$gtap_bea_crosswalk,
+    inputs$nvpp_commodity_ratio
+  )
+  omega_D_post <- 1 - omega_M_post
 
-  #---------------------------
-  # Step 4a: Get MAUS outputs (surrogate or manual)
-  #---------------------------
+  postsub_results <- compute_boston_fed_prices(
+    tau_M = tau_M_post,
+    B_MD = inputs$boston_fed_matrices$B_MD,
+    leontief_domestic = inputs$bea_leontief_domestic,
+    omega_M = omega_M_post,
+    omega_D = omega_D_post,
+    pce_bridge = inputs$pce_bridge,
+    usd_offset = inputs$assumptions$usd_offset
+  )
 
-  # Always generate MAUS input shocks (needed for both surrogate and manual)
-  message('\nStep 4a: Generating MAUS input shocks...')
-  maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
+  price_results <- list(
+    pre_sub_price_increase = presub_results$aggregate * 100,
+    post_sub_price_increase = postsub_results$aggregate * 100,
+    presub = presub_results,
+    postsub = postsub_results
+  )
 
-  if (use_maus_surrogate) {
-    # Use pre-estimated surrogate model (indexed by UTFIBC)
-    message('  Using MAUS surrogate model...')
+  # Store PCE category prices and BEA commodity prices for outputs
+  inputs$pce_category_prices <- presub_results$pce_category_prices
 
-    if (!maus_surrogate_available()) {
-      stop('MAUS surrogate not found. Either:\n',
-           '  1. Run estimate_maus_surrogate() first, or\n',
-           '  2. Use run_scenario(..., use_maus_surrogate = FALSE) for manual MAUS')
-    }
-
-    # Predict MAUS using interpolation on UTFIBC
-    inputs$maus <- predict_maus(
-      maus_inputs = maus_inputs$shocks,
-      baseline_maus = inputs$baselines$maus
-    )
+  # Build BEA commodity detail table
+  bea_prices_vec <- presub_results$bea_commodity_prices
+  desc_file <- 'resources/io/bea_commodity_descriptions.csv'
+  if (file.exists(desc_file)) {
+    bea_desc <- read_csv(desc_file, show_col_types = FALSE) %>%
+      rename(bea_code = `Commodity Code`, description = Description)
   } else {
-    # Manual MAUS workflow: print shocks, pause, load output
-    print_shock_summary(maus_inputs)
-
-    wait_for_maus(maus_inputs, scenario_dir)
-
-    # Load MAUS output levels
-    message('\nLoading MAUS output levels...')
-    inputs$maus <- load_maus_levels(scenario_dir, inputs$baselines$maus)
+    bea_desc <- tibble(bea_code = character(), description = character())
   }
+
+  pce <- inputs$bea_pce_weights
+  bea_commodities <- names(bea_prices_vec)
+  inputs$bea_commodity_prices <- tibble(
+    bea_code = bea_commodities,
+    sr_price_effect = as.numeric(bea_prices_vec) * 100,
+    pce_weight = as.numeric(pce[bea_commodities])
+  ) %>%
+    mutate(pce_weight = coalesce(pce_weight, 0)) %>%
+    left_join(bea_desc, by = 'bea_code') %>%
+    mutate(description = coalesce(description, bea_code)) %>%
+    arrange(desc(sr_price_effect))
+
+  message(sprintf('  Pre-sub aggregate:  %.3f%%', price_results$pre_sub_price_increase))
+  message(sprintf('  Post-sub aggregate: %.3f%%', price_results$post_sub_price_increase))
+
+  #---------------------------
+  # Step 3a: Run USMM surrogate
+  #---------------------------
+
+  message('\nStep 3a: Running USMM surrogate...')
+  usmm_results <- run_usmm_surrogate(etr_results, inputs)
+  inputs$macro_quarterly <- usmm_results$macro_quarterly
+  inputs$macro_quarterly_allperm <- usmm_results$macro_quarterly_allperm
 
   #---------------------------
   # Step 4: Calculate revenue
@@ -278,8 +186,8 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   #---------------------------
 
   message('\nStep 5: Calculating macro effects...')
-  if (is.null(inputs$maus)) {
-    stop('MAUS data is required for macro calculations')
+  if (is.null(inputs$macro_quarterly)) {
+    stop('USMM macro data is required for macro calculations')
   }
   macro_results <- calculate_macro(inputs)
 
@@ -324,16 +232,6 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   distribution_results <- calculate_distribution(price_results, inputs)
 
   #---------------------------
-  # Step 10: Calculate product price effects
-  #---------------------------
-
-  message('\nStep 10: Calculating product price effects...')
-  if (is.null(inputs$product_prices)) {
-    stop('product_prices data is required for product calculations')
-  }
-  product_results <- calculate_products(inputs)
-
-  #---------------------------
   # Compile results
   #---------------------------
 
@@ -349,15 +247,14 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     sectors = sector_results,
     dynamic = dynamic_results,
     foreign_gdp = foreign_gdp_results,
-    distribution = distribution_results,
-    products = product_results
+    distribution = distribution_results
   )
 
   #---------------------------
-  # Step 11: Write outputs to disk
+  # Step 10: Write outputs to disk
   #---------------------------
 
-  message('\nStep 11: Writing outputs to disk...')
+  message('\nStep 10: Writing outputs to disk...')
   write_outputs(results, scenario)
 
   # Print key results summary
@@ -393,6 +290,10 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     message(sprintf('U-rate 2026 Q4:                 %+.2f pp', macro_results$urate_2026))
     message(sprintf('Payroll 2025 Q4:                %.0f thousand', macro_results$payroll_2025))
     message(sprintf('Payroll 2026 Q4:                %.0f thousand', macro_results$payroll_2026))
+    message(sprintf('PCE 2025 Q4:                    %+.2f%%', macro_results$pce_2025))
+    message(sprintf('PCE 2026 Q4:                    %+.2f%%', macro_results$pce_2026))
+    message(sprintf('Fed funds 2025 Q4:              %+.2f pp', macro_results$fed_funds_2025))
+    message(sprintf('Fed funds 2026 Q4:              %+.2f pp', macro_results$fed_funds_2026))
     # Export change from GTAP
     if (!is.null(inputs$qxwreg)) {
       message(sprintf('Export change (GTAP):           %.2f%%', inputs$qxwreg))
@@ -414,12 +315,63 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     message(sprintf('Services:                       %.2f%%', sector_results$services))
   }
 
+  message('----------------------------------------------------------')
+  message('BEA COMMODITY PRICE EFFECTS (Boston Fed)')
+  message('----------------------------------------------------------')
+  message(sprintf('Aggregate SR (PCE-weighted):     %.4f%%', presub_results$aggregate * 100))
+  message(sprintf('  Direct import channel:         %.4f%%', presub_results$direct_aggregate * 100))
+  message(sprintf('  Supply chain channel:          %.4f%%', presub_results$supply_chain_aggregate * 100))
+
+  bea_detail <- inputs$bea_commodity_prices
+  top_bea <- bea_detail %>% filter(sr_price_effect > 0.01) %>% head(15)
+  message(sprintf('\nTop BEA commodities by SR price effect (%d with nonzero):',
+                  sum(bea_detail$sr_price_effect > 0.001)))
+  message(sprintf('  %-8s %-42s %8s %10s', 'Code', 'Description', 'SR (%)', 'PCE ($M)'))
+  for (i in 1:nrow(top_bea)) {
+    message(sprintf('  %-8s %-42s %8.3f %10s',
+                    top_bea$bea_code[i],
+                    substr(top_bea$description[i], 1, 42),
+                    top_bea$sr_price_effect[i],
+                    format(round(top_bea$pce_weight[i]), big.mark = ',')))
+  }
+
+  if (!is.null(inputs$pce_category_prices)) {
+    pce_cats <- inputs$pce_category_prices
+    pce_agg <- presub_results$aggregate * 100
+
+    message('')
+    message('----------------------------------------------------------')
+    message('CONSUMER PRICE EFFECTS BY PCE CATEGORY (Boston Fed)')
+    message('----------------------------------------------------------')
+    message(sprintf('Aggregate (PCE-weighted):        %.4f%%', pce_agg))
+    message('')
+    message(sprintf('  %-4s %-44s %7s %12s %6s',
+                    'Line', 'PCE Category', 'SR (%)', 'Value ($M)', '% PCE'))
+    message(paste(rep('-', 80), collapse = ''))
+
+    for (i in 1:nrow(pce_cats)) {
+      cat_name <- pce_cats$pce_category[i]
+      if (nchar(cat_name) > 43) cat_name <- substr(cat_name, 1, 43)
+      message(sprintf('  %4d %-44s %7.3f %12s %5.1f%%',
+                      pce_cats$nipa_line[i],
+                      cat_name,
+                      pce_cats$sr_price_effect[i],
+                      format(round(pce_cats$purchasers_value[i]), big.mark = ','),
+                      pce_cats$pce_share[i]))
+    }
+    message(paste(rep('-', 80), collapse = ''))
+    message(sprintf('  %4s %-44s %7.3f %12s %5.1f%%',
+                    '', 'TOTAL (PCE-weighted average)',
+                    pce_agg,
+                    format(round(sum(pce_cats$purchasers_value)), big.mark = ','),
+                    100.0))
+  }
+
   if (!is.null(foreign_gdp_results)) {
     message('----------------------------------------------------------')
     message('FOREIGN GDP EFFECTS (Long-Run)')
     message('----------------------------------------------------------')
     message(sprintf('USA:                            %+.2f%%', foreign_gdp_results$usa))
-    # Long-run GDP dollar loss (2025 concept dollars, estimated 2025 GDP = $30,441B)
     lr_gdp_dollar_loss <- foreign_gdp_results$usa / 100 * 30441
     message(sprintf('USA (2025$):                    $%.0fB', lr_gdp_dollar_loss))
     message(sprintf('China:                          %+.2f%%', foreign_gdp_results$china))
@@ -429,16 +381,6 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     message(sprintf('UK:                             %+.2f%%', foreign_gdp_results$uk))
     message(sprintf('Japan:                          %+.2f%%', foreign_gdp_results$japan))
     message(sprintf('ROW:                            %+.2f%%', foreign_gdp_results$row))
-  }
-
-  if (!is.null(product_results)) {
-    message('----------------------------------------------------------')
-    message('PRODUCT PRICE EFFECTS')
-    message('----------------------------------------------------------')
-    message(sprintf('Food (Short-Run):               %.4f%%', product_results$food_sr))
-    message(sprintf('Food (Long-Run):                %.4f%%', product_results$food_lr))
-    message(sprintf('Total products:                 %d', product_results$n_products))
-    message(sprintf('Food products:                  %d', product_results$n_food))
   }
 
   if (!is.null(distribution_results)) {

@@ -59,8 +59,8 @@ load_report_data <- function(scenario) {
       file.path(output_dir, 'dynamic_revenue_by_year.csv'),
       show_col_types = FALSE
     ),
-    product_prices = read_csv(
-      file.path(output_dir, 'product_prices.csv'),
+    pce_category_prices = read_csv(
+      file.path(output_dir, 'pce_category_prices.csv'),
       show_col_types = FALSE
     ),
     foreign_gdp = read_csv(
@@ -109,42 +109,25 @@ results_to_yaml <- function(data, scenario_name) {
     median_cost = round(abs(data$distribution$cost_per_hh[5]))  # Decile 5 as proxy
   )
 
-  # Get top price impact products (top 15 for more coverage)
-  top_products <- data$product_prices %>%
+  # Get top price impact PCE categories (top 15 for more coverage)
+  top_categories <- data$pce_category_prices %>%
     arrange(desc(sr_price_effect)) %>%
     head(15) %>%
-    mutate(
-      sr_price_effect = round(sr_price_effect, 2),
-      lr_price_effect = round(lr_price_effect, 2)
-    ) %>%
-    select(gtap_sector, sr_price_effect, lr_price_effect)
+    mutate(sr_price_effect = round(sr_price_effect, 3)) %>%
+    select(pce_category, sr_price_effect)
 
-  # Get food price effects
-  food_prices <- data$product_prices %>%
-    filter(is_food == 1) %>%
-    summarise(
-      sr_weighted = sum(sr_price_effect * weight) / sum(weight),
-      lr_weighted = sum(lr_price_effect * weight) / sum(weight)
-    )
+  # Get food-related PCE categories for narrative
+  food_cats <- data$pce_category_prices %>%
+    filter(grepl('food|Food', pce_category, ignore.case = TRUE))
+  food_sr <- if (nrow(food_cats) > 0 && sum(food_cats$purchasers_value) > 0) {
+    sum(food_cats$sr_price_effect * food_cats$purchasers_value) / sum(food_cats$purchasers_value)
+  } else {
+    0
+  }
 
-  # Get key product prices for narrative
-  key_products <- list(
-    leather = data$product_prices %>% filter(gtap_sector == 'lea') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    apparel = data$product_prices %>% filter(gtap_sector == 'wap') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    textiles = data$product_prices %>% filter(gtap_sector == 'tex') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    electrical_equip = data$product_prices %>% filter(gtap_sector == 'ele') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    electronics = data$product_prices %>% filter(gtap_sector == 'eeq') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    motor_vehicles = data$product_prices %>% filter(gtap_sector == 'mvh') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    metal_products = data$product_prices %>% filter(gtap_sector == 'fmp') %>%
-      select(sr_price_effect, lr_price_effect) %>% as.list(),
-    food_sr = round(food_prices$sr_weighted, 2),
-    food_lr = round(food_prices$lr_weighted, 2)
+  key_categories <- list(
+    food_sr = round(food_sr, 3),
+    top_categories = as.list(top_categories)
   )
 
   # Get 10-year revenue totals
@@ -166,8 +149,8 @@ results_to_yaml <- function(data, scenario_name) {
     key_results = key_results,
     sector_effects = sector_effects,
     distribution = distribution,
-    top_price_impact_products = as.list(top_products),
-    key_product_prices = key_products,
+    top_pce_category_prices = as.list(top_categories),
+    key_price_categories = key_categories,
     revenue_10yr = revenue_10yr,
     foreign_gdp = foreign_gdp
   )

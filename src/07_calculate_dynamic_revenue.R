@@ -22,51 +22,52 @@
 
 library(tidyverse)
 
-#' Calculate FY growth deviations from MAUS quarterly data
+#' Calculate FY growth deviations from USMM quarterly data
 #'
 #' Maps calendar quarters to fiscal years and computes the incremental
 #' growth deviation for each fiscal year.
 #'
-#' Implements Excel blending logic: starting from 2026 Q1, level deviations
-#' are floored at the GTAP long-run GDP effect (can't recover beyond long-run).
-#' Formula: MIN(maus_level_dev, gtap_long_run_gdp) for 2026 Q1 onwards.
+#' Implements linear blend from USMM short-run to GTAP long-run:
+#' Over 16 quarters starting 2025Q1, the level deviation transitions
+#' linearly from the USMM value (weight=1) to the GTAP long-run value (weight=0).
 #'
-#' @param maus Quarterly GDP data with baseline and tariff scenarios
+#' @param macro Quarterly GDP data with baseline and tariff scenarios
 #' @param gtap_long_run_gdp GTAP long-run US GDP percent change (e.g., -0.31)
 #' @return Data frame with fiscal_year and growth_deviation
-calculate_fy_growth_deviations <- function(maus, gtap_long_run_gdp = NULL) {
+calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL) {
 
   # Map calendar quarters to fiscal years
   # FY runs Oct-Sep: Q4 → next FY Q1, Q1-Q3 → same FY
-  maus_fy <- maus %>%
+  macro_fy <- macro %>%
     mutate(
       fiscal_year = if_else(quarter == 4, year + 1, year),
       # Raw level deviation (%) for each quarter
       raw_level_deviation = 100 * (gdp_tariff / gdp_baseline - 1)
     )
 
-  # Apply GTAP long-run GDP floor starting from 2026 Q1
-  # Excel logic: MIN(maus_deviation, gtap_long_run) for 2026 Q1 onwards
-  # Since both are negative, MIN selects the more negative (worse) value,
-  # preventing recovery beyond the GTAP long-run equilibrium
+  # Apply linear blend from USMM to GTAP over 16 quarters
+  # q_index = quarters since 2025Q1 (0-based)
+  # blend_weight = max(0, 1 - q_index / 16)
+  # level_deviation = blend_weight * usmm_dev + (1 - blend_weight) * gtap_long_run_gdp
   if (!is.null(gtap_long_run_gdp)) {
-    maus_fy <- maus_fy %>%
+    macro_fy <- macro_fy %>%
       mutate(
+        q_index = (year - 2025) * 4 + (quarter - 1),  # 2025Q1 = 0
+        blend_weight = pmax(0, 1 - q_index / 16),
         level_deviation = case_when(
-          # Through 2025 Q4: use raw MAUS deviation
-          year < 2026 ~ raw_level_deviation,
-          # 2026 Q1 onwards: apply MIN (floor at GTAP long-run)
-          TRUE ~ pmin(raw_level_deviation, gtap_long_run_gdp)
+          q_index < 0 ~ raw_level_deviation,  # Before 2025Q1: no blend
+          TRUE ~ blend_weight * raw_level_deviation + (1 - blend_weight) * gtap_long_run_gdp
         )
       )
-    message(sprintf('  Applying GTAP long-run GDP floor: %.2f%% (from 2026 Q1)', gtap_long_run_gdp))
+    message(sprintf('  Applying USMM-GTAP linear blend over 16 quarters (GTAP LR: %.2f%%)',
+                    gtap_long_run_gdp))
   } else {
-    maus_fy <- maus_fy %>%
+    macro_fy <- macro_fy %>%
       mutate(level_deviation = raw_level_deviation)
   }
 
   # Average level deviation by fiscal year
-  fy_level_dev <- maus_fy %>%
+  fy_level_dev <- macro_fy %>%
     group_by(fiscal_year) %>%
     summarise(
       avg_level_deviation = mean(level_deviation),
@@ -183,11 +184,11 @@ apply_cbo_convolution <- function(growth_deviations, cbo_params) {
 
 #' Calculate dynamic revenue effects
 #'
-#' Applies CBO dynamic scoring rules to GDP impacts from MAUS, using the
+#' Applies CBO dynamic scoring rules to GDP impacts from USMM, using the
 #' full CBO Rules of Thumb methodology with impulse response convolution.
 #'
 #' @param inputs List containing:
-#'   - maus: Quarterly GDP data with baseline and tariff scenarios
+#'   - macro_quarterly: Quarterly GDP data with baseline and tariff scenarios
 #'   - cbo_convolution_params: CBO parameters (or loads from default)
 #' @param revenue_results Results from calculate_revenue() with conventional revenue
 #'
@@ -198,10 +199,10 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
   # Load required data
   # -------------------------------------------------------------------------
 
-  maus <- inputs$maus
+  macro <- inputs$macro_quarterly
 
-  if (is.null(maus)) {
-    stop('MAUS quarterly data not found in inputs$maus')
+  if (is.null(macro)) {
+    stop('USMM quarterly data not found in inputs$macro_quarterly')
   }
 
   # Load CBO convolution parameters
@@ -217,7 +218,7 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
                      'CBO convolution parameters')
   message('  Loaded CBO convolution parameters')
 
-  message(sprintf('  Processing %d quarters of MAUS data', nrow(maus)))
+  message(sprintf('  Processing %d quarters of USMM data', nrow(macro)))
 
   # Get GTAP long-run US GDP effect for blending
   gtap_long_run_gdp <- NULL
@@ -227,10 +228,10 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
   }
 
   # -------------------------------------------------------------------------
-  # Step 1: Calculate FY growth deviations from MAUS
+  # Step 1: Calculate FY growth deviations from USMM
   # -------------------------------------------------------------------------
 
-  fy_growth_dev <- calculate_fy_growth_deviations(maus, gtap_long_run_gdp)
+  fy_growth_dev <- calculate_fy_growth_deviations(macro, gtap_long_run_gdp)
 
   message('  FY growth deviations (matching Excel AI column):')
   fy_growth_dev %>%
@@ -268,11 +269,11 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
       by = 'fiscal_year'
     )
 
-  # Handle years without dynamic effects (incomplete MAUS data)
+  # Handle years without dynamic effects (incomplete USMM data)
   # Use 0 for missing years (dynamic revenue = conventional revenue)
   if (any(is.na(dynamic_by_year$dynamic_effect))) {
     missing_years <- dynamic_by_year$fiscal_year[is.na(dynamic_by_year$dynamic_effect)]
-    message(sprintf('  Note: Using 0 dynamic effect for FY %s (incomplete MAUS data)',
+    message(sprintf('  Note: Using 0 dynamic effect for FY %s (incomplete USMM data)',
                     paste(missing_years, collapse = ', ')))
     dynamic_by_year <- dynamic_by_year %>%
       mutate(

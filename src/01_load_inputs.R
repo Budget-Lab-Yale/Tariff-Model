@@ -5,53 +5,8 @@
 # Source GTAP file reader
 source('src/read_gtap.R')
 
-#' Load and merge MAUS scenario data with baseline
-#'
-#' Reads scenario-specific MAUS output (tariff values) and joins with baseline.
-#' MAUS uses column names: GDP, LEB (employment), LURC (unemployment rate)
-#' These are mapped to internal names: gdp_tariff, employment_tariff, urate_tariff
-#'
-#' @param scenario_file Path to scenario MAUS output file
-#' @param baseline_data Baseline MAUS data (from load_baselines())
-#' @return Tibble with both baseline and tariff columns
-load_maus_scenario <- function(scenario_file, baseline_data) {
-
-  if (!file.exists(scenario_file)) {
-    stop('MAUS scenario file not found: ', scenario_file)
-  }
-
-  # Read scenario data with MAUS column names
-  scenario_raw <- read_csv(scenario_file, show_col_types = FALSE)
-
-  # Validate required columns (MAUS native names)
-  assert_has_columns(scenario_raw, c('year', 'quarter', 'GDP', 'LEB', 'LURC'), 'MAUS output')
-
-  # Map MAUS column names to internal names for tariff values
-  scenario_data <- scenario_raw %>%
-    rename(
-      gdp_tariff = GDP,
-      employment_tariff = LEB,
-      urate_tariff = LURC
-    )
-
-  # Join with baseline data
-  maus_combined <- baseline_data %>%
-    left_join(
-      scenario_data %>% select(year, quarter, gdp_tariff, employment_tariff, urate_tariff),
-      by = c('year', 'quarter')
-    )
-
-  # Validate join worked
-  if (any(is.na(maus_combined$gdp_tariff))) {
-    missing_quarters <- maus_combined %>%
-      filter(is.na(gdp_tariff)) %>%
-      mutate(yq = paste0(year, 'Q', quarter)) %>%
-      pull(yq)
-    stop('Missing tariff data for quarters: ', paste(missing_quarters, collapse = ', '))
-  }
-
-  return(maus_combined)
-}
+# Source I-O price model (Boston Fed)
+source('src/io_price_model.R')
 
 
 #' Load global assumptions (applies to all scenarios)
@@ -141,23 +96,6 @@ load_baselines <- function() {
   rownames(baselines$import_baseline_dollars) <- import_data$gtap_code
   message('  Loaded import baseline (dollars)')
 
-  # MAUS baseline (GDP, employment, unemployment rate)
-  maus_baseline_file <- 'resources/baselines/maus_baseline.csv'
-  if (!file.exists(maus_baseline_file)) {
-    stop('MAUS baseline file not found: ', maus_baseline_file)
-  }
-  maus_raw <- read_csv(maus_baseline_file, show_col_types = FALSE)
-  assert_has_columns(maus_raw, c('year', 'quarter', 'GDP', 'LEB', 'LURC'), 'MAUS baseline')
-  # Map MAUS column names to internal names
-  # MAUS uses: GDP, LEB (employment), LURC (unemployment rate)
-  baselines$maus <- maus_raw %>%
-    rename(
-      gdp_baseline = GDP,
-      employment_baseline = LEB,
-      urate_baseline = LURC
-    )
-  message(sprintf('  Loaded MAUS baseline: %d quarters', nrow(baselines$maus)))
-
   return(baselines)
 }
 
@@ -165,10 +103,9 @@ load_baselines <- function() {
 #' Load all inputs for a scenario
 #'
 #' @param scenario Name of the scenario
-#' @param skip_maus If TRUE, skip loading MAUS data (will be loaded later)
 #'
 #' @return List containing all input data
-load_inputs <- function(scenario, skip_maus = FALSE) {
+load_inputs <- function(scenario) {
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
 
@@ -183,6 +120,32 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   # ============================
 
   inputs$assumptions <- load_global_assumptions()
+
+  # ============================
+  # Boston Fed I-O data (always loaded)
+  # ============================
+
+  inputs$bea_use_import <- load_bea_use_data('import')
+  inputs$bea_use_domestic <- load_bea_use_data('domestic')
+  inputs$bea_pce_weights <- load_bea_pce_weights()
+  inputs$bea_industry_output <- load_bea_industry_output()
+  inputs$bea_leontief_domestic <- load_bea_requirements('domestic')
+
+  # Pre-compute Boston Fed matrices (B_MD, omega_M, omega_D)
+  inputs$boston_fed_matrices <- build_boston_fed_matrices(
+    use_import = inputs$bea_use_import,
+    use_domestic = inputs$bea_use_domestic,
+    industry_output = inputs$bea_industry_output
+  )
+  message(sprintf('  Built Boston Fed matrices: %d commodities x %d industries',
+                  nrow(inputs$boston_fed_matrices$B_MD),
+                  ncol(inputs$boston_fed_matrices$B_MD)))
+
+  # GTAP-BEA crosswalk (for post-substitution adjustments)
+  inputs$gtap_bea_crosswalk <- load_gtap_bea_crosswalk()
+
+  # PCE bridge for consumer category reporting
+  inputs$pce_bridge <- load_pce_bridge()
 
   # ============================
   # Baseline data
@@ -248,15 +211,11 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   assert_has_columns(levels_raw, 'gtap_code', 'ETR levels matrix')
 
   if ('date' %in% names(levels_raw)) {
-    # Time-varying levels
     inputs$levels_matrix_by_date <- levels_raw %>%
       mutate(date = as.Date(date))
-
-    # Extract reference date slice as flat levels_matrix
     inputs$levels_matrix <- inputs$levels_matrix_by_date %>%
       filter(date == inputs$gtap_reference_date) %>%
       select(-date)
-
     message(sprintf('  Loaded time-varying ETR levels: %d dates', length(inputs$etr_dates)))
   } else {
     inputs$levels_matrix <- levels_raw
@@ -310,8 +269,35 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
     inputs$baseline_census_country_levels <- NULL
   }
 
+  # ---- BEA-level ETR deltas (for Boston Fed I-O price model) ----
+  bea_deltas_file <- file.path(tariff_etrs_dir, 'bea_deltas_by_commodity.csv')
+  if (!file.exists(bea_deltas_file)) {
+    stop('BEA deltas file not found: ', bea_deltas_file,
+         '\n  Re-run Tariff-ETRs to generate BEA-level output')
+  }
+  bea_deltas_raw <- read_csv(bea_deltas_file, show_col_types = FALSE)
+
+  if ('date' %in% names(bea_deltas_raw)) {
+    inputs$bea_deltas_by_date <- bea_deltas_raw %>%
+      mutate(date = as.Date(date))
+    inputs$bea_deltas <- bea_deltas_raw %>%
+      filter(date == as.character(inputs$gtap_reference_date)) %>%
+      select(-date)
+    message(sprintf('  Loaded time-varying BEA deltas: %d dates',
+                    length(unique(inputs$bea_deltas_by_date$date))))
+  } else {
+    inputs$bea_deltas <- bea_deltas_raw
+    inputs$bea_deltas_by_date <- NULL
+    message(sprintf('  Loaded BEA deltas: %d commodities', nrow(inputs$bea_deltas)))
+  }
+
+  # Build tau_M vector (named by bea_code)
+  inputs$tau_M <- setNames(inputs$bea_deltas$etr_delta, inputs$bea_deltas$bea_code)
+  message(sprintf('  tau_M vector: %d BEA commodities, mean=%.4f%%',
+                  length(inputs$tau_M), mean(inputs$tau_M) * 100))
+
   # ============================
-  # Mappings (load early for GTAP processing)
+  # Mappings
   # ============================
 
   gtap_mapping_file <- 'resources/mappings/gtap_sectors.csv'
@@ -325,38 +311,10 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
                      'GTAP sector mappings')
   message('  Loaded GTAP sector mappings')
 
-  # Product parameters (coefficients and weights for aggregation)
-  product_params_file <- 'resources/products/product_params.csv'
-  if (!file.exists(product_params_file)) {
-    stop('Product parameters not found: ', product_params_file)
-  }
-  inputs$product_params <- read_csv(product_params_file, show_col_types = FALSE)
-  assert_has_columns(inputs$product_params, c('gtap_sector', 'weight', 'is_food'), 'product parameters')
-  message('  Loaded product parameters')
-
-  # Import shares (baseline import share of consumption by sector)
-  import_shares_file <- 'resources/products/import_shares.csv'
-  if (!file.exists(import_shares_file)) {
-    stop('Import shares not found: ', import_shares_file)
-  }
-  inputs$import_shares <- read_csv(import_shares_file, show_col_types = FALSE)
-  assert_has_columns(inputs$import_shares, c('gtap_sector', 'import_share'), 'import shares')
-  message('  Loaded import shares')
-
-  # Import weights by country (for product-level weighted ETR calculation)
-  import_weights_file <- 'resources/products/import_weights.csv'
-  if (!file.exists(import_weights_file)) {
-    stop('Import weights not found: ', import_weights_file)
-  }
-  inputs$import_weights <- read_csv(import_weights_file, show_col_types = FALSE)
-  assert_has_columns(inputs$import_weights, c('gtap_sector', 'total'), 'import weights')
-  message('  Loaded import weights')
-
   # ============================
   # GTAP outputs (from solution files)
   # ============================
 
-  # GTAP outputs are in output/{scenario}/gtap/ (generated by run_gtap)
   gtap_solution_dir <- file.path('output', scenario, 'gtap')
   gtap_file_prefix <- scenario
 
@@ -370,10 +328,7 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   gtap_data <- load_gtap_from_files(
     solution_dir = gtap_solution_dir,
     file_prefix = gtap_file_prefix,
-    sector_mapping = inputs$gtap_sector_mapping,
-    product_params = inputs$product_params,
-    etr_matrix = inputs$etr_matrix
-    # Note: overall price effects will be calculated after ETR aggregation
+    sector_mapping = inputs$gtap_sector_mapping
   )
 
   # Transfer GTAP data to inputs
@@ -402,31 +357,20 @@ load_inputs <- function(scenario, skip_maus = FALSE) {
   }
   inputs$nvpp_adjustment <- gtap_data$nvpp_adjustment
 
-  # Product prices will be calculated in 02_calculate_etr.R after ETR aggregation
+  # Per-commodity NVPP import share ratios (for post-sub omega_M)
+  inputs$nvpp_commodity_ratio <- gtap_data$nvpp_commodity_ratio
 
   # ============================
-  # MAUS outputs (scenario-specific)
+  # USMM IRFs (impulse response functions)
   # ============================
 
-  if (!skip_maus) {
-    maus_outputs_dir <- file.path(scenario_dir, 'maus_outputs')
-    maus_file <- file.path(maus_outputs_dir, 'quarterly.csv')
-    if (!file.exists(maus_file)) {
-      stop('MAUS results not found: ', maus_file)
-    }
-    inputs$maus <- load_maus_scenario(maus_file, inputs$baselines$maus)
-    message(sprintf('  Loaded MAUS results: %d rows', nrow(inputs$maus)))
-  } else {
-    message('  Skipping MAUS load (will be loaded after shock generation)')
-    inputs$maus <- NULL
-  }
+  inputs$usmm_irfs <- load_usmm_irfs()
+  message('  Loaded USMM IRFs and baseline')
 
   # ============================
   # CBO dynamic scoring parameters
   # ============================
 
-  # Load CBO revenue sensitivity (derived from CBO rules of thumb workbook)
-  # Formula: sensitivity = cbo_revenue_change / cbo_gdp_change
   cbo_file <- 'resources/cbo_rules/revenue_sensitivity.csv'
   if (!file.exists(cbo_file)) {
     stop('CBO revenue sensitivity parameters not found: ', cbo_file)

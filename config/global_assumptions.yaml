@@ -19,16 +19,6 @@ inflation_2024_to_2025: 0.027
 # Price Effect Parameters
 # -----------------------------------------------------------------------------
 
-# Domestic price passthrough rate
-# How much of tariff cost is passed through to domestic prices
-price_passthrough: 0.50
-
-# Goods share of Personal Consumption Expenditures (BEA)
-goods_share_pce: 0.31471
-
-# Import share of goods consumption (BEA)
-import_share: 0.20570
-
 # USD offset for exchange rate response
 # Calculated as: exchange_rate_response (0.3) * import_content (0.58)
 usd_offset: 0.174

@@ -187,7 +187,7 @@ load_model_outputs <- function(scenario) {
     'sector_effects.csv',
     'foreign_gdp.csv',
     'distribution.csv',
-    'product_prices.csv'
+    'pce_category_prices.csv'
   )
 
   for (f in required_files) {
@@ -234,7 +234,7 @@ build_data_toc <- function(report_date) {
       'Figure 4. Long-Run Change in Real GDP Level from 2025 Tariffs to Date',
       'Table 3. Estimated Revenue Effects of All 2025 Tariffs',
       'Figure 5. Short-Run Distributional Effects of 2025 Tariffs',
-      sprintf('Figure 6. Commodity Price Effects from 2025 Tariffs through %s', date_md)
+      sprintf('Figure 6. Consumer Category Price Effects from 2025 Tariffs through %s', date_md)
     )
   )
 }
@@ -456,7 +456,7 @@ build_f1 <- function(outputs) {
 
 
 # =============================================================================
-# F2: GDP Level Effects (Blended MAUS-GTAP approach)
+# F2: GDP Level Effects (Blended USMM-GTAP approach)
 # =============================================================================
 
 build_f2 <- function(outputs) {
@@ -467,18 +467,17 @@ build_f2 <- function(outputs) {
     filter(region == 'usa') %>%
     pull(gdp_change_pct)
 
-  # Calculate GDP deviation as percentage with GTAP floor for 2026+
-  # This matches the "blended" approach: MIN(maus_deviation, gtap_long_run) for 2026 Q1+
+  # Calculate GDP deviation with USMM-GTAP linear blend over 16 quarters
   result <- macro %>%
     filter(year >= 2025) %>%
     mutate(
       Date = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),  # Mid-quarter date
       raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
-      # Apply GTAP floor for 2026+: use MIN (more negative = worse)
-      `All 2025 Tariffs to Date` = case_when(
-        year < 2026 ~ raw_deviation,
-        TRUE ~ pmin(raw_deviation, gtap_lr_gdp)
-      )
+      # Linear blend: 2025Q1 (w=1 USMM) → 2029Q1 (w=0, pure GTAP LR)
+      q_index = (year - 2025) * 4 + (quarter - 1),
+      blend_weight = pmax(0, 1 - q_index / 16),
+      `All 2025 Tariffs to Date` = blend_weight * raw_deviation +
+        (1 - blend_weight) * gtap_lr_gdp
     ) %>%
     select(
       Date,
@@ -573,23 +572,18 @@ build_f5 <- function(outputs) {
 
 
 # =============================================================================
-# F6: Commodity Price Effects
+# F6: Consumer Category Price Effects (Boston Fed)
 # =============================================================================
 
 build_f6 <- function(outputs) {
-  prices <- outputs$product_prices
+  prices <- outputs$pce_category_prices
 
   result <- prices %>%
-    left_join(GTAP_SECTOR_NAMES, by = 'gtap_sector') %>%
-    mutate(
-      Name = coalesce(display_name, gtap_sector)
-    ) %>%
     select(
-      Name,
-      `Short-Run` = sr_price_effect,
-      `Long-Run` = lr_price_effect
+      `PCE Category` = pce_category,
+      `Short-Run (%)` = sr_price_effect
     ) %>%
-    arrange(desc(`Short-Run`))  # Sort by short-run effect descending
+    arrange(desc(`Short-Run (%)`))
 
   return(result)
 }
@@ -858,13 +852,13 @@ export_excel_tables <- function(scenario, report_date) {
   write_block('F5', pct_row, start_row = 8, start_col = 2)
   write_block('F5', cost_row, start_row = 12, start_col = 2)
 
-  # F6: Commodity Price Effects
-  message('  Building F6 (Commodities)...')
+  # F6: Consumer Category Price Effects
+  message('  Building F6 (Consumer Categories)...')
   f6 <- build_f6(outputs)
   writeData(
     wb,
     'F6',
-    sprintf('Figure 6. Commodity Price Effects from 2025 Tariffs through %s', date_md),
+    sprintf('Figure 6. Consumer Category Price Effects from 2025 Tariffs through %s', date_md),
     startCol = 1,
     startRow = 1,
     colNames = FALSE

@@ -338,6 +338,7 @@ calculate_etr <- function(inputs) {
     }
 
     # Scale GTAP etr_increase proportionally by each date's weighted ETR
+    # (post-sub, for revenue calculations)
     etr_increase_by_date <- per_date_etrs %>%
       mutate(
         etr_increase = etr_increase * (weighted_etr / ref_etr)
@@ -350,6 +351,18 @@ calculate_etr <- function(inputs) {
       message(sprintf('    %s: etr_increase=%.4f',
                       etr_increase_by_date$date[i],
                       etr_increase_by_date$etr_increase[i]))
+    }
+
+    # Pre-sub per-date ETR increases (raw from Tariff-ETRs, for USMM)
+    presub_etr_increase_by_date <- per_date_etrs %>%
+      mutate(etr_increase = weighted_etr / 100) %>%
+      select(date, etr_increase)
+
+    message('  Pre-sub etr_increase by date (for USMM):')
+    for (i in seq_len(nrow(presub_etr_increase_by_date))) {
+      message(sprintf('    %s: etr_increase=%.4f',
+                      presub_etr_increase_by_date$date[i],
+                      presub_etr_increase_by_date$etr_increase[i]))
     }
 
     # Compute per-date all-in levels (for output transparency)
@@ -375,6 +388,9 @@ calculate_etr <- function(inputs) {
   # Compile results
   # -------------------------------------------------------------------------
 
+  # Pre-sub etr_increase for USMM (raw from Tariff-ETRs, as fraction)
+  presub_etr_increase <- pre_sub_etr / 100
+
   results <- list(
     # Main ETR results (as percentages) - goods-weighted for display
     pre_sub_increase = pre_sub_etr,
@@ -383,10 +399,14 @@ calculate_etr <- function(inputs) {
     post_sub_all_in = post_sub_all_in * 100,
     # Baseline ETR computed from levels (as percentage)
     baseline_etr = baseline_etr * 100,
-    # etr_increase for revenue calculations (from mtax, includes all imports)
+    # etr_increase for revenue calculations (from mtax, post-sub)
     etr_increase = etr_increase,
-    # Per-date etr_increase (NULL for static scenarios)
+    # Per-date etr_increase for revenue (NULL for static scenarios)
     etr_increase_by_date = etr_increase_by_date,
+    # Pre-sub etr_increase for USMM (raw from Tariff-ETRs)
+    presub_etr_increase = presub_etr_increase,
+    # Per-date pre-sub etr_increase for USMM (NULL for static scenarios)
+    presub_etr_increase_by_date = if (exists('presub_etr_increase_by_date')) presub_etr_increase_by_date else NULL,
     # Country-level data for output (deltas)
     postsim_country = postsim_country_etrs,
     presim_country = presim_country_etrs,

@@ -19,7 +19,7 @@ write_outputs <- function(results, scenario) {
   message(sprintf('  Writing outputs to %s/', output_dir))
 
   required_sections <- c('etr', 'prices', 'revenue', 'dynamic', 'macro',
-                         'distribution', 'products', 'sectors', 'foreign_gdp')
+                         'distribution', 'sectors', 'foreign_gdp')
   for (section in required_sections) {
     if (is.null(results[[section]])) {
       stop('Missing required results section: ', section)
@@ -30,8 +30,6 @@ write_outputs <- function(results, scenario) {
   # Key Results Summary
   # ============================
 
-  # Per-HH costs come from distribution calculation (matches Excel: Key Results B13/B15
-  # pull from F6 Distribution via ricco_price_effects_and_etr!I24/I25)
   key_results <- tibble(
     metric = c(
       # ETR
@@ -40,6 +38,8 @@ write_outputs <- function(results, scenario) {
       # Prices
       'pre_sub_price_increase', 'post_sub_price_increase',
       'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
+      # Price decomposition (Boston Fed)
+      'direct_aggregate', 'supply_chain_aggregate',
       # Revenue
       'gross_revenue_10yr', 'conventional_revenue_10yr',
       # Dynamic revenue
@@ -48,29 +48,33 @@ write_outputs <- function(results, scenario) {
       'gdp_2025_q4q4', 'gdp_2026_q4q4',
       'urate_2025_q4', 'urate_2026_q4',
       'payroll_2025_q4', 'payroll_2026_q4',
-      # Products
-      'food_price_sr', 'food_price_lr'
+      'pce_2025_q4', 'pce_2026_q4',
+      'fed_funds_2025_q4', 'fed_funds_2026_q4'
     ),
     value = c(
       results$etr$pre_sub_increase, results$etr$post_sub_increase,
       results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$post_sub_all_in,
       results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
       abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
+      results$prices$presub$direct_aggregate * 100,
+      results$prices$presub$supply_chain_aggregate * 100,
       results$revenue$gross_10yr, results$revenue$conventional_10yr,
       results$dynamic$dynamic_effect_10yr, results$dynamic$dynamic_10yr,
       results$macro$gdp_2025, results$macro$gdp_2026,
       results$macro$urate_2025, results$macro$urate_2026,
       results$macro$payroll_2025, results$macro$payroll_2026,
-      results$products$food_sr, results$products$food_lr
+      results$macro$pce_2025, results$macro$pce_2026,
+      results$macro$fed_funds_2025, results$macro$fed_funds_2026
     ),
     unit = c(
       'pct', 'pct',
       'pct', 'pct', 'pct',
       'pct', 'pct', 'dollars', 'dollars',
+      'pct', 'pct',
       'billions', 'billions',
       'billions', 'billions',
       'pct', 'pct', 'pp', 'pp', 'thousands', 'thousands',
-      'pct', 'pct'
+      'pct', 'pct', 'pp', 'pp'
     )
   )
 
@@ -163,14 +167,27 @@ write_outputs <- function(results, scenario) {
   message('    distribution.csv (10 deciles)')
 
   # ============================
-  # Product Prices
+  # PCE Category Prices (Boston Fed)
   # ============================
 
-  if (is.null(results$products$products)) {
-    stop('products$products not found in results')
+  if (is.null(results$inputs$pce_category_prices)) {
+    stop('pce_category_prices not found in results$inputs')
   }
-  write_csv(results$products$products, file.path(output_dir, 'product_prices.csv'))
-  message(sprintf('    product_prices.csv (%d products)', nrow(results$products$products)))
+  write_csv(results$inputs$pce_category_prices,
+            file.path(output_dir, 'pce_category_prices.csv'))
+  message(sprintf('    pce_category_prices.csv (%d consumer categories)',
+                  nrow(results$inputs$pce_category_prices)))
+
+  # ============================
+  # BEA Commodity Prices (Boston Fed)
+  # ============================
+
+  if (!is.null(results$inputs$bea_commodity_prices)) {
+    write_csv(results$inputs$bea_commodity_prices,
+              file.path(output_dir, 'bea_commodity_prices.csv'))
+    message(sprintf('    bea_commodity_prices.csv (%d BEA commodities)',
+                    nrow(results$inputs$bea_commodity_prices)))
+  }
 
   # ============================
   # Goods-Weighted ETRs by Country
@@ -183,7 +200,6 @@ write_outputs <- function(results, scenario) {
     stop('etr$presim_country not found in results')
   }
 
-  # Create output with pre-sub and post-sub ETRs by country
   country_codes <- c('chn', 'ca', 'mx', 'uk', 'jp', 'eu', 'row', 'fta')
   country_names <- c('China', 'Canada', 'Mexico', 'UK', 'Japan', 'EU', 'ROW', 'FTA')
 
@@ -198,8 +214,6 @@ write_outputs <- function(results, scenario) {
     stop('Missing required columns in etr$presim_country: ', paste(missing_pre, collapse = ', '))
   }
 
-  # Actually, create a simpler format - one row per country with columns for pre/post
-  # Include both delta ETRs and level ETRs (if available)
   has_levels <- !is.null(results$etr$baseline_country_levels) &&
                 !is.null(results$etr$presim_country_levels) &&
                 !is.null(results$etr$postsim_country_levels)
@@ -229,7 +243,6 @@ write_outputs <- function(results, scenario) {
       )
   }
 
-  # Add totals row
   total_row <- tibble(
     country = 'TOTAL',
     country_code = 'all',
