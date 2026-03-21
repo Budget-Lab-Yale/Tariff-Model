@@ -393,5 +393,31 @@ load_inputs <- function(scenario) {
                      'distribution parameters')
   message('  Loaded distribution parameters (10 deciles)')
 
+  # BLS distributional PCE shares by decile (optional)
+  dist_pce_file <- 'resources/distribution/distributional_pce_2023.csv'
+  if (file.exists(dist_pce_file)) {
+    inputs$distributional_pce <- read_csv(dist_pce_file, show_col_types = FALSE)
+    assert_has_columns(inputs$distributional_pce,
+                       c('pce_mp', 'total_billions', 'd1', 'd10'),
+                       'distributional PCE')
+    message(sprintf('  Loaded BLS distributional PCE: %d categories',
+                    nrow(inputs$distributional_pce)))
+  } else {
+    inputs$distributional_pce <- NULL
+    message('  BLS distributional PCE not found (will use aggregate pce_variation fallback)')
+  }
+
+  # NIPA-to-distributional-bucket mapping (optional, required if distributional_pce loaded)
+  bucket_file <- 'resources/distribution/nipa_pce_to_distributional_bucket.csv'
+  if (file.exists(bucket_file)) {
+    inputs$nipa_to_bucket <- read_csv(bucket_file, show_col_types = FALSE)
+    assert_has_columns(inputs$nipa_to_bucket, c('nipa_line', 'pce_mp'), 'NIPA-to-bucket mapping')
+    message(sprintf('  Loaded NIPA-to-bucket mapping: %d categories -> %d buckets',
+                    nrow(inputs$nipa_to_bucket),
+                    length(unique(inputs$nipa_to_bucket$pce_mp))))
+  } else {
+    inputs$nipa_to_bucket <- NULL
+  }
+
   return(inputs)
 }
