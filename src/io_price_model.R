@@ -268,6 +268,13 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output)
 #' propagated through domestic production) components, then maps to consumer
 #' categories via the PCE bridge table (the C matrix).
 #'
+#' The markup_assumption parameter controls how distribution margins respond
+#' to cost changes (Barbiero & Stein Section "Response of Prices to Tariffs"):
+#'   - 'constant_percentage': margins scale proportionally with cost (upper bound).
+#'     A 10% cost increase on a $1 good with $1 markup -> $2.20 (+10%).
+#'   - 'constant_dollar': margins stay fixed in dollar terms (lower bound).
+#'     A 10% cost increase on a $1 good with $1 markup -> $2.10 (+5%).
+#'
 #' @param tau_M Named vector of tariff shocks by BEA commodity (fractional)
 #' @param B_MD CxI import input coefficients matrix
 #' @param leontief_domestic IxC domestic requirements matrix
@@ -275,6 +282,8 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output)
 #' @param omega_D Named vector of domestic shares by commodity
 #' @param pce_bridge PCE bridge tibble from load_pce_bridge()
 #' @param usd_offset Scalar USD appreciation offset (e.g., 0.174)
+#' @param markup_assumption Either 'constant_percentage' (default, upper bound)
+#'   or 'constant_dollar' (lower bound)
 #'
 #' @return List with:
 #'   - pce_category_prices: tibble (nipa_line, pce_category, sr_price_effect [pp],
@@ -283,9 +292,17 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output)
 #'   - aggregate: PCE-weighted aggregate price effect (fractional)
 #'   - direct_aggregate: PCE-weighted aggregate from direct effects only (fractional)
 #'   - supply_chain_aggregate: PCE-weighted aggregate from supply chain only (fractional)
+#'   - markup_assumption: which assumption was used
 compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
                                      omega_M, omega_D, pce_bridge,
-                                     usd_offset) {
+                                     usd_offset,
+                                     markup_assumption = 'constant_percentage') {
+
+  valid_markups <- c('constant_percentage', 'constant_dollar')
+  if (!markup_assumption %in% valid_markups) {
+    stop('Invalid markup_assumption: ', markup_assumption,
+         '. Must be one of: ', paste(valid_markups, collapse = ', '))
+  }
 
   # Align tau_M to commodity dimension of B_MD
   commodities <- rownames(B_MD)
@@ -347,25 +364,44 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
   direct_scaled <- direct * (1 - usd_offset)
   supply_chain_scaled <- supply_chain * (1 - usd_offset)
 
-  # ---- Derive per-commodity PCE weights from bridge ----
-  commodity_pce <- pce_bridge %>%
+  # ---- Markup assumption: choose numerator weight ----
+  # Constant-percentage: weight by purchasers_value (margins scale with cost)
+  # Constant-dollar: weight by producers_value (margins stay fixed in $)
+  # Denominator is always purchasers_value (what consumers actually pay)
+  if (markup_assumption == 'constant_dollar') {
+    numerator_col <- 'producers_value'
+  } else {
+    numerator_col <- 'purchasers_value'
+  }
+
+  # ---- Derive per-commodity weights from bridge ----
+  commodity_weights <- pce_bridge %>%
     group_by(bea_code) %>%
-    summarise(pce = sum(purchasers_value), .groups = 'drop')
-  pce_lookup <- setNames(commodity_pce$pce, commodity_pce$bea_code)
+    summarise(
+      numerator_wt = sum(.data[[numerator_col]]),
+      purchasers_wt = sum(purchasers_value),
+      .groups = 'drop'
+    )
+  num_lookup <- setNames(commodity_weights$numerator_wt, commodity_weights$bea_code)
+  pv_lookup <- setNames(commodity_weights$purchasers_wt, commodity_weights$bea_code)
 
-  pce_aligned <- rep(0, length(commodities))
-  names(pce_aligned) <- commodities
-  pce_matched <- intersect(names(pce_lookup), commodities)
-  pce_aligned[pce_matched] <- pce_lookup[pce_matched]
+  num_aligned <- rep(0, length(commodities))
+  names(num_aligned) <- commodities
+  pv_aligned <- rep(0, length(commodities))
+  names(pv_aligned) <- commodities
 
-  total_pce <- sum(pce_aligned)
+  matched_codes <- intersect(names(num_lookup), commodities)
+  num_aligned[matched_codes] <- num_lookup[matched_codes]
+  pv_aligned[matched_codes] <- pv_lookup[matched_codes]
+
+  total_pce <- sum(pv_aligned)
   if (total_pce == 0) {
     stop('Total PCE weight is zero - cannot compute aggregate')
   }
 
-  aggregate <- sum(total * pce_aligned) / total_pce
-  direct_aggregate <- sum(direct_scaled * pce_aligned) / total_pce
-  supply_chain_aggregate <- sum(supply_chain_scaled * pce_aligned) / total_pce
+  aggregate <- sum(total * num_aligned) / total_pce
+  direct_aggregate <- sum(direct_scaled * num_aligned) / total_pce
+  supply_chain_aggregate <- sum(supply_chain_scaled * num_aligned) / total_pce
 
   # ---- Map to PCE categories via bridge (the C matrix) ----
   price_df <- tibble(
@@ -379,8 +415,8 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
     mutate(price = coalesce(price, 0)) %>%
     group_by(nipa_line, pce_category) %>%
     summarise(
-      sr_price_effect = if (sum(abs(purchasers_value)) > 0) {
-        sum(price * purchasers_value) / sum(purchasers_value)
+      sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
+        sum(price * .data[[numerator_col]]) / sum(purchasers_value)
       } else {
         0
       },
@@ -395,7 +431,7 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
     arrange(nipa_line)
 
   # ---- Diagnostics ----
-  message(sprintf('  Boston Fed price effects:'))
+  message(sprintf('  Boston Fed price effects (%s markups):', markup_assumption))
   message(sprintf('    Commodities with nonzero tariff: %d of %d',
                   sum(tau_aligned > 0), length(tau_aligned)))
   message(sprintf('    Aggregate price effect: %.4f%%', aggregate * 100))
@@ -409,7 +445,8 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
     bea_commodity_prices = total,
     aggregate = aggregate,
     direct_aggregate = direct_aggregate,
-    supply_chain_aggregate = supply_chain_aggregate
+    supply_chain_aggregate = supply_chain_aggregate,
+    markup_assumption = markup_assumption
   ))
 }
 

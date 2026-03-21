@@ -39,7 +39,7 @@ src/
   00_run_tariff_etrs.R    # Calls Tariff-ETRs via CLI
   01_load_inputs.R        # Load all inputs
   02_calculate_etr.R      # Weighted ETR calculations
-  03_calculate_prices.R   # Price effects, per-household cost
+  io_price_model.R        # Boston Fed I-O price model (Barbiero & Stein 2025)
   04_calculate_revenue.R  # Conventional + dynamic revenue
   05_calculate_macro.R    # GDP, unemployment effects
   06_calculate_sectors.R  # Sector output effects
@@ -50,13 +50,18 @@ excel_model/              # Reference Excel model and documentation
 
 ## Running the Model
 
-```r
-# From project root:
-source('src/run_model.R')
+**Always use the CLI runner** (`Rscript run.R`), not `source()` calls:
 
-# Or with a specific scenario:
-run_scenario('scenario_name')
+```bash
+# Run a scenario (from project root):
+Rscript run.R 2-21_perm
+
+# With constant-dollar markup assumption (lower bound):
+Rscript run.R 2-21_perm --markup constant_dollar
 ```
+
+Options:
+- `--markup <type>`: `constant_percentage` (default, upper bound) or `constant_dollar` (lower bound)
 
 ## Key Calculations
 

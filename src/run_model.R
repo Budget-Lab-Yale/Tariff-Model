@@ -30,15 +30,16 @@ source('src/08_calculate_foreign_gdp.R')
 source('src/09_calculate_distribution.R')
 source('src/11_write_outputs.R')
 source('src/12_export_excel.R')
-source('src/13_generate_report.R')
 
 
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
+#' @param markup_assumption Markup response to cost changes:
+#'   'constant_percentage' (default, upper bound) or 'constant_dollar' (lower bound)
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario) {
+run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -105,7 +106,8 @@ run_scenario <- function(scenario) {
     omega_M = inputs$boston_fed_matrices$omega_M,
     omega_D = inputs$boston_fed_matrices$omega_D,
     pce_bridge = inputs$pce_bridge,
-    usd_offset = inputs$assumptions$usd_offset
+    usd_offset = inputs$assumptions$usd_offset,
+    markup_assumption = markup_assumption
   )
 
   # Post-substitution (adjust tau_M and omega_M using GTAP)
@@ -128,7 +130,8 @@ run_scenario <- function(scenario) {
     omega_M = omega_M_post,
     omega_D = omega_D_post,
     pce_bridge = inputs$pce_bridge,
-    usd_offset = inputs$assumptions$usd_offset
+    usd_offset = inputs$assumptions$usd_offset,
+    markup_assumption = markup_assumption
   )
 
   price_results <- list(
