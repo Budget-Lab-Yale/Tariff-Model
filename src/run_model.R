@@ -116,8 +116,9 @@ run_scenario <- function(scenario) {
   )
   omega_M_post <- compute_postsub_omega_M(
     inputs$boston_fed_matrices$omega_M, inputs$gtap_bea_crosswalk,
-    inputs$nvpp_commodity_ratio
+    inputs$nvpp_commodity_ratio, inputs$baselines$viws_baseline
   )
+  # omega_M + omega_D = 1 by BEA use table construction (import + domestic = total)
   omega_D_post <- 1 - omega_M_post
 
   postsub_results <- compute_boston_fed_prices(
@@ -157,6 +158,7 @@ run_scenario <- function(scenario) {
     sr_price_effect = as.numeric(bea_prices_vec) * 100,
     pce_weight = as.numeric(pce[bea_commodities])
   ) %>%
+    # Commodities with no PCE weight (intermediates only) have zero consumer expenditure
     mutate(pce_weight = coalesce(pce_weight, 0)) %>%
     left_join(bea_desc, by = 'bea_code') %>%
     mutate(description = coalesce(description, bea_code)) %>%

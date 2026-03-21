@@ -385,11 +385,11 @@ plot_f6 <- function(path) {
   data <- raw %>% slice((header_row_idx + 1):n())
   first_col <- names(data)[1]
   data <- data %>% filter(!is.na(.data[[first_col]]))
-  names(data) <- c("Commodity", "Short-Run", "Long-Run")
+  names(data) <- c("PCE Category", "Short-Run")
 
   table_plot(
     data,
-    col_labels = c("", "Short-Run", "Long-Run"),
+    col_labels = c("", "Short-Run"),
     value_format = label_percent(scale = 1, accuracy = 0.1),
     title = raw[[1]][1]
   )

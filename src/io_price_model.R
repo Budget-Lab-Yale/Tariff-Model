@@ -375,6 +375,7 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
 
   pce_category_prices <- pce_bridge %>%
     left_join(price_df, by = 'bea_code') %>%
+    # BEA commodities not in the tariff vector (services, etc.) have zero tariff shock
     mutate(price = coalesce(price, 0)) %>%
     group_by(nipa_line, pce_category) %>%
     summarise(
@@ -465,8 +466,15 @@ compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
   matched <- intersect(names(tau_M_postsub), names(ratio_lookup))
   tau_M_postsub[matched] <- tau_M_presub[matched] * ratio_lookup[matched]
 
+  unmatched_bea <- setdiff(names(tau_M_presub), names(ratio_lookup))
+  nonzero_unmatched <- unmatched_bea[tau_M_presub[unmatched_bea] > 0]
   message(sprintf('  Post-sub tau_M: %d BEA commodities adjusted, mean ratio = %.4f',
                   length(matched), mean(ratio_lookup[matched])))
+  if (length(nonzero_unmatched) > 0) {
+    message(sprintf('    Warning: %d BEA codes with nonzero tariff not in crosswalk (kept at pre-sub): %s',
+                    length(nonzero_unmatched),
+                    paste(head(nonzero_unmatched, 5), collapse = ', ')))
+  }
 
   return(tau_M_postsub)
 }
@@ -479,14 +487,19 @@ compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
 #' captures both "imports fell" and "domestic production rose" -- the full
 #' GE response.
 #'
+#' When multiple GTAP sectors map to one BEA commodity, ratios are averaged
+#' weighted by baseline imports (consistent with compute_postsub_tau_M).
+#'
 #' @param omega_M Named vector of import shares by BEA commodity
 #' @param gtap_bea_crosswalk Tibble with gtap_code, bea_code columns
 #' @param nvpp_commodity_ratio Named vector of per-GTAP-commodity import share
 #'   ratios (postsim_share / baseline_share), names = GTAP commodity codes
+#' @param viws_baseline Matrix [commodity x source_region] of baseline imports
+#'   (for weighting when multiple GTAP sectors map to one BEA commodity)
 #'
 #' @return Named vector of post-sub import shares by BEA commodity (capped at 1.0)
 compute_postsub_omega_M <- function(omega_M, gtap_bea_crosswalk,
-                                    nvpp_commodity_ratio) {
+                                    nvpp_commodity_ratio, viws_baseline) {
 
   crosswalk <- gtap_bea_crosswalk %>%
     mutate(gtap_code = toupper(gtap_code))
@@ -494,12 +507,27 @@ compute_postsub_omega_M <- function(omega_M, gtap_bea_crosswalk,
   # Uppercase NVPP names to match crosswalk
   names(nvpp_commodity_ratio) <- toupper(names(nvpp_commodity_ratio))
 
-  # Build BEA-level ratios from GTAP commodity ratios
+  # Get per-GTAP-sector baseline import totals for weighting
+  baseline_totals <- rowSums(viws_baseline)
+  names(baseline_totals) <- toupper(names(baseline_totals))
+
+  # Build BEA-level ratios from GTAP commodity ratios (import-weighted)
   bea_ratios <- crosswalk %>%
-    mutate(ratio = nvpp_commodity_ratio[gtap_code]) %>%
+    mutate(
+      ratio = nvpp_commodity_ratio[gtap_code],
+      baseline_imports = baseline_totals[gtap_code]
+    ) %>%
     filter(!is.na(ratio)) %>%
+    mutate(baseline_imports = coalesce(baseline_imports, 0)) %>%
     group_by(bea_code) %>%
-    summarise(ratio = mean(ratio), .groups = 'drop')
+    summarise(
+      ratio = if (sum(baseline_imports) > 0) {
+        sum(ratio * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(ratio)
+      },
+      .groups = 'drop'
+    )
 
   ratio_lookup <- setNames(bea_ratios$ratio, bea_ratios$bea_code)
 

@@ -580,10 +580,10 @@ build_f6 <- function(outputs) {
 
   result <- prices %>%
     select(
-      `PCE Category` = pce_category,
-      `Short-Run (%)` = sr_price_effect
+      Name = pce_category,
+      `Short-Run` = sr_price_effect
     ) %>%
-    arrange(desc(`Short-Run (%)`))
+    arrange(desc(`Short-Run`))
 
   return(result)
 }

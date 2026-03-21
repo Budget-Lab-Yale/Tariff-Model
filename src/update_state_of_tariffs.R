@@ -288,24 +288,24 @@ write_block('F5', cost_perm, start_row = 23, start_col = 2)
 
 
 # =============================================================================
-# F6: Commodity Price Effects (4 data columns: temp SR/LR = B/C, perm SR/LR = D/E)
+# F6: Consumer Category Price Effects (2 data columns: temp SR = B, perm SR = C)
 # =============================================================================
 
-message('  Updating F6 (Commodities)...')
+message('  Updating F6 (Consumer Categories)...')
 
 f6_temp <- build_f6(out_temp)
 f6_perm <- build_f6(out_perm)
 
-# Write names + temp SR/LR (cols A-C)
+# Write names + temp SR (cols A-B)
 write_block('F6', f6_temp, start_row = 8, start_col = 1)
 
-# Align perm data to temp's commodity sort order before writing cols D-E
+# Align perm data to temp's category sort order before writing col C
 f6_perm_aligned <- f6_temp %>%
   select(Name) %>%
   left_join(f6_perm, by = 'Name') %>%
-  select(`Short-Run`, `Long-Run`)
+  select(`Short-Run`)
 
-write_block('F6', f6_perm_aligned, start_row = 8, start_col = 4)
+write_block('F6', f6_perm_aligned, start_row = 8, start_col = 3)
 
 
 # =============================================================================

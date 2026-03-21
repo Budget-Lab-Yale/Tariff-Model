@@ -315,6 +315,7 @@ calculate_etr <- function(inputs) {
   # -------------------------------------------------------------------------
 
   etr_increase_by_date <- NULL
+  presub_etr_increase_by_date <- NULL
   per_date_levels <- NULL
 
   if (isTRUE(inputs$is_time_varying)) {
@@ -406,7 +407,7 @@ calculate_etr <- function(inputs) {
     # Pre-sub etr_increase for USMM (raw from Tariff-ETRs)
     presub_etr_increase = presub_etr_increase,
     # Per-date pre-sub etr_increase for USMM (NULL for static scenarios)
-    presub_etr_increase_by_date = if (exists('presub_etr_increase_by_date')) presub_etr_increase_by_date else NULL,
+    presub_etr_increase_by_date = presub_etr_increase_by_date,
     # Country-level data for output (deltas)
     postsim_country = postsim_country_etrs,
     presim_country = presim_country_etrs,
