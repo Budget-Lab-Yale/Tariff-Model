@@ -328,16 +328,14 @@ load_bea_industry_output <- function(data_dir = 'resources/io') {
 #' not just intermediate use. This file provides the full totals.
 #'
 #' @param data_dir Path to BEA I-O data directory
-#' @return Tibble with bea_code, import_total, domestic_total; or NULL if file
-#'   not found (falls back to intermediate-only omega in build_boston_fed_matrices)
+#' @return Tibble with bea_code, import_total, domestic_total
 load_bea_commodity_use_totals <- function(data_dir = 'resources/io') {
 
   path <- file.path(data_dir, 'bea_commodity_use_totals.csv')
   if (!file.exists(path)) {
-    warning('bea_commodity_use_totals.csv not found in ', data_dir,
-            '\n  omega_M will use intermediate-only shares (less accurate)',
-            '\n  Run: python src/util/extract_bea_totals.py --level <summary|detail>')
-    return(NULL)
+    stop('bea_commodity_use_totals.csv not found in ', data_dir,
+         '\n  omega_M requires total commodity absorption (incl final demand)',
+         '\n  Run: python src/util/extract_bea_totals.py --level <summary|detail>')
   }
 
   data <- read_csv(path, show_col_types = FALSE)
@@ -354,16 +352,14 @@ load_bea_commodity_use_totals <- function(data_dir = 'resources/io') {
 #' not by total industry output.
 #'
 #' @param data_dir Path to BEA I-O data directory
-#' @return Named numeric vector (names = bea_code, values = variable_cost);
-#'   or NULL if file not found
+#' @return Named numeric vector (names = bea_code, values = variable_cost)
 load_bea_industry_variable_cost <- function(data_dir = 'resources/io') {
 
   path <- file.path(data_dir, 'bea_industry_variable_cost.csv')
   if (!file.exists(path)) {
-    warning('bea_industry_variable_cost.csv not found in ', data_dir,
-            '\n  B matrices will always use industry output normalization',
-            '\n  Run: python src/util/extract_bea_totals.py --level <summary|detail>')
-    return(NULL)
+    stop('bea_industry_variable_cost.csv not found in ', data_dir,
+         '\n  B matrix normalization requires variable cost data',
+         '\n  Run: python src/util/extract_bea_totals.py --level <summary|detail>')
   }
 
   data <- read_csv(path, show_col_types = FALSE)
@@ -429,8 +425,8 @@ load_pce_bridge <- function(data_dir = 'resources/io') {
 #'   - omega_D: named vector of domestic shares by commodity
 build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
                                      markup_assumption = 'constant_dollar',
-                                     commodity_use_totals = NULL,
-                                     industry_variable_cost = NULL) {
+                                     commodity_use_totals,
+                                     industry_variable_cost) {
 
   if (ncol(use_import) != ncol(use_domestic)) {
     stop('Import and domestic use tables have different numbers of industries')
@@ -447,7 +443,7 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
   # ---- Choose B-matrix normalization denominator ----
   # Boston Fed appendix: constant-dollar uses industry output,
   # constant-percentage uses total intermediates + compensation of employees
-  if (markup_assumption == 'constant_percentage' && !is.null(industry_variable_cost)) {
+  if (markup_assumption == 'constant_percentage') {
     norm_vec <- industry_variable_cost[industry_codes]
     norm_label <- 'variable cost (intermediates + comp of employees)'
     missing <- industry_codes[is.na(norm_vec)]
@@ -462,10 +458,6 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
     if (length(missing) > 0) {
       stop('Industry output missing for: ',
            paste(missing, collapse = ', '))
-    }
-    if (markup_assumption == 'constant_percentage' && is.null(industry_variable_cost)) {
-      warning('constant_percentage markup requested but industry_variable_cost not available; ',
-              'falling back to industry output normalization')
     }
   }
 
@@ -504,32 +496,26 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
   # ---- Compute import/domestic shares by commodity ----
   # Boston Fed appendix: omega_M from total commodity absorption (intermediate +
   # final demand), not just intermediate use
-  if (!is.null(commodity_use_totals)) {
-    totals_lookup <- commodity_use_totals %>%
-      mutate(total = import_total + domestic_total)
-    import_lookup <- setNames(totals_lookup$import_total, totals_lookup$bea_code)
-    total_lookup <- setNames(totals_lookup$total, totals_lookup$bea_code)
+  totals_lookup <- commodity_use_totals %>%
+    mutate(total = import_total + domestic_total)
+  import_lookup <- setNames(totals_lookup$import_total, totals_lookup$bea_code)
+  total_lookup <- setNames(totals_lookup$total, totals_lookup$bea_code)
 
-    import_totals <- import_lookup[commodity_codes]
-    total_use <- total_lookup[commodity_codes]
+  import_totals <- import_lookup[commodity_codes]
+  total_use <- total_lookup[commodity_codes]
 
-    # Commodities in use table but not in totals file: fall back to intermediate
-    missing_codes <- commodity_codes[is.na(total_use)]
-    if (length(missing_codes) > 0) {
-      message(sprintf('    %d commodities not in use totals file, using intermediate-only: %s',
-                      length(missing_codes),
-                      paste(head(missing_codes, 5), collapse = ', ')))
-      import_totals[is.na(import_totals)] <- rowSums(use_import)[is.na(import_totals)]
-      total_use[is.na(total_use)] <- (rowSums(use_import) + rowSums(use_domestic))[is.na(total_use)]
-    }
-    names(import_totals) <- commodity_codes
-    names(total_use) <- commodity_codes
-    omega_source <- 'full absorption (incl final demand)'
-  } else {
-    import_totals <- rowSums(use_import)
-    total_use <- rowSums(use_import) + rowSums(use_domestic)
-    omega_source <- 'intermediate use only'
+  # Commodities in use table but not in totals file: fall back to intermediate
+  missing_codes <- commodity_codes[is.na(total_use)]
+  if (length(missing_codes) > 0) {
+    message(sprintf('    %d commodities not in use totals file, using intermediate-only: %s',
+                    length(missing_codes),
+                    paste(head(missing_codes, 5), collapse = ', ')))
+    import_totals[is.na(import_totals)] <- rowSums(use_import)[is.na(import_totals)]
+    total_use[is.na(total_use)] <- (rowSums(use_import) + rowSums(use_domestic))[is.na(total_use)]
   }
+  names(import_totals) <- commodity_codes
+  names(total_use) <- commodity_codes
+  omega_source <- 'full absorption (incl final demand)'
 
   omega_M <- import_totals / total_use
   omega_D <- 1 - omega_M
@@ -550,6 +536,25 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
                     sum(neg_omega)))
     omega_M[neg_omega] <- 0
     omega_D[neg_omega] <- 1
+  }
+
+  # Zero out omega for BEA special adjustment commodities
+  # These are statistical adjustments, not real produced goods
+  BEA_ADJUSTMENT_CODES <- c(
+    'S00300',  # Noncomparable imports
+    'S00401',  # Scrap
+    'S00402',  # Used and secondhand goods
+    'S00900',  # Rest-of-world adjustment
+    'Other',   # Summary: noncomparable imports + rest-of-world
+    'Used'     # Summary: scrap, used and secondhand goods
+  )
+  adj_mask <- commodity_codes %in% BEA_ADJUSTMENT_CODES
+  if (any(adj_mask)) {
+    message(sprintf('    Zeroing omega_M for %d BEA adjustment commodities: %s',
+                    sum(adj_mask),
+                    paste(commodity_codes[adj_mask], collapse = ', ')))
+    omega_M[adj_mask] <- 0
+    omega_D[adj_mask] <- 1
   }
 
   message(sprintf('  Built Boston Fed matrices:'))
@@ -647,26 +652,47 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
   # L_D is IxC, need L_D' %*% imported_input_cost -> Cx1
   leontief_industries <- rownames(leontief_domestic)
   bmd_industries <- colnames(B_MD)
-  common_industries <- intersect(bmd_industries, leontief_industries)
 
-  if (length(common_industries) < length(bmd_industries)) {
-    message(sprintf('    Aligning industry dimensions: %d common of %d B_MD / %d L_D',
-                    length(common_industries), length(bmd_industries),
-                    length(leontief_industries)))
+  missing_from_leontief <- setdiff(bmd_industries, leontief_industries)
+  missing_from_bmd <- setdiff(leontief_industries, bmd_industries)
+  if (length(missing_from_leontief) > 0 || length(missing_from_bmd) > 0) {
+    msg <- 'B_MD and Leontief domestic industry dimensions do not match'
+    if (length(missing_from_leontief) > 0) {
+      msg <- paste0(msg, sprintf('\n  In B_MD but not L_D (%d): %s',
+                                 length(missing_from_leontief),
+                                 paste(head(missing_from_leontief, 10), collapse = ', ')))
+    }
+    if (length(missing_from_bmd) > 0) {
+      msg <- paste0(msg, sprintf('\n  In L_D but not B_MD (%d): %s',
+                                 length(missing_from_bmd),
+                                 paste(head(missing_from_bmd, 10), collapse = ', ')))
+    }
+    stop(msg)
   }
 
-  cost_aligned <- rep(0, length(leontief_industries))
-  names(cost_aligned) <- leontief_industries
-  cost_aligned[common_industries] <- imported_input_cost[common_industries]
+  cost_aligned <- imported_input_cost[leontief_industries]
 
   propagated <- as.numeric(t(leontief_domestic) %*% cost_aligned)
   names(propagated) <- colnames(leontief_domestic)
 
-  # Align propagated to commodity dimension
-  propagated_aligned <- rep(0, length(commodities))
-  names(propagated_aligned) <- commodities
-  prop_matched <- intersect(names(propagated), commodities)
-  propagated_aligned[prop_matched] <- propagated[prop_matched]
+  # Verify propagated commodity dimension matches expected commodities
+  missing_from_prop <- setdiff(commodities, names(propagated))
+  extra_in_prop <- setdiff(names(propagated), commodities)
+  if (length(missing_from_prop) > 0 || length(extra_in_prop) > 0) {
+    msg <- 'Propagated price commodity dimension does not match expected commodities'
+    if (length(missing_from_prop) > 0) {
+      msg <- paste0(msg, sprintf('\n  Expected but missing (%d): %s',
+                                 length(missing_from_prop),
+                                 paste(head(missing_from_prop, 10), collapse = ', ')))
+    }
+    if (length(extra_in_prop) > 0) {
+      msg <- paste0(msg, sprintf('\n  Extra in propagated (%d): %s',
+                                 length(extra_in_prop),
+                                 paste(head(extra_in_prop, 10), collapse = ', ')))
+    }
+    stop(msg)
+  }
+  propagated_aligned <- propagated[commodities]
 
   supply_chain <- omega_D_aligned * propagated_aligned
 
@@ -727,13 +753,12 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
     left_join(price_df, by = 'bea_code')
   na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
   if (length(na_bridge_codes) > 0) {
-    warning(sprintf('  %d PCE bridge BEA codes not in Use table commodities (set to 0): %s',
-                    length(na_bridge_codes),
-                    paste(head(na_bridge_codes, 10), collapse = ', ')))
+    stop(sprintf('%d PCE bridge BEA codes not found in Use table commodities: %s',
+                 length(na_bridge_codes),
+                 paste(na_bridge_codes, collapse = ', ')))
   }
 
   pce_category_prices <- bridge_joined %>%
-    mutate(price = if_else(is.na(price), 0, price)) %>%
     group_by(nipa_line, pce_category) %>%
     summarise(
       sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {

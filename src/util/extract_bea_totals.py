@@ -159,7 +159,9 @@ def extract_totals(level):
             imp_t001_idx = i
         elif i >= 2 and not code.startswith('T') and imp_t001_idx is None:
             imp_industry_indices.append(i)
-        elif code.startswith('F') and not code.startswith(('F05', 'F050')):
+        elif code.startswith('F') and not code.startswith(('F04', 'F040', 'F05', 'F050')):
+            # Same filter as total-use table: exclude exports (F04) and
+            # import adjustment (F05) so omega_M uses domestic absorption
             imp_final_demand_indices.append(i)
 
     imp_all_use_indices = imp_industry_indices + imp_final_demand_indices
