@@ -37,9 +37,12 @@ source('src/12_export_excel.R')
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
 #' @param markup_assumption Markup response to cost changes:
 #'   'constant_percentage' (default, upper bound) or 'constant_dollar' (lower bound)
+#' @param bea_io_level BEA I-O table level: 'summary' (73 commodities, 2024) or
+#'   'detail' (~400 commodities, 2017). NULL uses value from global_assumptions.yaml.
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
+run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
+                         bea_io_level = NULL) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -70,7 +73,7 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
   #---------------------------
 
   message('\nStep 1: Loading inputs...')
-  inputs <- load_inputs(scenario)
+  inputs <- load_inputs(scenario, bea_io_level_override = bea_io_level)
 
   if (isTRUE(inputs$is_time_varying)) {
     message(sprintf('  Detected time-varying ETRs (%d dates)', length(inputs$etr_dates)))
@@ -114,7 +117,7 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
   message('  Post-substitution (GTAP-adjusted):')
   tau_M_post <- compute_postsub_tau_M(
     inputs$tau_M, inputs$gtap_bea_crosswalk,
-    inputs$viws, inputs$baselines$viws_baseline
+    inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
   )
   omega_M_post <- compute_postsub_omega_M(
     inputs$boston_fed_matrices$omega_M, inputs$gtap_bea_crosswalk,
@@ -147,26 +150,21 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
 
   # When using detail-level tables, reaggregate commodity prices to summary-level
   # NIPA categories for the distribution pipeline (which needs 2024 NIPA line numbers)
-  bea_io_level <- inputs$assumptions$bea_io_level %||% 'summary'
-  if (bea_io_level == 'detail') {
+  if (inputs$bea_io_level == 'detail') {
     message('  Reaggregating detail prices to summary NIPA categories for distribution:')
-    summary_to_detail <- read_csv(
-      file.path(inputs$io_data_dir, 'bea_summary_to_detail.csv'),
-      show_col_types = FALSE
-    )
     summary_bridge <- load_pce_bridge('resources/io')
 
     message('  Pre-substitution:')
     price_results$presub$pce_category_prices <- reaggregate_to_summary_pce(
       presub_results$bea_commodity_prices,
       inputs$bea_use_import, inputs$bea_use_domestic,
-      summary_to_detail, summary_bridge, markup_assumption
+      inputs$summary_to_detail, summary_bridge, markup_assumption
     )
     message('  Post-substitution:')
     price_results$postsub$pce_category_prices <- reaggregate_to_summary_pce(
       postsub_results$bea_commodity_prices,
       inputs$bea_use_import, inputs$bea_use_domestic,
-      summary_to_detail, summary_bridge, markup_assumption
+      inputs$summary_to_detail, summary_bridge, markup_assumption
     )
   }
 
@@ -189,9 +187,19 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
     bea_code = bea_commodities,
     sr_price_effect = as.numeric(bea_prices_vec) * 100,
     pce_weight = as.numeric(pce[bea_commodities])
-  ) %>%
-    # Commodities with no PCE weight (intermediates only) have zero consumer expenditure
-    mutate(pce_weight = coalesce(pce_weight, 0)) %>%
+  )
+
+  # Flag commodities with no PCE weight before filling (pure intermediates are
+  # expected; goods with consumer expenditure missing would be a data issue)
+  na_pce_codes <- inputs$bea_commodity_prices$bea_code[is.na(inputs$bea_commodity_prices$pce_weight)]
+  if (length(na_pce_codes) > 0) {
+    message(sprintf('  Note: %d BEA commodities have no PCE weight (intermediates, set to 0): %s',
+                    length(na_pce_codes),
+                    paste(head(na_pce_codes, 10), collapse = ', ')))
+  }
+
+  inputs$bea_commodity_prices <- inputs$bea_commodity_prices %>%
+    mutate(pce_weight = if_else(is.na(pce_weight), 0, pce_weight)) %>%
     left_join(bea_desc, by = 'bea_code') %>%
     mutate(description = coalesce(description, bea_code)) %>%
     arrange(desc(sr_price_effect))

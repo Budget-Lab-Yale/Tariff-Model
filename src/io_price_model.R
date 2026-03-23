@@ -123,8 +123,17 @@ reaggregate_to_summary_pce <- function(bea_commodity_prices,
     detail_code = names(bea_commodity_prices),
     price = as.numeric(bea_commodity_prices),
     use_weight = as.numeric(total_use[names(bea_commodity_prices)])
-  ) %>%
-    mutate(use_weight = coalesce(use_weight, 0))
+  )
+
+  # Flag detail codes with no Use table entry (NA weight) before filling
+  na_weight_codes <- detail_prices$detail_code[is.na(detail_prices$use_weight)]
+  if (length(na_weight_codes) > 0) {
+    warning(sprintf('  %d detail codes have no Use table entry (use_weight set to 0): %s',
+                    length(na_weight_codes),
+                    paste(head(na_weight_codes, 10), collapse = ', ')))
+  }
+  detail_prices <- detail_prices %>%
+    mutate(use_weight = if_else(is.na(use_weight), 0, use_weight))
 
   # ---- Aggregate to summary codes ----
   summary_prices <- detail_prices %>%
@@ -153,9 +162,18 @@ reaggregate_to_summary_pce <- function(bea_commodity_prices,
     numerator_col <- 'purchasers_value'
   }
 
-  pce_category_prices <- summary_bridge %>%
-    left_join(summary_prices %>% select(bea_code, price), by = 'bea_code') %>%
-    mutate(price = coalesce(price, 0)) %>%
+  # Flag bridge BEA codes with no summary price data before filling
+  bridge_joined <- summary_bridge %>%
+    left_join(summary_prices %>% select(bea_code, price), by = 'bea_code')
+  na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
+  if (length(na_bridge_codes) > 0) {
+    warning(sprintf('  %d summary bridge BEA codes have no detail-level price (set to 0): %s',
+                    length(na_bridge_codes),
+                    paste(head(na_bridge_codes, 10), collapse = ', ')))
+  }
+
+  pce_category_prices <- bridge_joined %>%
+    mutate(price = if_else(is.na(price), 0, price)) %>%
     group_by(nipa_line, pce_category) %>%
     summarise(
       sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
@@ -547,7 +565,7 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
     stop('Total PCE weight is zero - cannot compute aggregate')
   }
 
-  aggregate <- sum(total * num_aligned) / total_pce
+  # Direct/supply chain decomposition (only available at commodity level)
   direct_aggregate <- sum(direct_scaled * num_aligned) / total_pce
   supply_chain_aggregate <- sum(supply_chain_scaled * num_aligned) / total_pce
 
@@ -557,10 +575,20 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
     price = as.numeric(total)
   )
 
-  pce_category_prices <- pce_bridge %>%
-    left_join(price_df, by = 'bea_code') %>%
-    # BEA commodities not in the tariff vector (services, etc.) have zero tariff shock
-    mutate(price = coalesce(price, 0)) %>%
+  # Flag bridge BEA codes not in the Use tables (all Use table commodities,
+  # including services, already have price=0 from tau initialization — an NA
+  # here means the bridge references a code absent from the I-O tables entirely)
+  bridge_joined <- pce_bridge %>%
+    left_join(price_df, by = 'bea_code')
+  na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
+  if (length(na_bridge_codes) > 0) {
+    warning(sprintf('  %d PCE bridge BEA codes not in Use table commodities (set to 0): %s',
+                    length(na_bridge_codes),
+                    paste(head(na_bridge_codes, 10), collapse = ', ')))
+  }
+
+  pce_category_prices <- bridge_joined %>%
+    mutate(price = if_else(is.na(price), 0, price)) %>%
     group_by(nipa_line, pce_category) %>%
     summarise(
       sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
@@ -577,6 +605,11 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
       pce_share = purchasers_value / sum(purchasers_value) * 100
     ) %>%
     arrange(nipa_line)
+
+  # ---- Derive aggregate from category table (single source of truth) ----
+  aggregate <- sum(pce_category_prices$sr_price_effect / 100 *
+                   pce_category_prices$purchasers_value) /
+               sum(pce_category_prices$purchasers_value)
 
   # ---- Diagnostics ----
   message(sprintf('  Boston Fed price effects (%s markups):', markup_assumption))
@@ -601,34 +634,86 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
 
 # ==== Post-substitution adjustments ==========================================
 
-#' Compute post-substitution tau_M using GTAP import volume changes
+#' Compute post-substitution tau_M using GTAP source-composition shifts
 #'
-#' For each BEA commodity, scales the pre-sub tariff shock by the ratio of
-#' post-simulation to baseline import volumes from GTAP. This captures the
-#' effect of trade diversion: sectors with larger import declines get smaller
-#' effective tariff shocks.
+#' For each GTAP sector, recomputes the import-weighted average tariff rate
+#' using post-simulation import weights (from viws) but the SAME tariff rates.
+#' The ratio of post-sim to baseline weighted-average tariff isolates the pure
+#' source-composition effect: if imports shift from high-tariff China to
+#' low-tariff Vietnam, the effective tariff falls — even though no tariff rate
+#' changed.
+#'
+#' This deliberately excludes the overall import volume decline (margin 2:
+#' import-to-domestic substitution), which is already captured by the omega_M
+#' adjustment in compute_postsub_omega_M(). Using total import volume ratios
+#' here would double-count that margin.
 #'
 #' @param tau_M_presub Named vector of pre-sub tariff shocks by BEA commodity
 #' @param gtap_bea_crosswalk Tibble with gtap_code, bea_code columns
+#' @param etr_matrix Tibble with gtap_code column and country columns of tariff
+#'   rates (fractional, e.g. 0.10 = 10%). Country columns must align with
+#'   viws column names (minus 'usa').
 #' @param viws_postsim Matrix [commodity x source_region] of post-sim imports
 #' @param viws_baseline Matrix [commodity x source_region] of baseline imports
 #'
 #' @return Named vector of post-sub tariff shocks by BEA commodity
 compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
-                                  viws_postsim, viws_baseline) {
+                                  etr_matrix, viws_postsim, viws_baseline) {
 
-  # Per-GTAP-sector total import ratio
-  baseline_totals <- rowSums(viws_baseline)
-  postsim_totals <- rowSums(viws_postsim)
+  gtap_codes <- toupper(rownames(viws_baseline))
+
+  # Country columns shared between etr_matrix and viws
+  etr_countries <- setdiff(names(etr_matrix), c('gtap_code', 'date'))
+  viws_countries <- colnames(viws_baseline)
+  common_countries <- intersect(etr_countries, viws_countries)
+
+  if (length(common_countries) == 0) {
+    stop('No common country columns between etr_matrix and viws matrices')
+  }
+
+  # Build tariff rate matrix aligned to viws rows (GTAP sectors x countries)
+  etr_lookup <- etr_matrix %>%
+    mutate(gtap_code = toupper(gtap_code))
+  etr_mat <- matrix(0, nrow = length(gtap_codes), ncol = length(common_countries),
+                    dimnames = list(gtap_codes, common_countries))
+  matched_sectors <- intersect(gtap_codes, etr_lookup$gtap_code)
+  for (sector in matched_sectors) {
+    row_idx <- which(etr_lookup$gtap_code == sector)
+    for (cty in common_countries) {
+      etr_mat[sector, cty] <- etr_lookup[[cty]][row_idx]
+    }
+  }
+
+  # Extract viws submatrices for common countries only
+  viws_bl <- viws_baseline[, common_countries, drop = FALSE]
+  viws_ps <- viws_postsim[, common_countries, drop = FALSE]
+
+  # Per-GTAP-sector: import-weighted average tariff, baseline vs post-sim weights
+  # avg_tariff = sum(tariff_r * imports_r) / sum(imports_r)
+  weighted_tariff_bl <- rowSums(etr_mat * viws_bl)
+  weighted_tariff_ps <- rowSums(etr_mat * viws_ps)
+  total_imports_bl <- rowSums(viws_bl)
+  total_imports_ps <- rowSums(viws_ps)
+
+  avg_tariff_bl <- weighted_tariff_bl / total_imports_bl
+  avg_tariff_ps <- weighted_tariff_ps / total_imports_ps
+
+  # Ratio: how did the source-weighted average tariff change?
+  # >1 means imports shifted toward higher-tariff sources (rare)
+  # <1 means imports shifted toward lower-tariff sources (trade diversion)
+  tariff_ratio <- avg_tariff_ps / avg_tariff_bl
+
+  # Handle edge cases: zero baseline tariff, zero imports, NaN/Inf
+  # If baseline avg tariff is 0, no tariff to shift composition of -> ratio = 1
+  # If post-sim imports are 0, sector has no imports left -> ratio doesn't matter
+  #   (omega_M adjustment will handle this)
+  tariff_ratio[is.nan(tariff_ratio) | is.infinite(tariff_ratio)] <- 1.0
 
   gtap_ratios <- tibble(
-    gtap_code = toupper(rownames(viws_baseline)),
-    import_ratio = postsim_totals / baseline_totals,
-    baseline_imports = baseline_totals
-  ) %>%
-    mutate(import_ratio = if_else(
-      is.nan(import_ratio) | is.infinite(import_ratio), 1.0, import_ratio
-    ))
+    gtap_code = gtap_codes,
+    tariff_ratio = as.numeric(tariff_ratio),
+    baseline_imports = as.numeric(total_imports_bl)
+  )
 
   # Map to BEA: weighted average of GTAP ratios within each BEA group
   bea_ratios <- gtap_bea_crosswalk %>%
@@ -637,9 +722,9 @@ compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
     group_by(bea_code) %>%
     summarise(
       ratio = if (sum(baseline_imports) > 0) {
-        sum(import_ratio * baseline_imports) / sum(baseline_imports)
+        sum(tariff_ratio * baseline_imports) / sum(baseline_imports)
       } else {
-        mean(import_ratio)
+        mean(tariff_ratio)
       },
       .groups = 'drop'
     )
@@ -653,7 +738,7 @@ compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
 
   unmatched_bea <- setdiff(names(tau_M_presub), names(ratio_lookup))
   nonzero_unmatched <- unmatched_bea[tau_M_presub[unmatched_bea] > 0]
-  message(sprintf('  Post-sub tau_M: %d BEA commodities adjusted, mean ratio = %.4f',
+  message(sprintf('  Post-sub tau_M (source-composition): %d BEA commodities adjusted, mean ratio = %.4f',
                   length(matched), mean(ratio_lookup[matched])))
   if (length(nonzero_unmatched) > 0) {
     message(sprintf('    Warning: %d BEA codes with nonzero tariff not in crosswalk (kept at pre-sub): %s',

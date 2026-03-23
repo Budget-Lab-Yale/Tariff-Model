@@ -7,10 +7,13 @@
 # Options:
 #   --markup <type>            Markup assumption: 'constant_percentage' (default,
 #                              upper bound) or 'constant_dollar' (lower bound)
+#   --bea-io-level <level>     BEA I-O table level: 'summary' (default, 73
+#                              commodities) or 'detail' (~400 commodities)
 #
 # Example:
 #   Rscript run.R 2-21_perm
 #   Rscript run.R 2-21_perm --markup constant_dollar
+#   Rscript run.R 2-21_perm --bea-io-level detail
 # =============================================================================
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -19,6 +22,7 @@ if (length(args) < 1) {
   cat('Usage: Rscript run.R <scenario_name> [options]\n')
   cat('\nOptions:\n')
   cat('  --markup <type>            Markup assumption: constant_percentage (default) or constant_dollar\n')
+  cat('  --bea-io-level <level>     BEA I-O table level: summary (default) or detail\n')
   cat('\nAvailable scenarios:\n')
   scenarios <- list.dirs('config/scenarios', full.names = FALSE, recursive = FALSE)
   for (s in scenarios) {
@@ -38,6 +42,16 @@ if ('--markup' %in% args) {
   }
 }
 
+# Parse --bea-io-level argument
+bea_io_level <- NULL
+if ('--bea-io-level' %in% args) {
+  idx <- which(args == '--bea-io-level')
+  if (idx < length(args)) {
+    bea_io_level <- args[idx + 1]
+  }
+}
+
 # Run model
 source('src/run_model.R')
-run_scenario(scenario, markup_assumption = markup_assumption)
+run_scenario(scenario, markup_assumption = markup_assumption,
+             bea_io_level = bea_io_level)

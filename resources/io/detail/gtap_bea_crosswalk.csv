@@ -606,7 +606,6 @@ NMM,327999,Miscellaneous nonmetallic mineral products
 I_S,331110,Iron and steel mills and ferroalloy manufacturing
 I_S,331200,Steel product manufacturing from purchased steel
 I_S,331313,Alumina refining and primary aluminum production
-I_S,331314,Secondary smelting and alloying of aluminum
 I_S,33131B,Aluminum product manufacturing from purchased aluminum
 I_S,331410,Nonferrous metal (except aluminum) smelting and refining
 I_S,331420,"Copper rolling, drawing, extruding and alloying"
@@ -616,7 +615,6 @@ I_S,331520,Nonferrous metal foundries
 NFM,331110,Iron and steel mills and ferroalloy manufacturing
 NFM,331200,Steel product manufacturing from purchased steel
 NFM,331313,Alumina refining and primary aluminum production
-NFM,331314,Secondary smelting and alloying of aluminum
 NFM,33131B,Aluminum product manufacturing from purchased aluminum
 NFM,331410,Nonferrous metal (except aluminum) smelting and refining
 NFM,331420,"Copper rolling, drawing, extruding and alloying"

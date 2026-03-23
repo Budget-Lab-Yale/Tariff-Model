@@ -105,7 +105,7 @@ load_baselines <- function() {
 #' @param scenario Name of the scenario
 #'
 #' @return List containing all input data
-load_inputs <- function(scenario) {
+load_inputs <- function(scenario, bea_io_level_override = NULL) {
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
 
@@ -125,7 +125,8 @@ load_inputs <- function(scenario) {
   # Boston Fed I-O data (always loaded)
   # ============================
 
-  bea_io_level <- inputs$assumptions$bea_io_level %||% 'summary'
+  bea_io_level <- bea_io_level_override %||% inputs$assumptions$bea_io_level %||% 'summary'
+  inputs$bea_io_level <- bea_io_level
   io_data_dir <- resolve_io_data_dir(bea_io_level)
   inputs$io_data_dir <- io_data_dir
   message(sprintf('  BEA I-O level: %s (%s)', bea_io_level, io_data_dir))
@@ -304,6 +305,11 @@ load_inputs <- function(scenario) {
   # Disaggregate tau_M to detail BEA codes if using detail-level tables
   if (bea_io_level == 'detail') {
     inputs$tau_M <- disaggregate_tau_M(inputs$tau_M, io_data_dir)
+    # Cache the mapping for reaggregation in run_model.R
+    inputs$summary_to_detail <- read_csv(
+      file.path(io_data_dir, 'bea_summary_to_detail.csv'),
+      show_col_types = FALSE
+    )
   }
 
   # ============================

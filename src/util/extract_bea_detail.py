@@ -353,7 +353,26 @@ def extract_crosswalk():
                 detail_descriptions[detail_code] = vals[4]
 
     wb.close()
-    print(f'    {len(detail_to_summary)} detail -> summary mappings')
+    print(f'    {len(detail_to_summary)} detail -> summary mappings (from NAICS sheet)')
+
+    # Filter to only detail codes present in the actual 2017 use tables.
+    # The NAICS Codes sheet lists all NAICS detail codes, but the 2017 I-O
+    # tables only cover ~402 commodities. Phantom codes (e.g. 331314) would
+    # get tariff shocks assigned but then silently dropped during matrix
+    # alignment, losing part of their parent summary code's effect.
+    use_import_path = os.path.join(OUTPUT_DIR, 'bea_use_import.csv')
+    with open(use_import_path, 'r') as f:
+        reader = csv.DictReader(f)
+        valid_commodities = {row['bea_code'] for row in reader}
+    print(f'    {len(valid_commodities)} commodities in 2017 use tables')
+
+    dropped = {c for c in detail_to_summary if c not in valid_commodities}
+    if dropped:
+        print(f'    Dropping {len(dropped)} detail codes not in use tables: '
+              f'{sorted(dropped)[:10]}')
+    detail_to_summary = {c: s for c, s in detail_to_summary.items()
+                         if c in valid_commodities}
+    print(f'    {len(detail_to_summary)} detail -> summary mappings (after filtering)')
 
     # Build summary -> [detail] lookup
     summary_to_details = {}

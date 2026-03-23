@@ -55,24 +55,11 @@ GTAP_SLC_HEADERS <- list(
 
 #' Read GTAP solution files
 #'
-#' @param sol_path Path to .sol file
-#' @param sl4_path Path to .sl4 file (for metadata)
+#' @param sol Parsed .sol HAR object
+#' @param regions Character vector of region names
+#' @param commodities Character vector of commodity names
 #' @return List containing extracted GTAP data
-read_gtap_solution <- function(sol_path, sl4_path) {
-  # Read solution file
-  sol <- read_har(sol_path)
-
-  # Get set labels from sl4
-  if (is.null(sl4_path) || !file.exists(sl4_path)) {
-    stop('GTAP .sl4 file not found: ', sl4_path)
-  }
-  sl4 <- read_har(sl4_path)
-  stel <- sl4[['stel']]
-  if (is.null(stel)) {
-    stop('GTAP .sl4 file missing stel metadata: ', sl4_path)
-  }
-  regions <- stel[1:9]
-  commodities <- stel[10:74]
+extract_sol_data <- function(sol, regions, commodities) {
 
   result <- list(
     regions = regions,
@@ -155,7 +142,7 @@ read_gtap_solution <- function(sol_path, sl4_path) {
 
 #' Get foreign GDP effects
 #'
-#' @param gtap_data Result from read_gtap_solution()
+#' @param gtap_data Result from read_gtap_full()
 #' @return Data frame with region and gdp_pct_change columns
 get_foreign_gdp <- function(gtap_data) {
   if (is.null(gtap_data$qgdp)) {
@@ -174,7 +161,7 @@ get_foreign_gdp <- function(gtap_data) {
 
 #' Get sector output effects
 #'
-#' @param gtap_data Result from read_gtap_solution()
+#' @param gtap_data Result from read_gtap_full()
 #' @param target_region Region to extract (default 'usa')
 #' @return Data frame with gtap_sector and output_pct_change columns
 get_sector_outputs <- function(gtap_data, target_region = 'usa') {
@@ -201,7 +188,7 @@ get_sector_outputs <- function(gtap_data, target_region = 'usa') {
 
 #' Get aggregate import change
 #'
-#' @param gtap_data Result from read_gtap_solution()
+#' @param gtap_data Result from read_gtap_full()
 #' @param target_region Region to extract (default 'usa')
 #' @return Numeric value (% change)
 get_import_change <- function(gtap_data, target_region = 'usa') {
@@ -214,7 +201,7 @@ get_import_change <- function(gtap_data, target_region = 'usa') {
 
 #' Get aggregate export change
 #'
-#' @param gtap_data Result from read_gtap_solution()
+#' @param gtap_data Result from read_gtap_full()
 #' @param target_region Region to extract (default 'usa')
 #' @return Numeric value (% change)
 get_export_change <- function(gtap_data, target_region = 'usa') {
@@ -227,7 +214,7 @@ get_export_change <- function(gtap_data, target_region = 'usa') {
 
 #' Get import prices by commodity
 #'
-#' @param gtap_data Result from read_gtap_solution()
+#' @param gtap_data Result from read_gtap_full()
 #' @param target_region Region to extract (default 'usa')
 #' @return Data frame with gtap_sector and price_pct_change columns
 get_import_prices <- function(gtap_data, target_region = 'usa') {
@@ -253,34 +240,21 @@ get_import_prices <- function(gtap_data, target_region = 'usa') {
 }
 
 # ============================================================================
-# SLC FILE FUNCTIONS (Level/Updated Values)
+# SLC EXTRACTION FUNCTIONS (operate on pre-parsed slc object)
 # ============================================================================
 
-#' Read VIWS (VALIMPORTS) from .slc file
+#' Extract VIWS (VALIMPORTS) from parsed .slc data
 #'
 #' Extracts post-simulation import values by commodity, source, and destination.
 #' Returns imports TO a target region (default USA) FROM all source regions.
 #'
-#' @param slc_path Path to .slc file
-#' @param sl4_path Path to .sl4 file (for metadata)
+#' @param slc Parsed .slc HAR object
+#' @param regions Character vector of region names
+#' @param commodities Character vector of commodity names
 #' @param target_region Index of destination region (default 1 = USA)
 #' @return Matrix of imports [commodity x source_region] in $millions
-read_viws <- function(slc_path, sl4_path, target_region = 1) {
-  slc <- read_har(slc_path)
+extract_viws <- function(slc, regions, commodities, target_region = 1) {
 
-  # Get set labels from sl4
-  if (is.null(sl4_path) || !file.exists(sl4_path)) {
-    stop('GTAP .sl4 file not found: ', sl4_path)
-  }
-  sl4 <- read_har(sl4_path)
-  stel <- sl4[['stel']]
-  if (is.null(stel)) {
-    stop('GTAP .sl4 file missing stel metadata: ', sl4_path)
-  }
-  regions <- stel[1:9]
-  commodities <- stel[10:74]
-
-  # Extract VIWS array [comm, src, dst]
   viws_header <- GTAP_SLC_HEADERS$viws
   if (is.null(slc[[viws_header]])) {
     stop(paste('VIWS header not found:', viws_header))
@@ -292,7 +266,6 @@ read_viws <- function(slc_path, sl4_path, target_region = 1) {
   # viws_full[comm, src, dst] -> viws[comm, src] for dst=target_region
   viws <- viws_full[, , target_region]
 
-  # Set dimnames
   if (!is.null(commodities)) {
     rownames(viws) <- commodities
   }
@@ -301,26 +274,13 @@ read_viws <- function(slc_path, sl4_path, target_region = 1) {
   return(viws)
 }
 
-#' Read VGDP (GDP levels) from .slc file
+#' Extract VGDP (GDP levels) from parsed .slc data
 #'
-#' @param slc_path Path to .slc file
-#' @param sl4_path Path to .sl4 file (for metadata)
+#' @param slc Parsed .slc HAR object
+#' @param regions Character vector of region names
 #' @return Named vector of GDP levels by region ($millions)
-read_vgdp <- function(slc_path, sl4_path) {
-  slc <- read_har(slc_path)
+extract_vgdp <- function(slc, regions) {
 
-  # Get region labels from sl4
-  if (is.null(sl4_path) || !file.exists(sl4_path)) {
-    stop('GTAP .sl4 file not found: ', sl4_path)
-  }
-  sl4 <- read_har(sl4_path)
-  stel <- sl4[['stel']]
-  if (is.null(stel)) {
-    stop('GTAP .sl4 file missing stel metadata: ', sl4_path)
-  }
-  regions <- stel[1:9]
-
-  # Extract VGDP
   vgdp_header <- GTAP_SLC_HEADERS$vgdp
   if (is.null(slc[[vgdp_header]])) {
     stop(paste('VGDP header not found:', vgdp_header))
@@ -332,7 +292,7 @@ read_vgdp <- function(slc_path, sl4_path) {
   return(vgdp)
 }
 
-#' Read NVPP and calculate adjustment factors for post-substitution price
+#' Extract NVPP and calculate adjustment factors for post-substitution price
 #'
 #' NVPP (National Value of Production and Purchases) provides domestic and
 #' imported values by commodity. The adjustment factors scale the base
@@ -344,12 +304,13 @@ read_vgdp <- function(slc_path, sl4_path) {
 #' - import_adjustment = (goods_imp_postsim / goods_total_postsim) /
 #'                       (goods_imp_baseline / goods_total_baseline)
 #'
-#' @param slc_path Path to .slc file
-#' @param goods_indices Indices of goods sectors (default 1:45 for 45 goods)
+#' @param slc Parsed .slc HAR object
+#' @param commodities Character vector of commodity names (from stel)
+#' @param sector_mapping Data frame with gtap_code and aggregate_sector columns
 #' @param target_region Index of region (default 1 = USA)
 #' @return List with goods_adjustment and import_adjustment factors
-read_nvpp_adjustment <- function(slc_path, goods_indices = 1:45, target_region = 1) {
-  slc <- read_har(slc_path)
+extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
+                                    target_region = 1) {
 
   # Extract NVPP arrays (65 commodities x 9 regions)
   domestic_baseline <- slc[[GTAP_SLC_HEADERS$nvpp_domestic]]
@@ -367,6 +328,18 @@ read_nvpp_adjustment <- function(slc_path, goods_indices = 1:45, target_region =
   imp_bl <- imported_baseline[, target_region]
   dom_ps <- domestic_postsim[, target_region]
   imp_ps <- imported_postsim[, target_region]
+
+  # Derive goods indices from sector mapping (Agriculture, Mining, Manufacturing)
+  goods_sectors <- sector_mapping$aggregate_sector %in%
+    c('Agriculture', 'Mining', 'Manufacturing')
+  goods_codes <- tolower(sector_mapping$gtap_code[goods_sectors])
+  goods_indices <- which(tolower(commodities) %in% goods_codes)
+
+  if (length(goods_indices) == 0) {
+    stop('No goods sectors matched between sector_mapping and GTAP commodities')
+  }
+  message(sprintf('    NVPP goods indices: %d of %d commodities (from sector_mapping)',
+                  length(goods_indices), length(commodities)))
 
   # Calculate totals for goods sectors vs all sectors
   goods_dom_baseline <- sum(dom_bl[goods_indices])
@@ -400,6 +373,7 @@ read_nvpp_adjustment <- function(slc_path, goods_indices = 1:45, target_region =
   commodity_ratio <- imp_share_ps / imp_share_bl
   # Handle NaN from zero totals
   commodity_ratio[is.nan(commodity_ratio) | is.infinite(commodity_ratio)] <- 1.0
+  names(commodity_ratio) <- commodities
 
   return(list(
     goods_adjustment = goods_adjustment,
@@ -409,21 +383,20 @@ read_nvpp_adjustment <- function(slc_path, goods_indices = 1:45, target_region =
     goods_share_postsim = goods_share_postsim,
     import_share_baseline = import_share_baseline,
     import_share_postsim = import_share_postsim,
-    # Per-commodity data (names added by read_gtap_full)
+    # Per-commodity data
     commodity_ratio = commodity_ratio
   ))
 }
 
-#' Read MTAX (tariff revenue) and calculate etr_increase
+#' Extract MTAX (tariff revenue) and calculate etr_increase
 #'
 #' Calculates etr_increase = (scenario_mtax / scenario_imports) - (baseline_mtax / baseline_imports)
 #' This uses total imports (including services) as the denominator.
 #'
-#' @param slc_path Path to .slc file
+#' @param slc Parsed .slc HAR object
 #' @param target_region Index of destination region (default 1 = USA)
 #' @return List with mtax_scenario, mtax_baseline, imports_scenario, imports_baseline, etr_increase
-read_mtax_etr_increase <- function(slc_path, target_region = 1) {
-  slc <- read_har(slc_path)
+extract_mtax_etr_increase <- function(slc, target_region = 1) {
 
   # Get scenario mtax (tariff revenue)
   if (is.null(slc[[GTAP_SLC_HEADERS$mtax]])) {
@@ -473,42 +446,54 @@ read_mtax_etr_increase <- function(slc_path, target_region = 1) {
 
 #' Read GTAP solution with VIWS and VGDP
 #'
-#' Extended version that also reads .slc file for level values.
+#' Master reader that parses each file once and passes parsed objects to
+#' extraction functions.
 #'
 #' @param sol_path Path to .sol file
 #' @param slc_path Path to .slc file
 #' @param sl4_path Path to .sl4 file (for metadata)
+#' @param sector_mapping Data frame with gtap_code and aggregate_sector columns
+#'   (used to derive goods indices for NVPP adjustment)
 #' @return List containing all extracted GTAP data including viws and vgdp
-read_gtap_full <- function(sol_path, slc_path, sl4_path) {
-  # Get base solution data
-  result <- read_gtap_solution(sol_path, sl4_path)
+read_gtap_full <- function(sol_path, slc_path, sl4_path, sector_mapping) {
 
-  # Add VIWS from .slc file
+  # ---- Parse each file once ----
+  if (is.null(sl4_path) || !file.exists(sl4_path)) {
+    stop('GTAP .sl4 file not found: ', sl4_path)
+  }
   if (!file.exists(slc_path)) {
     stop('GTAP .slc file not found: ', slc_path)
   }
-  result$viws <- read_viws(slc_path, sl4_path, target_region = 1)
-  result$vgdp <- read_vgdp(slc_path, sl4_path)
 
-  # Calculate etr_increase from mtax
-  mtax_data <- read_mtax_etr_increase(slc_path, target_region = 1)
-  result$etr_increase <- mtax_data$etr_increase
-  result$mtax_data <- mtax_data
-
-  # Read NVPP adjustment factors for post-substitution price calculation
-  nvpp_adjustment <- read_nvpp_adjustment(slc_path, goods_indices = 1:45, target_region = 1)
-  result$nvpp_adjustment <- nvpp_adjustment
-
-  # Read VOM (Value of Output at Market prices) for sector weighting
+  sol <- read_har(sol_path)
   slc <- read_har(slc_path)
   sl4 <- read_har(sl4_path)
+
   stel <- sl4[['stel']]
+  if (is.null(stel)) {
+    stop('GTAP .sl4 file missing stel metadata: ', sl4_path)
+  }
   regions <- stel[1:9]
   commodities <- stel[10:74]
 
-  # Add commodity names to NVPP per-commodity data (now that commodities is available)
-  names(result$nvpp_adjustment$commodity_ratio) <- commodities
+  # ---- Extract .sol data ----
+  result <- extract_sol_data(sol, regions, commodities)
 
+  # ---- Extract .slc data ----
+  result$viws <- extract_viws(slc, regions, commodities, target_region = 1)
+  result$vgdp <- extract_vgdp(slc, regions)
+
+  # Calculate etr_increase from mtax
+  mtax_data <- extract_mtax_etr_increase(slc, target_region = 1)
+  result$etr_increase <- mtax_data$etr_increase
+  result$mtax_data <- mtax_data
+
+  # Read NVPP adjustment factors (goods indices derived from sector_mapping)
+  nvpp_adjustment <- extract_nvpp_adjustment(slc, commodities, sector_mapping,
+                                             target_region = 1)
+  result$nvpp_adjustment <- nvpp_adjustment
+
+  # VOM (Value of Output at Market prices) for sector weighting
   if (!is.null(slc[[GTAP_SLC_HEADERS$vom]])) {
     vom <- slc[[GTAP_SLC_HEADERS$vom]]
     rownames(vom) <- commodities
@@ -652,8 +637,12 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
 
   message(sprintf('  Reading GTAP solution: %s', basename(sol_path)))
 
-  # Read full GTAP data
-  gtap_data <- read_gtap_full(sol_path, slc_path, sl4_path)
+  if (is.null(sector_mapping)) {
+    stop('Sector mapping data is required')
+  }
+
+  # Read full GTAP data (parses each file once)
+  gtap_data <- read_gtap_full(sol_path, slc_path, sl4_path, sector_mapping)
 
   result <- list()
 
@@ -673,9 +662,6 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$imports_by_country <- get_imports_by_country(gtap_data)
   message(sprintf('    - Imports by country: %d countries', length(result$imports_by_country)))
 
-  if (is.null(sector_mapping)) {
-    stop('Sector mapping data is required')
-  }
   result$sector_outputs <- get_sector_outputs_full(gtap_data, sector_mapping, 'usa')
   message(sprintf('    - Sector outputs: %d sectors (with mappings)', nrow(result$sector_outputs)))
 
@@ -712,4 +698,3 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
 
   return(result)
 }
-

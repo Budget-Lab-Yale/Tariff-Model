@@ -134,7 +134,6 @@ summary_code,detail_code,detail_description
 331,331110,Iron and steel mills and ferroalloy manufacturing
 331,331200,Steel product manufacturing from purchased steel
 331,331313,Alumina refining and primary aluminum production
-331,331314,Secondary smelting and alloying of aluminum
 331,33131B,Aluminum product manufacturing from purchased aluminum
 331,331410,Nonferrous metal (except aluminum) smelting and refining
 331,331420,"Copper rolling, drawing, extruding and alloying"
@@ -394,10 +393,7 @@ ORE,531ORE,Other real estate
 GSLG,GSLGE,State and local government (educational services)
 GSLG,GSLGH,State and local government (hospitals and health services)
 GSLG,GSLGO,State and local government (other services)
-GFE,S00101,Federal electric utilities
 GFE,S00102,Other federal government enterprises
-GSLE,S00201,State and local government passenger transit
-GSLE,S00202,State and local government electric utilities
 GSLE,S00203,Other state and local government enterprises
 Other,S00300,Noncomparable imports
 Used,S00401,Scrap
