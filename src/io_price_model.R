@@ -321,6 +321,60 @@ load_bea_industry_output <- function(data_dir = 'resources/io') {
 }
 
 
+#' Load full commodity use totals (intermediate + final demand)
+#'
+#' Per Boston Fed appendix (April 2025), omega_M should reflect total commodity
+#' absorption including final demand (PCE, investment, government, exports),
+#' not just intermediate use. This file provides the full totals.
+#'
+#' @param data_dir Path to BEA I-O data directory
+#' @return Tibble with bea_code, import_total, domestic_total; or NULL if file
+#'   not found (falls back to intermediate-only omega in build_boston_fed_matrices)
+load_bea_commodity_use_totals <- function(data_dir = 'resources/io') {
+
+  path <- file.path(data_dir, 'bea_commodity_use_totals.csv')
+  if (!file.exists(path)) {
+    warning('bea_commodity_use_totals.csv not found in ', data_dir,
+            '\n  omega_M will use intermediate-only shares (less accurate)',
+            '\n  Run: python src/util/extract_bea_totals.py --level <summary|detail>')
+    return(NULL)
+  }
+
+  data <- read_csv(path, show_col_types = FALSE)
+  message(sprintf('  Loaded commodity use totals (incl final demand): %d commodities',
+                  nrow(data)))
+  return(data)
+}
+
+
+#' Load industry variable cost (for constant-percentage B normalization)
+#'
+#' Per Boston Fed appendix (April 2025), B matrices under constant-percentage
+#' markup are normalized by total intermediates + compensation of employees,
+#' not by total industry output.
+#'
+#' @param data_dir Path to BEA I-O data directory
+#' @return Named numeric vector (names = bea_code, values = variable_cost);
+#'   or NULL if file not found
+load_bea_industry_variable_cost <- function(data_dir = 'resources/io') {
+
+  path <- file.path(data_dir, 'bea_industry_variable_cost.csv')
+  if (!file.exists(path)) {
+    warning('bea_industry_variable_cost.csv not found in ', data_dir,
+            '\n  B matrices will always use industry output normalization',
+            '\n  Run: python src/util/extract_bea_totals.py --level <summary|detail>')
+    return(NULL)
+  }
+
+  data <- read_csv(path, show_col_types = FALSE)
+  vc <- setNames(data$variable_cost, data$bea_code)
+
+  message(sprintf('  Loaded industry variable cost: %d industries, total = %.1f',
+                  length(vc), sum(vc)))
+  return(vc)
+}
+
+
 #' Load PCE Bridge Table (BEA commodity -> consumer PCE category)
 #'
 #' @param data_dir Path to BEA I-O data directory
@@ -349,16 +403,34 @@ load_pce_bridge <- function(data_dir = 'resources/io') {
 #' coefficients matrix (B_D), and import/domestic shares of commodity supply
 #' (omega_M, omega_D).
 #'
+#' Per the Boston Fed appendix (Barbiero & Stein, April 2025):
+#'   - omega_M is computed from total commodity absorption (intermediate +
+#'     final demand), not just intermediate use
+#'   - B matrices are normalized by industry variable cost (total intermediates +
+#'     compensation of employees) under constant-percentage markup, or by total
+#'     industry output under constant-dollar markup
+#'
 #' @param use_import CxI matrix of imported commodity use by industry
 #' @param use_domestic CxI matrix of domestic commodity use by industry
 #' @param industry_output Named numeric vector of total output by industry
+#' @param markup_assumption 'constant_percentage' or 'constant_dollar'; controls
+#'   B-matrix normalization
+#' @param commodity_use_totals Tibble with bea_code, import_total,
+#'   domestic_total (full commodity absorption incl final demand); NULL falls
+#'   back to intermediate-only rowSums
+#' @param industry_variable_cost Named numeric vector of variable cost
+#'   (total intermediates + compensation of employees) per industry; required
+#'   when markup_assumption = 'constant_percentage'
 #'
 #' @return List with:
 #'   - B_MD: CxI import input coefficients matrix
 #'   - B_D: CxI domestic input coefficients matrix
 #'   - omega_M: named vector of import shares by commodity
 #'   - omega_D: named vector of domestic shares by commodity
-build_boston_fed_matrices <- function(use_import, use_domestic, industry_output) {
+build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
+                                     markup_assumption = 'constant_dollar',
+                                     commodity_use_totals = NULL,
+                                     industry_variable_cost = NULL) {
 
   if (ncol(use_import) != ncol(use_domestic)) {
     stop('Import and domestic use tables have different numbers of industries')
@@ -366,39 +438,101 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output)
   if (nrow(use_import) != nrow(use_domestic)) {
     stop('Import and domestic use tables have different numbers of commodities')
   }
+  stopifnot(all(colnames(use_import) == colnames(use_domestic)))
+  stopifnot(all(rownames(use_import) == rownames(use_domestic)))
 
-  # Align industry output to column order of use tables
   industry_codes <- colnames(use_import)
-  output_vec <- industry_output[industry_codes]
+  commodity_codes <- rownames(use_import)
 
-  missing_industries <- industry_codes[is.na(output_vec)]
-  if (length(missing_industries) > 0) {
-    stop('Industry output missing for: ',
-         paste(missing_industries, collapse = ', '))
+  # ---- Choose B-matrix normalization denominator ----
+  # Boston Fed appendix: constant-dollar uses industry output,
+  # constant-percentage uses total intermediates + compensation of employees
+  if (markup_assumption == 'constant_percentage' && !is.null(industry_variable_cost)) {
+    norm_vec <- industry_variable_cost[industry_codes]
+    norm_label <- 'variable cost (intermediates + comp of employees)'
+    missing <- industry_codes[is.na(norm_vec)]
+    if (length(missing) > 0) {
+      stop('Industry variable cost missing for: ',
+           paste(missing, collapse = ', '))
+    }
+  } else {
+    norm_vec <- industry_output[industry_codes]
+    norm_label <- 'industry output'
+    missing <- industry_codes[is.na(norm_vec)]
+    if (length(missing) > 0) {
+      stop('Industry output missing for: ',
+           paste(missing, collapse = ', '))
+    }
+    if (markup_assumption == 'constant_percentage' && is.null(industry_variable_cost)) {
+      warning('constant_percentage markup requested but industry_variable_cost not available; ',
+              'falling back to industry output normalization')
+    }
+  }
+
+  # Handle zero-normalization industries (e.g., imputed industries with zero
+  # variable cost but nonzero output). These produce Inf/NaN in B matrices.
+  # Zero norm -> zero B (no cost propagation through that industry).
+  zero_norm <- norm_vec == 0
+  if (any(zero_norm)) {
+    message(sprintf('    Warning: %d industries with zero normalization denominator, B set to 0: %s',
+                    sum(zero_norm),
+                    paste(industry_codes[zero_norm], collapse = ', ')))
+    norm_vec[zero_norm] <- 1  # placeholder to avoid division by zero
   }
 
   # ---- Compute input coefficients matrices ----
-  output_matrix <- matrix(
-    rep(output_vec, each = nrow(use_import)),
+  norm_matrix <- matrix(
+    rep(norm_vec, each = nrow(use_import)),
     nrow = nrow(use_import),
     ncol = ncol(use_import)
   )
 
-  B_MD <- use_import / output_matrix
-  B_D <- use_domestic / output_matrix
+  B_MD <- use_import / norm_matrix
+  B_D <- use_domestic / norm_matrix
 
-  rownames(B_MD) <- rownames(use_import)
+  # Zero out columns for industries with zero normalization denominator
+  if (any(zero_norm)) {
+    B_MD[, zero_norm] <- 0
+    B_D[, zero_norm] <- 0
+  }
+
+  rownames(B_MD) <- commodity_codes
   colnames(B_MD) <- industry_codes
-  rownames(B_D) <- rownames(use_domestic)
+  rownames(B_D) <- commodity_codes
   colnames(B_D) <- industry_codes
 
   # ---- Compute import/domestic shares by commodity ----
-  import_totals <- rowSums(use_import)
-  domestic_totals <- rowSums(use_domestic)
-  total_use <- import_totals + domestic_totals
+  # Boston Fed appendix: omega_M from total commodity absorption (intermediate +
+  # final demand), not just intermediate use
+  if (!is.null(commodity_use_totals)) {
+    totals_lookup <- commodity_use_totals %>%
+      mutate(total = import_total + domestic_total)
+    import_lookup <- setNames(totals_lookup$import_total, totals_lookup$bea_code)
+    total_lookup <- setNames(totals_lookup$total, totals_lookup$bea_code)
+
+    import_totals <- import_lookup[commodity_codes]
+    total_use <- total_lookup[commodity_codes]
+
+    # Commodities in use table but not in totals file: fall back to intermediate
+    missing_codes <- commodity_codes[is.na(total_use)]
+    if (length(missing_codes) > 0) {
+      message(sprintf('    %d commodities not in use totals file, using intermediate-only: %s',
+                      length(missing_codes),
+                      paste(head(missing_codes, 5), collapse = ', ')))
+      import_totals[is.na(import_totals)] <- rowSums(use_import)[is.na(import_totals)]
+      total_use[is.na(total_use)] <- (rowSums(use_import) + rowSums(use_domestic))[is.na(total_use)]
+    }
+    names(import_totals) <- commodity_codes
+    names(total_use) <- commodity_codes
+    omega_source <- 'full absorption (incl final demand)'
+  } else {
+    import_totals <- rowSums(use_import)
+    total_use <- rowSums(use_import) + rowSums(use_domestic)
+    omega_source <- 'intermediate use only'
+  }
 
   omega_M <- import_totals / total_use
-  omega_D <- domestic_totals / total_use
+  omega_D <- 1 - omega_M
 
   # Handle commodities with zero total use
   zero_use <- total_use == 0
@@ -409,9 +543,20 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output)
     omega_D[zero_use] <- 0
   }
 
+  # Clamp any slightly negative omega_M from rounding (e.g., -0.008 in detail)
+  neg_omega <- omega_M < 0 & !zero_use
+  if (any(neg_omega)) {
+    message(sprintf('    Warning: %d commodities with slightly negative omega_M (clamped to 0)',
+                    sum(neg_omega)))
+    omega_M[neg_omega] <- 0
+    omega_D[neg_omega] <- 1
+  }
+
   message(sprintf('  Built Boston Fed matrices:'))
+  message(sprintf('    B normalization: %s', norm_label))
   message(sprintf('    B_MD: %d x %d (CxI)', nrow(B_MD), ncol(B_MD)))
   message(sprintf('    B_D:  %d x %d (CxI)', nrow(B_D), ncol(B_D)))
+  message(sprintf('    omega_M source: %s', omega_source))
   message(sprintf('    omega_M range: [%.4f, %.4f], mean: %.4f',
                   min(omega_M), max(omega_M), mean(omega_M)))
   message(sprintf('    omega_D range: [%.4f, %.4f], mean: %.4f',
@@ -812,4 +957,143 @@ compute_postsub_omega_M <- function(omega_M, gtap_bea_crosswalk,
                   length(matched), mean(ratio_lookup[matched])))
 
   return(omega_M_post)
+}
+
+
+# ==== GE price model (GTAP ppa) ==============================================
+
+#' Compute GE price effects from GTAP private consumption prices
+#'
+#' Uses GTAP's ppa (private consumption price % change by commodity) as the
+#' full general-equilibrium price response, mapped to BEA commodities via the
+#' GTAP-BEA crosswalk and then to 76 NIPA PCE categories via the PCE bridge.
+#'
+#' Unlike the PE Boston Fed model, this captures all GE channels:
+#'   - Domestic competitive repricing (pricing umbrella)
+#'   - Foreign exporter absorption (incomplete passthrough)
+#'   - Input substitution in production (CES nesting)
+#'   - Cross-sector feedback and terms-of-trade effects
+#'
+#' No USD offset is applied -- GTAP's equilibrium prices already internalize
+#' exchange rate responses under its closure.
+#'
+#' @param ppa_usa Named vector of GTAP commodity price % changes for USA
+#'   (65 commodities, names = GTAP commodity codes)
+#' @param gtap_bea_crosswalk Tibble with gtap_code, bea_code columns
+#' @param viws_baseline Matrix [commodity x source_region] of baseline imports
+#'   (for import-weighting when multiple GTAP sectors map to one BEA code)
+#' @param pce_bridge PCE bridge tibble from load_pce_bridge()
+#' @param markup_assumption Either 'constant_percentage' or 'constant_dollar'
+#'
+#' @return List with:
+#'   - pce_category_prices: tibble (nipa_line, pce_category, sr_price_effect [pp],
+#'     purchasers_value, pce_share)
+#'   - bea_commodity_prices: named vector of per-commodity price effects (fractional)
+#'   - aggregate: PCE-weighted aggregate price effect (fractional)
+#'   - markup_assumption: which assumption was used
+compute_ge_prices <- function(ppa_usa, gtap_bea_crosswalk, viws_baseline,
+                              pce_bridge, markup_assumption = 'constant_percentage') {
+
+  valid_markups <- c('constant_percentage', 'constant_dollar')
+  if (!markup_assumption %in% valid_markups) {
+    stop('Invalid markup_assumption: ', markup_assumption,
+         '. Must be one of: ', paste(valid_markups, collapse = ', '))
+  }
+
+  # ---- Map GTAP ppa to BEA codes via crosswalk (import-weighted) ----
+
+  gtap_codes <- toupper(names(ppa_usa))
+  ppa_values <- as.numeric(ppa_usa)
+
+  # Baseline import totals per GTAP sector for weighting
+  baseline_totals <- rowSums(viws_baseline)
+  names(baseline_totals) <- toupper(names(baseline_totals))
+
+  gtap_ppa <- tibble(
+    gtap_code = gtap_codes,
+    ppa = ppa_values,
+    baseline_imports = as.numeric(baseline_totals[gtap_codes])
+  ) %>%
+    mutate(baseline_imports = coalesce(baseline_imports, 0))
+
+  bea_ppa <- gtap_bea_crosswalk %>%
+    mutate(gtap_code = toupper(gtap_code)) %>%
+    inner_join(gtap_ppa, by = 'gtap_code') %>%
+    group_by(bea_code) %>%
+    summarise(
+      ppa_pct = if (sum(baseline_imports) > 0) {
+        sum(ppa * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(ppa)
+      },
+      n_gtap = n(),
+      .groups = 'drop'
+    )
+
+  # Convert % change to fractional price effect
+  bea_prices <- setNames(bea_ppa$ppa_pct / 100, bea_ppa$bea_code)
+
+  message(sprintf('  GE prices: %d GTAP -> %d BEA commodities, mean ppa = %.4f%%',
+                  length(gtap_codes), nrow(bea_ppa), mean(bea_ppa$ppa_pct)))
+
+  # ---- Apply PCE bridge (C matrix) ----
+
+  if (markup_assumption == 'constant_dollar') {
+    numerator_col <- 'producers_value'
+  } else {
+    numerator_col <- 'purchasers_value'
+  }
+
+  price_df <- tibble(
+    bea_code = names(bea_prices),
+    price = as.numeric(bea_prices)
+  )
+
+  bridge_joined <- pce_bridge %>%
+    left_join(price_df, by = 'bea_code')
+
+  na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
+  if (length(na_bridge_codes) > 0) {
+    message(sprintf('    %d PCE bridge BEA codes not in GTAP crosswalk (set to 0): %s',
+                    length(na_bridge_codes),
+                    paste(head(na_bridge_codes, 10), collapse = ', ')))
+  }
+
+  pce_category_prices <- bridge_joined %>%
+    mutate(price = if_else(is.na(price), 0, price)) %>%
+    group_by(nipa_line, pce_category) %>%
+    summarise(
+      sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
+        sum(price * .data[[numerator_col]]) / sum(purchasers_value)
+      } else {
+        0
+      },
+      purchasers_value = sum(purchasers_value),
+      n_commodities = n(),
+      .groups = 'drop'
+    ) %>%
+    mutate(
+      sr_price_effect = sr_price_effect * 100,  # Convert to pp
+      pce_share = purchasers_value / sum(purchasers_value) * 100
+    ) %>%
+    arrange(nipa_line)
+
+  # ---- Aggregate from category table (single source of truth) ----
+  aggregate <- sum(pce_category_prices$sr_price_effect / 100 *
+                   pce_category_prices$purchasers_value) /
+               sum(pce_category_prices$purchasers_value)
+
+  # ---- Diagnostics ----
+  message(sprintf('  GE price effects (%s markups, no USD offset):', markup_assumption))
+  message(sprintf('    Aggregate price effect: %.4f%%', aggregate * 100))
+  message(sprintf('    PCE categories:         %d', nrow(pce_category_prices)))
+  message(sprintf('    Nonzero categories:     %d',
+                  sum(pce_category_prices$sr_price_effect != 0)))
+
+  return(list(
+    pce_category_prices = pce_category_prices,
+    bea_commodity_prices = bea_prices,
+    aggregate = aggregate,
+    markup_assumption = markup_assumption
+  ))
 }

@@ -33,11 +33,11 @@ write_outputs <- function(results, scenario) {
   key_results <- tibble(
     metric = c(
       # ETR
-      'pre_sub_etr_increase', 'post_sub_etr_increase',
-      'baseline_etr', 'pre_sub_all_in_etr', 'post_sub_all_in_etr',
+      'pre_sub_etr_increase', 'pe_postsub_etr_increase',
+      'baseline_etr', 'pre_sub_all_in_etr', 'pe_postsub_all_in_etr',
       # Prices
-      'pre_sub_price_increase', 'post_sub_price_increase',
-      'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
+      'pre_sub_price_increase', 'pe_postsub_price_increase', 'ge_price_increase',
+      'pre_sub_per_hh_cost',
       # Price decomposition (Boston Fed)
       'direct_aggregate', 'supply_chain_aggregate',
       # Revenue
@@ -52,10 +52,11 @@ write_outputs <- function(results, scenario) {
       'fed_funds_2025_q4', 'fed_funds_2026_q4'
     ),
     value = c(
-      results$etr$pre_sub_increase, results$etr$post_sub_increase,
-      results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$post_sub_all_in,
-      results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
-      abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
+      results$etr$pre_sub_increase, results$etr$pe_postsub_increase,
+      results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$pe_postsub_all_in,
+      results$prices$pre_sub_price_increase, results$prices$pe_postsub_price_increase,
+      results$prices$ge_price_increase,
+      abs(results$distribution$pre_sub_per_hh_cost),
       results$prices$presub$direct_aggregate * 100,
       results$prices$presub$supply_chain_aggregate * 100,
       results$revenue$gross_10yr, results$revenue$conventional_10yr,
@@ -69,7 +70,7 @@ write_outputs <- function(results, scenario) {
     unit = c(
       'pct', 'pct',
       'pct', 'pct', 'pct',
-      'pct', 'pct', 'dollars', 'dollars',
+      'pct', 'pct', 'pct', 'dollars',
       'pct', 'pct',
       'billions', 'billions',
       'billions', 'billions',
@@ -221,9 +222,9 @@ write_outputs <- function(results, scenario) {
   goods_etrs <- tibble(
     country = country_names,
     country_code = country_codes,
-    postsub_imports = sapply(country_codes, function(code)
+    pe_postsub_imports = sapply(country_codes, function(code)
       results$etr$postsim_country[[paste0('imports_', code)]]),
-    postsub_etr = sapply(country_codes, function(code)
+    pe_postsub_etr = sapply(country_codes, function(code)
       results$etr$postsim_country[[paste0('etr_', code)]]),
     presub_imports = sapply(country_codes, function(code)
       results$etr$presim_country[[paste0('imports_', code)]]),
@@ -238,7 +239,7 @@ write_outputs <- function(results, scenario) {
           results$etr$baseline_country_levels[[paste0('etr_', code)]]),
         presub_level = sapply(country_codes, function(code)
           results$etr$presim_country_levels[[paste0('etr_', code)]]),
-        postsub_level = sapply(country_codes, function(code)
+        pe_postsub_level = sapply(country_codes, function(code)
           results$etr$postsim_country_levels[[paste0('etr_', code)]])
       )
   }
@@ -246,8 +247,8 @@ write_outputs <- function(results, scenario) {
   total_row <- tibble(
     country = 'TOTAL',
     country_code = 'all',
-    postsub_imports = sum(goods_etrs$postsub_imports),
-    postsub_etr = results$etr$post_sub_increase,
+    pe_postsub_imports = sum(goods_etrs$pe_postsub_imports),
+    pe_postsub_etr = results$etr$pe_postsub_increase,
     presub_imports = sum(goods_etrs$presub_imports),
     presub_etr = results$etr$pre_sub_increase
   )
@@ -257,7 +258,7 @@ write_outputs <- function(results, scenario) {
       mutate(
         baseline_level = results$etr$baseline_etr,
         presub_level = results$etr$pre_sub_all_in,
-        postsub_level = results$etr$post_sub_all_in
+        pe_postsub_level = results$etr$pe_postsub_all_in
       )
   }
 

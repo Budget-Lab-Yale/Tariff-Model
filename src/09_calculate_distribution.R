@@ -163,14 +163,12 @@ calculate_distribution <- function(price_results, inputs) {
                   (inflation_factor - 1) * 100))
 
   # -------------------------------------------------------------------------
-  # Get base price effects from actual tariff calculation (pre and post-sub)
+  # Get base price effect from pre-substitution calculation
   # -------------------------------------------------------------------------
 
   pre_sub_pce <- price_results$pre_sub_price_increase / 100  # Convert to decimal
-  post_sub_pce <- price_results$post_sub_price_increase / 100  # Convert to decimal
 
   message(sprintf('  Pre-sub PCE effect: %.4f%%', pre_sub_pce * 100))
-  message(sprintf('  Post-sub PCE effect: %.4f%%', post_sub_pce * 100))
 
   # -------------------------------------------------------------------------
   # Compute per-decile price effects
@@ -185,16 +183,8 @@ calculate_distribution <- function(price_results, inputs) {
   if (use_category_level) {
     message('  Computing category-level distributional effects (16 BLS buckets):')
 
-    message('  Pre-substitution:')
     pre_decile_pce <- calc_decile_prices(
       price_results$presub$pce_category_prices,
-      inputs$nipa_to_bucket,
-      inputs$distributional_pce
-    )
-
-    message('  Post-substitution:')
-    post_decile_pce <- calc_decile_prices(
-      price_results$postsub$pce_category_prices,
       inputs$nipa_to_bucket,
       inputs$distributional_pce
     )
@@ -202,7 +192,6 @@ calculate_distribution <- function(price_results, inputs) {
     message('  Using category-level distributional PCE (BLS 2023)')
   } else {
     pre_decile_pce <- pre_sub_pce * decile_params$pce_variation
-    post_decile_pce <- post_sub_pce * decile_params$pce_variation
     message('  Using aggregate pce_variation fallback (no BLS distributional data)')
   }
 
@@ -211,44 +200,31 @@ calculate_distribution <- function(price_results, inputs) {
   # -------------------------------------------------------------------------
 
   distribution <- calc_decile_distribution(decile_params, pre_decile_pce, inflation_factor)
-  distribution_post <- calc_decile_distribution(decile_params, post_decile_pce, inflation_factor)
 
   # -------------------------------------------------------------------------
   # Calculate summary statistics
   # -------------------------------------------------------------------------
 
   # Simple average across deciles (matches Excel AVERAGE(B23:K23) in F6 Distribution)
-  # This is what Key Results per-HH cost should use (via ricco_price_effects_and_etr!I24)
   pre_sub_avg_cost <- mean(distribution$cost_per_hh)
-  post_sub_avg_cost <- mean(distribution_post$cost_per_hh)
 
   # Median cost (decile 5-6 midpoint approximation)
   pre_sub_median_cost <- (distribution$cost_per_hh[5] + distribution$cost_per_hh[6]) / 2
-  post_sub_median_cost <- (distribution_post$cost_per_hh[5] + distribution_post$cost_per_hh[6]) / 2
 
   message(sprintf('  Pre-sub average per-HH cost: $%.0f (2025 dollars)', pre_sub_avg_cost))
-  message(sprintf('  Post-sub average per-HH cost: $%.0f (2025 dollars)', post_sub_avg_cost))
 
   # -------------------------------------------------------------------------
   # Compile results
   # -------------------------------------------------------------------------
 
   results <- list(
-    # Distribution by decile (pre-substitution, for detailed output)
+    # Distribution by decile (pre-substitution)
     by_decile = distribution %>%
-      select(decile, income, pct_of_income, cost_per_hh),
-
-    # Post-substitution by decile
-    by_decile_post = distribution_post %>%
       select(decile, income, pct_of_income, cost_per_hh),
 
     # Pre-substitution per-HH costs (matches Excel Key Results B13)
     pre_sub_per_hh_cost = pre_sub_avg_cost,
     pre_sub_median_cost = pre_sub_median_cost,
-
-    # Post-substitution per-HH costs (matches Excel Key Results B15)
-    post_sub_per_hh_cost = post_sub_avg_cost,
-    post_sub_median_cost = post_sub_median_cost,
 
     # Legacy field for backwards compatibility
     avg_per_hh_cost = pre_sub_avg_cost,

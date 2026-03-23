@@ -257,21 +257,21 @@ build_t1 <- function(outputs) {
 
   # ETR LEVELS from key_results (computed from levels matrices in 02_calculate_etr.R)
   pre_sub_etr_level <- key['pre_sub_all_in_etr'] / 100
-  post_sub_etr_level <- key['post_sub_all_in_etr'] / 100
+  pe_postsub_etr_level <- key['pe_postsub_all_in_etr'] / 100
 
   tibble(
     value = c(
       NA,  # Section header
       pre_sub_etr_level,  # LEVEL (baseline + increase)
-      post_sub_etr_level,  # LEVEL (baseline + increase)
+      pe_postsub_etr_level,  # LEVEL (baseline + increase)
       NA,  # Section header
       key['conventional_revenue_10yr'] / 1000,  # Billions to trillions
       key['dynamic_revenue_10yr'] / 1000,
       NA,  # Section header
       key['pre_sub_price_increase'] / 100,
-      key['post_sub_price_increase'] / 100,
+      key['pe_postsub_price_increase'] / 100,
+      key['ge_price_increase'] / 100,
       key['pre_sub_per_hh_cost'],
-      key['post_sub_per_hh_cost'],
       NA,  # Section header
       key['gdp_2025_q4q4'],  # Percentage points
       key['gdp_2026_q4q4'],  # Percentage points
@@ -292,7 +292,7 @@ build_t2 <- function(outputs) {
   # Get total imports for share calculation
   total_row <- etrs %>% filter(country_code == 'all')
   total_presub_imports <- total_row$presub_imports
-  total_postsub_imports <- total_row$postsub_imports
+  total_pe_postsub_imports <- total_row$pe_postsub_imports
 
   # Aggregate UK, Japan, EU, FTA, ROW into "Rest of World"
   row_countries <- c('uk', 'jp', 'eu', 'row', 'fta')
@@ -312,10 +312,10 @@ build_t2 <- function(outputs) {
       country = 'Rest of World',
       country_code = 'row_agg',
       # Calculate ETRs first using original column values
-      postsub_etr = sum(postsub_etr * postsub_imports) / sum(postsub_imports),
+      pe_postsub_etr = sum(pe_postsub_etr * pe_postsub_imports) / sum(pe_postsub_imports),
       presub_etr = sum(presub_etr * presub_imports) / sum(presub_imports),
       # Then sum imports (order matters in dplyr 1.0+!)
-      postsub_imports = sum(postsub_imports),
+      pe_postsub_imports = sum(pe_postsub_imports),
       presub_imports = sum(presub_imports)
     )
 
@@ -336,18 +336,18 @@ build_t2 <- function(outputs) {
   result <- combined %>%
     mutate(
       share_presub = presub_imports / total_presub_imports,
-      share_postsub = postsub_imports / total_postsub_imports,
+      share_pe_postsub = pe_postsub_imports / total_pe_postsub_imports,
       contrib_presub = presub_etr * share_presub,
-      contrib_postsub = postsub_etr * share_postsub
+      contrib_pe_postsub = pe_postsub_etr * share_pe_postsub
     ) %>%
     select(
       Region = country,
       `Avg ETR Pre-Sub` = presub_etr,
-      `Avg ETR Post-Sub` = postsub_etr,
+      `Avg ETR PE Post-Sub` = pe_postsub_etr,
       `Share Pre-Sub` = share_presub,
-      `Share Post-Sub` = share_postsub,
+      `Share PE Post-Sub` = share_pe_postsub,
       `Contrib Pre-Sub` = contrib_presub,
-      `Contrib Post-Sub` = contrib_postsub
+      `Contrib PE Post-Sub` = contrib_pe_postsub
     )
 
   return(result)
@@ -414,7 +414,7 @@ build_f1 <- function(outputs) {
 
   # ETR LEVELS from key_results (already in %, computed in 02_calculate_etr.R)
   pre_sub_etr_level <- key['pre_sub_all_in_etr']
-  post_sub_etr_level <- key['post_sub_all_in_etr']
+  pe_postsub_etr_level <- key['pe_postsub_all_in_etr']
 
   last_year <- max(HISTORICAL_ETR$year)
   last_etr <- HISTORICAL_ETR %>%
@@ -425,14 +425,14 @@ build_f1 <- function(outputs) {
   result <- HISTORICAL_ETR %>%
     rename(`Effective Tariff Rate` = etr) %>%
     mutate(
-      `Projected Post-Substitution Rate` = NA_real_,
-      `Current Post-Substitution Rate` = post_sub_etr_level,
+      `Projected PE Post-Substitution Rate` = NA_real_,
+      `Current PE Post-Substitution Rate` = pe_postsub_etr_level,
       `Projected Pre-Substitution Rate` = NA_real_,
       `Current Pre-Substituton Rate` = pre_sub_etr_level
     ) %>%
     mutate(
-      `Projected Post-Substitution Rate` = if_else(
-        year == last_year, last_etr, `Projected Post-Substitution Rate`
+      `Projected PE Post-Substitution Rate` = if_else(
+        year == last_year, last_etr, `Projected PE Post-Substitution Rate`
       ),
       `Projected Pre-Substitution Rate` = if_else(
         year == last_year, last_etr, `Projected Pre-Substitution Rate`
@@ -443,8 +443,8 @@ build_f1 <- function(outputs) {
   row_2025 <- tibble(
     year = last_year + 1,
     `Effective Tariff Rate` = NA_real_,
-    `Projected Post-Substitution Rate` = post_sub_etr_level,
-    `Current Post-Substitution Rate` = post_sub_etr_level,
+    `Projected PE Post-Substitution Rate` = pe_postsub_etr_level,
+    `Current PE Post-Substitution Rate` = pe_postsub_etr_level,
     `Projected Pre-Substitution Rate` = pre_sub_etr_level,
     `Current Pre-Substituton Rate` = pre_sub_etr_level
   )

@@ -73,7 +73,8 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
   #---------------------------
 
   message('\nStep 1: Loading inputs...')
-  inputs <- load_inputs(scenario, bea_io_level_override = bea_io_level)
+  inputs <- load_inputs(scenario, bea_io_level_override = bea_io_level,
+                        markup_assumption = markup_assumption)
 
   if (isTRUE(inputs$is_time_varying)) {
     message(sprintf('  Detected time-varying ETRs (%d dates)', length(inputs$etr_dates)))
@@ -113,8 +114,8 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
     markup_assumption = markup_assumption
   )
 
-  # Post-substitution (adjust tau_M and omega_M using GTAP)
-  message('  Post-substitution (GTAP-adjusted):')
+  # PE post-substitution (adjust tau_M and omega_M using GTAP)
+  message('  PE post-substitution (GTAP-adjusted):')
   tau_M_post <- compute_postsub_tau_M(
     inputs$tau_M, inputs$gtap_bea_crosswalk,
     inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
@@ -130,7 +131,7 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
   omega_D_post <- 1 - omega_M_post
   omega_D_post[zero_use] <- 0
 
-  postsub_results <- compute_boston_fed_prices(
+  pe_postsub_results <- compute_boston_fed_prices(
     tau_M = tau_M_post,
     B_MD = inputs$boston_fed_matrices$B_MD,
     leontief_domestic = inputs$bea_leontief_domestic,
@@ -141,11 +142,24 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
     markup_assumption = markup_assumption
   )
 
+  # GE prices (full general equilibrium from GTAP ppa)
+  message('  GE prices (GTAP ppa):')
+  ppa_usa <- inputs$ppa[, 'usa']
+  ge_results <- compute_ge_prices(
+    ppa_usa = ppa_usa,
+    gtap_bea_crosswalk = inputs$gtap_bea_crosswalk,
+    viws_baseline = inputs$baselines$viws_baseline,
+    pce_bridge = inputs$pce_bridge,
+    markup_assumption = markup_assumption
+  )
+
   price_results <- list(
     pre_sub_price_increase = presub_results$aggregate * 100,
-    post_sub_price_increase = postsub_results$aggregate * 100,
+    pe_postsub_price_increase = pe_postsub_results$aggregate * 100,
+    ge_price_increase = ge_results$aggregate * 100,
     presub = presub_results,
-    postsub = postsub_results
+    pe_postsub = pe_postsub_results,
+    ge = ge_results
   )
 
   # When using detail-level tables, reaggregate commodity prices to summary-level
@@ -160,9 +174,15 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
       inputs$bea_use_import, inputs$bea_use_domestic,
       inputs$summary_to_detail, summary_bridge, markup_assumption
     )
-    message('  Post-substitution:')
-    price_results$postsub$pce_category_prices <- reaggregate_to_summary_pce(
-      postsub_results$bea_commodity_prices,
+    message('  PE post-substitution:')
+    price_results$pe_postsub$pce_category_prices <- reaggregate_to_summary_pce(
+      pe_postsub_results$bea_commodity_prices,
+      inputs$bea_use_import, inputs$bea_use_domestic,
+      inputs$summary_to_detail, summary_bridge, markup_assumption
+    )
+    message('  GE:')
+    price_results$ge$pce_category_prices <- reaggregate_to_summary_pce(
+      ge_results$bea_commodity_prices,
       inputs$bea_use_import, inputs$bea_use_domestic,
       inputs$summary_to_detail, summary_bridge, markup_assumption
     )
@@ -204,8 +224,9 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
     mutate(description = coalesce(description, bea_code)) %>%
     arrange(desc(sr_price_effect))
 
-  message(sprintf('  Pre-sub aggregate:  %.3f%%', price_results$pre_sub_price_increase))
-  message(sprintf('  Post-sub aggregate: %.3f%%', price_results$post_sub_price_increase))
+  message(sprintf('  Pre-sub aggregate:     %.3f%%', price_results$pre_sub_price_increase))
+  message(sprintf('  PE post-sub aggregate: %.3f%%', price_results$pe_postsub_price_increase))
+  message(sprintf('  GE aggregate:          %.3f%%', price_results$ge_price_increase))
 
   #---------------------------
   # Step 3a: Run USMM surrogate
@@ -306,15 +327,15 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
   message(sprintf('Baseline ETR (from levels):     %.3f%%', etr_results$baseline_etr))
   message(sprintf('Pre-substitution ETR increase:  %.2f%%', etr_results$pre_sub_increase))
   message(sprintf('Pre-sub all-in ETR:             %.3f%%', etr_results$pre_sub_all_in))
-  message(sprintf('Post-substitution ETR increase: %.2f%%', etr_results$post_sub_increase))
-  message(sprintf('Post-sub all-in ETR:            %.3f%%', etr_results$post_sub_all_in))
+  message(sprintf('PE post-sub ETR increase:       %.2f%%', etr_results$pe_postsub_increase))
+  message(sprintf('PE post-sub all-in ETR:         %.3f%%', etr_results$pe_postsub_all_in))
   message(sprintf('Pre-sub price increase:         %.3f%%', price_results$pre_sub_price_increase))
-  message(sprintf('Post-sub price increase:        %.3f%%', price_results$post_sub_price_increase))
+  message(sprintf('PE post-sub price increase:     %.3f%%', price_results$pe_postsub_price_increase))
+  message(sprintf('GE price increase:              %.3f%%', price_results$ge_price_increase))
 
   # Per-HH costs come from distribution calculation (matches Excel methodology)
   if (!is.null(distribution_results)) {
     message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub_per_hh_cost)))
-    message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub_per_hh_cost)))
   }
   message(sprintf('10-yr conventional revenue:     $%.0fB', revenue_results$conventional_10yr))
   if (!is.null(dynamic_results)) {

@@ -396,8 +396,8 @@ calculate_etr <- function(inputs) {
     # Main ETR results (as percentages) - goods-weighted for display
     pre_sub_increase = pre_sub_etr,
     pre_sub_all_in = pre_sub_all_in * 100,
-    post_sub_increase = post_sub_etr,
-    post_sub_all_in = post_sub_all_in * 100,
+    pe_postsub_increase = post_sub_etr,
+    pe_postsub_all_in = post_sub_all_in * 100,
     # Baseline ETR computed from levels (as percentage)
     baseline_etr = baseline_etr * 100,
     # etr_increase for revenue calculations (from mtax, post-sub)
@@ -420,7 +420,7 @@ calculate_etr <- function(inputs) {
   )
 
   message(sprintf('  Goods-weighted pre-sub ETR: %.2f%%', pre_sub_etr))
-  message(sprintf('  Goods-weighted post-sub ETR: %.2f%%', post_sub_etr))
+  message(sprintf('  Goods-weighted PE post-sub ETR: %.2f%%', post_sub_etr))
 
   return(results)
 }
