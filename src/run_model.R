@@ -32,16 +32,50 @@ source('src/11_write_outputs.R')
 source('src/12_export_excel.R')
 
 
+#' Average two sets of price results (element-wise)
+#'
+#' @param a Price results list from compute_boston_fed_prices() or compute_ge_prices()
+#' @param b Price results list from same function with different markup_assumption
+#' @return Averaged price results list
+average_price_results <- function(a, b) {
+  avg <- list(
+    aggregate = (a$aggregate + b$aggregate) / 2,
+    bea_commodity_prices = (a$bea_commodity_prices + b$bea_commodity_prices) / 2,
+    markup_assumption = 'average'
+  )
+
+  # Average per-PCE-category prices (join by nipa_line to be safe)
+  avg$pce_category_prices <- a$pce_category_prices %>%
+    inner_join(
+      b$pce_category_prices %>% select(nipa_line, sr_price_effect_b = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    mutate(
+      sr_price_effect = (sr_price_effect + sr_price_effect_b) / 2
+    ) %>%
+    select(-sr_price_effect_b)
+
+  # Average decomposition if present (presub Boston Fed only)
+  if (!is.null(a$direct_aggregate) && !is.null(b$direct_aggregate)) {
+    avg$direct_aggregate <- (a$direct_aggregate + b$direct_aggregate) / 2
+    avg$supply_chain_aggregate <- (a$supply_chain_aggregate + b$supply_chain_aggregate) / 2
+  }
+
+  return(avg)
+}
+
+
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
 #' @param markup_assumption Markup response to cost changes:
-#'   'constant_percentage' (default, upper bound) or 'constant_dollar' (lower bound)
+#'   'average' (default, mean of upper and lower bounds),
+#'   'constant_percentage' (upper bound), or 'constant_dollar' (lower bound)
 #' @param bea_io_level BEA I-O table level: 'summary' (73 commodities, 2024) or
 #'   'detail' (~400 commodities, 2017). NULL uses value from global_assumptions.yaml.
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
+run_scenario <- function(scenario, markup_assumption = 'average',
                          bea_io_level = NULL) {
 
   message(sprintf('\n=========================================================='))
@@ -100,58 +134,96 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
   #---------------------------
 
   message('\nStep 3: Calculating consumer price effects...')
+  message(sprintf('  Markup assumption: %s', markup_assumption))
 
-  # Pre-substitution
-  message('  Pre-substitution (Boston Fed):')
-  presub_results <- compute_boston_fed_prices(
-    tau_M = inputs$tau_M,
-    B_MD = inputs$boston_fed_matrices$B_MD,
-    leontief_domestic = inputs$bea_leontief_domestic,
-    omega_M = inputs$boston_fed_matrices$omega_M,
-    omega_D = inputs$boston_fed_matrices$omega_D,
-    pce_bridge = inputs$pce_bridge,
-    usd_offset = inputs$assumptions$usd_offset,
-    markup_assumption = markup_assumption
-  )
+  # Helper: compute all three price concepts for a given markup assumption
+  compute_all_prices <- function(ma, matrices) {
+    ppa_usa <- inputs$ppa[, 'usa']
 
-  # PE post-substitution (adjust tau_M and omega_M using GTAP)
-  message('  PE post-substitution (GTAP-adjusted):')
-  tau_M_post <- compute_postsub_tau_M(
-    inputs$tau_M, inputs$gtap_bea_crosswalk,
-    inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
-  )
-  omega_M_post <- compute_postsub_omega_M(
-    inputs$boston_fed_matrices$omega_M, inputs$gtap_bea_crosswalk,
-    inputs$nvpp_commodity_ratio, inputs$baselines$viws_baseline
-  )
-  # omega_M + omega_D = 1 by BEA use table construction (import + domestic = total)
-  # Preserve zero-use commodities: pre-sub has omega_M=0, omega_D=0 for these,
-  # so post-sub must keep both at 0 rather than letting 1 - 0 = 1 create a fake share
-  zero_use <- inputs$boston_fed_matrices$omega_M == 0 & inputs$boston_fed_matrices$omega_D == 0
-  omega_D_post <- 1 - omega_M_post
-  omega_D_post[zero_use] <- 0
+    # Pre-substitution
+    presub <- compute_boston_fed_prices(
+      tau_M = inputs$tau_M,
+      B_MD = matrices$B_MD,
+      leontief_domestic = inputs$bea_leontief_domestic,
+      omega_M = matrices$omega_M,
+      omega_D = matrices$omega_D,
+      pce_bridge = inputs$pce_bridge,
+      usd_offset = inputs$assumptions$usd_offset,
+      markup_assumption = ma
+    )
 
-  pe_postsub_results <- compute_boston_fed_prices(
-    tau_M = tau_M_post,
-    B_MD = inputs$boston_fed_matrices$B_MD,
-    leontief_domestic = inputs$bea_leontief_domestic,
-    omega_M = omega_M_post,
-    omega_D = omega_D_post,
-    pce_bridge = inputs$pce_bridge,
-    usd_offset = inputs$assumptions$usd_offset,
-    markup_assumption = markup_assumption
-  )
+    # PE post-substitution
+    tau_M_post <- compute_postsub_tau_M(
+      inputs$tau_M, inputs$gtap_bea_crosswalk,
+      inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
+    )
+    omega_M_post <- compute_postsub_omega_M(
+      matrices$omega_M, inputs$gtap_bea_crosswalk,
+      inputs$nvpp_commodity_ratio, inputs$baselines$viws_baseline
+    )
+    zero_use <- matrices$omega_M == 0 & matrices$omega_D == 0
+    omega_D_post <- 1 - omega_M_post
+    omega_D_post[zero_use] <- 0
 
-  # GE prices (full general equilibrium from GTAP ppa)
-  message('  GE prices (GTAP ppa):')
-  ppa_usa <- inputs$ppa[, 'usa']
-  ge_results <- compute_ge_prices(
-    ppa_usa = ppa_usa,
-    gtap_bea_crosswalk = inputs$gtap_bea_crosswalk,
-    viws_baseline = inputs$baselines$viws_baseline,
-    pce_bridge = inputs$pce_bridge,
-    markup_assumption = markup_assumption
-  )
+    pe_postsub <- compute_boston_fed_prices(
+      tau_M = tau_M_post,
+      B_MD = matrices$B_MD,
+      leontief_domestic = inputs$bea_leontief_domestic,
+      omega_M = omega_M_post,
+      omega_D = omega_D_post,
+      pce_bridge = inputs$pce_bridge,
+      usd_offset = inputs$assumptions$usd_offset,
+      markup_assumption = ma
+    )
+
+    # GE prices
+    ge <- compute_ge_prices(
+      ppa_usa = ppa_usa,
+      gtap_bea_crosswalk = inputs$gtap_bea_crosswalk,
+      viws_baseline = inputs$baselines$viws_baseline,
+      pce_bridge = inputs$pce_bridge,
+      markup_assumption = ma
+    )
+
+    # Detail-level reaggregation if needed
+    if (inputs$bea_io_level == 'detail') {
+      summary_bridge <- load_pce_bridge('resources/io')
+      presub$pce_category_prices <- reaggregate_to_summary_pce(
+        presub$bea_commodity_prices,
+        inputs$bea_use_import, inputs$bea_use_domestic,
+        inputs$summary_to_detail, summary_bridge, ma
+      )
+      pe_postsub$pce_category_prices <- reaggregate_to_summary_pce(
+        pe_postsub$bea_commodity_prices,
+        inputs$bea_use_import, inputs$bea_use_domestic,
+        inputs$summary_to_detail, summary_bridge, ma
+      )
+      ge$pce_category_prices <- reaggregate_to_summary_pce(
+        ge$bea_commodity_prices,
+        inputs$bea_use_import, inputs$bea_use_domestic,
+        inputs$summary_to_detail, summary_bridge, ma
+      )
+    }
+
+    return(list(presub = presub, pe_postsub = pe_postsub, ge = ge))
+  }
+
+  if (markup_assumption == 'average') {
+    message('  Running constant_percentage (upper bound):')
+    cp_prices <- compute_all_prices('constant_percentage', inputs$boston_fed_matrices_cp)
+    message('  Running constant_dollar (lower bound):')
+    cd_prices <- compute_all_prices('constant_dollar', inputs$boston_fed_matrices_cd)
+
+    message('  Averaging upper and lower bounds...')
+    presub_results <- average_price_results(cp_prices$presub, cd_prices$presub)
+    pe_postsub_results <- average_price_results(cp_prices$pe_postsub, cd_prices$pe_postsub)
+    ge_results <- average_price_results(cp_prices$ge, cd_prices$ge)
+  } else {
+    prices <- compute_all_prices(markup_assumption, inputs$boston_fed_matrices)
+    presub_results <- prices$presub
+    pe_postsub_results <- prices$pe_postsub
+    ge_results <- prices$ge
+  }
 
   # GTAP ppriv: aggregate private consumption price (CDE utility-weighted)
   if (!is.null(inputs$ppriv)) {
@@ -169,32 +241,6 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
     pe_postsub = pe_postsub_results,
     ge = ge_results
   )
-
-  # When using detail-level tables, reaggregate commodity prices to summary-level
-  # NIPA categories for the distribution pipeline (which needs 2024 NIPA line numbers)
-  if (inputs$bea_io_level == 'detail') {
-    message('  Reaggregating detail prices to summary NIPA categories for distribution:')
-    summary_bridge <- load_pce_bridge('resources/io')
-
-    message('  Pre-substitution:')
-    price_results$presub$pce_category_prices <- reaggregate_to_summary_pce(
-      presub_results$bea_commodity_prices,
-      inputs$bea_use_import, inputs$bea_use_domestic,
-      inputs$summary_to_detail, summary_bridge, markup_assumption
-    )
-    message('  PE post-substitution:')
-    price_results$pe_postsub$pce_category_prices <- reaggregate_to_summary_pce(
-      pe_postsub_results$bea_commodity_prices,
-      inputs$bea_use_import, inputs$bea_use_domestic,
-      inputs$summary_to_detail, summary_bridge, markup_assumption
-    )
-    message('  GE:')
-    price_results$ge$pce_category_prices <- reaggregate_to_summary_pce(
-      ge_results$bea_commodity_prices,
-      inputs$bea_use_import, inputs$bea_use_domestic,
-      inputs$summary_to_detail, summary_bridge, markup_assumption
-    )
-  }
 
   # Store PCE category prices and BEA commodity prices for outputs
   inputs$pce_category_prices <- price_results$presub$pce_category_prices

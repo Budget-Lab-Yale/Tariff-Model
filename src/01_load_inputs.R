@@ -109,7 +109,7 @@ load_baselines <- function() {
 #'
 #' @return List containing all input data
 load_inputs <- function(scenario, bea_io_level_override = NULL,
-                        markup_assumption = 'constant_percentage') {
+                        markup_assumption = 'average') {
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
 
@@ -147,14 +147,25 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$bea_industry_variable_cost <- load_bea_industry_variable_cost(io_data_dir)
 
   # Pre-compute Boston Fed matrices (B_MD, omega_M, omega_D)
-  inputs$boston_fed_matrices <- build_boston_fed_matrices(
-    use_import = inputs$bea_use_import,
-    use_domestic = inputs$bea_use_domestic,
-    industry_output = inputs$bea_industry_output,
-    markup_assumption = markup_assumption,
-    commodity_use_totals = inputs$bea_commodity_use_totals,
-    industry_variable_cost = inputs$bea_industry_variable_cost
-  )
+  # When averaging, build both variants; otherwise build just the requested one
+  build_matrices <- function(ma) {
+    build_boston_fed_matrices(
+      use_import = inputs$bea_use_import,
+      use_domestic = inputs$bea_use_domestic,
+      industry_output = inputs$bea_industry_output,
+      markup_assumption = ma,
+      commodity_use_totals = inputs$bea_commodity_use_totals,
+      industry_variable_cost = inputs$bea_industry_variable_cost
+    )
+  }
+
+  if (markup_assumption == 'average') {
+    inputs$boston_fed_matrices_cp <- build_matrices('constant_percentage')
+    inputs$boston_fed_matrices_cd <- build_matrices('constant_dollar')
+    inputs$boston_fed_matrices <- inputs$boston_fed_matrices_cp  # default for downstream
+  } else {
+    inputs$boston_fed_matrices <- build_matrices(markup_assumption)
+  }
   message(sprintf('  Built Boston Fed matrices: %d commodities x %d industries',
                   nrow(inputs$boston_fed_matrices$B_MD),
                   ncol(inputs$boston_fed_matrices$B_MD)))

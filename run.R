@@ -5,8 +5,9 @@
 #   Rscript run.R <scenario_name> [options]
 #
 # Options:
-#   --markup <type>            Markup assumption: 'constant_percentage' (default,
-#                              upper bound) or 'constant_dollar' (lower bound)
+#   --markup <type>            Markup assumption: 'average' (default, mean of
+#                              upper and lower bounds), 'constant_percentage'
+#                              (upper bound), or 'constant_dollar' (lower bound)
 #   --bea-io-level <level>     BEA I-O table level: 'summary' (default, 73
 #                              commodities) or 'detail' (~400 commodities)
 #
@@ -21,7 +22,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) {
   cat('Usage: Rscript run.R <scenario_name> [options]\n')
   cat('\nOptions:\n')
-  cat('  --markup <type>            Markup assumption: constant_percentage (default) or constant_dollar\n')
+  cat('  --markup <type>            Markup assumption: average (default), constant_percentage, or constant_dollar\n')
   cat('  --bea-io-level <level>     BEA I-O table level: summary (default) or detail\n')
   cat('\nAvailable scenarios:\n')
   scenarios <- list.dirs('config/scenarios', full.names = FALSE, recursive = FALSE)
@@ -34,7 +35,7 @@ if (length(args) < 1) {
 scenario <- args[1]
 
 # Parse --markup argument
-markup_assumption <- 'constant_percentage'
+markup_assumption <- 'average'
 if ('--markup' %in% args) {
   idx <- which(args == '--markup')
   if (idx < length(args)) {
