@@ -199,6 +199,15 @@ load_model_outputs <- function(scenario) {
     outputs[[name]] <- read_csv(path, show_col_types = FALSE)
   }
 
+  optional_files <- c('distribution_postsub.csv')
+  for (f in optional_files) {
+    path <- file.path(results_dir, f)
+    if (file.exists(path)) {
+      name <- tools::file_path_sans_ext(f)
+      outputs[[name]] <- read_csv(path, show_col_types = FALSE)
+    }
+  }
+
   return(outputs)
 }
 
@@ -270,8 +279,8 @@ build_t1 <- function(outputs) {
       NA,  # Section header
       key['pre_sub_price_increase'] / 100,
       key['pe_postsub_price_increase'] / 100,
-      key['ge_price_increase'] / 100,
       key['pre_sub_per_hh_cost'],
+      key['post_sub_per_hh_cost'],
       NA,  # Section header
       key['gdp_2025_q4q4'],  # Percentage points
       key['gdp_2026_q4q4'],  # Percentage points
@@ -622,19 +631,6 @@ export_excel_tables <- function(scenario, report_date) {
     stop('Template not found: ', template_path)
   }
 
-  suppress_openxlsx_external_link_warning <- function(expr) {
-    withCallingHandlers(
-      expr,
-      warning = function(w) {
-        msg <- conditionMessage(w)
-        if (grepl('externalLink', msg, fixed = TRUE) ||
-            grepl('one argument not used by format', msg, fixed = TRUE)) {
-          invokeRestart('muffleWarning')
-        }
-      }
-    )
-  }
-
   apply_white_background <- function(sheet, max_rows = 500, max_cols = 50) {
     white_style <- createStyle(fgFill = 'white')
     addStyle(
@@ -649,33 +645,7 @@ export_excel_tables <- function(scenario, report_date) {
   }
 
   # Load template workbook to preserve formatting
-  wb <- suppress_openxlsx_external_link_warning(loadWorkbook(template_path))
-
-  write_block <- function(sheet, data, start_row, start_col) {
-    if (is.null(dim(data))) {
-      data <- as.data.frame(data)
-    }
-    if (nrow(data) == 0 || ncol(data) == 0) {
-      return(invisible(NULL))
-    }
-
-    deleteData(
-      wb,
-      sheet = sheet,
-      cols = start_col:(start_col + ncol(data) - 1),
-      rows = start_row:(start_row + nrow(data) - 1),
-      gridExpand = TRUE
-    )
-
-    writeData(
-      wb,
-      sheet = sheet,
-      x = data,
-      startCol = start_col,
-      startRow = start_row,
-      colNames = FALSE
-    )
-  }
+  wb <- suppress_openxlsx_warnings(loadWorkbook(template_path))
 
   # ==========================================================================
   # Sheet order matches template: Data TOC, T1, T2, F1, F2, F3, F4, T3, F5, F6
@@ -702,7 +672,7 @@ export_excel_tables <- function(scenario, report_date) {
     list(row = 14, sheet = 'F6', label = toc$content[14])
   )
 
-  suppress_openxlsx_external_link_warning({
+  suppress_openxlsx_warnings({
     for (link in toc_links) {
       writeFormula(
         wb, 'Data TOC',
@@ -731,7 +701,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 4,
     colNames = FALSE
   )
-  write_block('T1', t1, start_row = 6, start_col = 2)
+  write_block(wb, 'T1', t1, start_row = 6, start_col = 2)
   deleteData(
     wb,
     sheet = 'T1',
@@ -765,12 +735,12 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 1,
     colNames = FALSE
   )
-  write_block('T2', t2, start_row = 8, start_col = 1)
+  write_block(wb, 'T2', t2, start_row = 8, start_col = 1)
 
   # F1: Historical ETR
   message('  Building F1 (Historical ETR)...')
   f1 <- build_f1(outputs)
-  write_block('F1', f1, start_row = 6, start_col = 1)
+  write_block(wb, 'F1', f1, start_row = 6, start_col = 1)
 
   # F2: GDP Level Effects
   message('  Building F2 (GDP Effects)...')
@@ -786,7 +756,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('F2', f2, start_row = 6, start_col = 1)
+  write_block(wb, 'F2', f2, start_row = 6, start_col = 1)
 
   # F3: Sector Output Changes
   message('  Building F3 (Sectors)...')
@@ -802,7 +772,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('F3', f3, start_row = 7, start_col = 1)
+  write_block(wb, 'F3', f3, start_row = 7, start_col = 1)
 
   # F4: International GDP Effects
   message('  Building F4 (International GDP)...')
@@ -818,7 +788,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('F4', f4, start_row = 7, start_col = 1)
+  write_block(wb, 'F4', f4, start_row = 7, start_col = 1)
 
   # T3: Revenue Table
   message('  Building T3 (Revenue)...')
@@ -831,7 +801,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('T3', t3, start_row = 6, start_col = 1)
+  write_block(wb, 'T3', t3, start_row = 6, start_col = 1)
 
   # F5: Distribution by Decile
   message('  Building F5 (Distribution)...')
@@ -849,8 +819,8 @@ export_excel_tables <- function(scenario, report_date) {
   )
   pct_row <- as.data.frame(as.list(f5$pct))
   cost_row <- as.data.frame(as.list(f5$cost))
-  write_block('F5', pct_row, start_row = 8, start_col = 2)
-  write_block('F5', cost_row, start_row = 12, start_col = 2)
+  write_block(wb, 'F5', pct_row, start_row = 8, start_col = 2)
+  write_block(wb, 'F5', cost_row, start_row = 12, start_col = 2)
 
   # F6: Consumer Category Price Effects
   message('  Building F6 (Consumer Categories)...')
@@ -863,7 +833,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 1,
     colNames = FALSE
   )
-  write_block('F6', f6, start_row = 7, start_col = 1)
+  write_block(wb, 'F6', f6, start_row = 7, start_col = 1)
 
   # Save workbook
   output_dir <- file.path('output', scenario, 'report')
@@ -876,7 +846,7 @@ export_excel_tables <- function(scenario, report_date) {
     apply_white_background(sheet_name)
   }
 
-  suppress_openxlsx_external_link_warning(saveWorkbook(wb, output_path, overwrite = TRUE))
+  suppress_openxlsx_warnings(saveWorkbook(wb, output_path, overwrite = TRUE))
 
   message(sprintf('  Exported to: %s', output_path))
 

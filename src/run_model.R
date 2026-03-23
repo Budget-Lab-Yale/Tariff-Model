@@ -236,9 +236,11 @@ run_scenario <- function(scenario, markup_assumption = 'average',
   price_results <- list(
     pre_sub_price_increase = presub_results$aggregate * 100,
     pe_postsub_price_increase = pe_postsub_results$aggregate * 100,
+    post_sub_price_increase = pe_postsub_results$aggregate * 100,
     ge_price_increase = ge_results$aggregate * 100,
     presub = presub_results,
     pe_postsub = pe_postsub_results,
+    post_sub = pe_postsub_results,
     ge = ge_results
   )
 
@@ -390,6 +392,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
   # Per-HH costs come from distribution calculation (matches Excel methodology)
   if (!is.null(distribution_results)) {
     message(sprintf('Pre-sub per-HH cost:            $%.0f', abs(distribution_results$pre_sub_per_hh_cost)))
+    message(sprintf('Post-sub per-HH cost:           $%.0f', abs(distribution_results$post_sub_per_hh_cost)))
   }
   message(sprintf('10-yr conventional revenue:     $%.0fB', revenue_results$conventional_10yr))
   if (!is.null(dynamic_results)) {

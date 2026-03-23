@@ -2,64 +2,67 @@
 # add_s122_15_columns.R - Add 15% Section 122 columns to data_download.xlsx
 # =============================================================================
 #
-# Adds two new columns (F and G) to the T1 sheet of the existing combined
-# data_download.xlsx for the 15% Section 122 scenarios.
+# Adds two new columns (F and G) to the T1 sheet of an existing combined
+# data_download workbook for the 15% Section 122 scenarios.
 #
 # Usage:
 #   Rscript src/add_s122_15_columns.R
+#   Rscript src/add_s122_15_columns.R --input output/combined/state_of_tariffs_data_download.xlsx
+#   Rscript src/add_s122_15_columns.R --input output/combined/state_of_tariffs_data_download.xlsx ^
+#     --output output/combined/state_of_tariffs_data_download_15.xlsx
 #
 # =============================================================================
 
+source('src/helpers.R')
 source('src/12_export_excel.R')
 
-INPUT_PATH <- 'C:/Users/jar335/Downloads/OneDrive_2026-03-08/2026 03 March 09 State of Tariffs/data_download.xlsx'
-OUTPUT_PATH <- INPUT_PATH  # Overwrite in place
+parse_args <- function(args) {
+  defaults <- list(
+    input = file.path('output', 'combined', 'state_of_tariffs_data_download.xlsx'),
+    output = file.path('output', 'combined', 'state_of_tariffs_data_download.xlsx')
+  )
 
-suppress_openxlsx_warnings <- function(expr) {
-  withCallingHandlers(
-    expr,
-    warning = function(w) {
-      msg <- conditionMessage(w)
-      if (grepl('externalLink', msg, fixed = TRUE) ||
-          grepl('one argument not used by format', msg, fixed = TRUE)) {
-        invokeRestart('muffleWarning')
-      }
+  if (length(args) == 0) {
+    return(defaults)
+  }
+
+  values <- defaults
+  i <- 1
+  while (i <= length(args)) {
+    arg <- args[[i]]
+    if (!startsWith(arg, '--')) {
+      stop('Unexpected argument: ', arg)
     }
-  )
+    if (i == length(args)) {
+      stop('Missing value for argument: ', arg)
+    }
+
+    key <- sub('^--', '', arg)
+    if (!key %in% c('input', 'output')) {
+      stop('Unknown argument: ', arg)
+    }
+
+    values[[key]] <- args[[i + 1]]
+    i <- i + 2
+  }
+
+  values
 }
 
-write_block <- function(wb, sheet, data, start_row, start_col) {
-  if (is.null(dim(data))) {
-    data <- as.data.frame(data)
-  }
-  if (nrow(data) == 0 || ncol(data) == 0) {
-    return(invisible(NULL))
-  }
-
-  deleteData(
-    wb,
-    sheet = sheet,
-    cols = start_col:(start_col + ncol(data) - 1),
-    rows = start_row:(start_row + nrow(data) - 1),
-    gridExpand = TRUE
-  )
-
-  writeData(
-    wb,
-    sheet = sheet,
-    x = data,
-    startCol = start_col,
-    startRow = start_row,
-    colNames = FALSE
-  )
-}
-
+args <- parse_args(commandArgs(trailingOnly = TRUE))
+INPUT_PATH <- args$input
+OUTPUT_PATH <- args$output
 
 # =============================================================================
 # Load workbook and scenario outputs
 # =============================================================================
 
 message('Loading workbook...')
+
+if (!file.exists(INPUT_PATH)) {
+  stop('Input workbook not found: ', INPUT_PATH)
+}
+
 wb <- suppress_openxlsx_warnings(loadWorkbook(INPUT_PATH))
 
 message('Loading 15% Section 122 scenario outputs...')
@@ -115,5 +118,6 @@ addStyle(wb, 'T1', white_style, rows = 1:500, cols = 6:7, gridExpand = TRUE, sta
 # =============================================================================
 
 message('Saving...')
+dir.create(dirname(OUTPUT_PATH), recursive = TRUE, showWarnings = FALSE)
 suppress_openxlsx_warnings(saveWorkbook(wb, OUTPUT_PATH, overwrite = TRUE))
 message(sprintf('Done! Saved to: %s', OUTPUT_PATH))

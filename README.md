@@ -1,412 +1,225 @@
 # The Budget Lab Tariff Model
 
-An R-based pipeline that calculates the economic impacts of U.S. tariff policies, including effective tariff rates (ETRs), consumer price effects, revenue estimates, GDP/employment impacts, and distributional effects by income decile.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Command Line Usage](#command-line-usage)
-- [Pipeline Steps](#pipeline-steps)
-- [Directory Structure](#directory-structure)
-- [Scenarios](#scenarios)
-- [Outputs](#outputs)
-- [USMM Integration](#usmm-integration)
-- [Excel Data Download](#excel-data-download)
+An R-based pipeline for estimating the economic effects of U.S. tariff policy,
+including effective tariff rates, consumer price effects, revenue, macro
+effects, sector output effects, foreign GDP effects, and distributional impacts.
 
 ## Overview
 
-The model orchestrates multiple components to produce tariff impact estimates:
+The top-level entrypoint is [run.R](/C:/Users/jar335/Documents/Repositories/Tariff-Model/run.R).
+It runs the full scenario pipeline orchestrated by
+[src/run_model.R](/C:/Users/jar335/Documents/Repositories/Tariff-Model/src/run_model.R).
 
-```
-┌─────────────────┐     ┌─────────────────┐
-│  Tariff-ETRs    │ --> │      GTAP       │
-│  (ETR Matrix)   │     │  (Trade Model)  │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         └───────────┬───────────┘
-                     │
-                     ▼
-        ┌─────────────────────────┐
-        │     Tariff Model        │
-        │  (This Repository)      │
-        │                         │
-        │  ┌───────────────────┐  │
-        │  │ USMM Surrogate   │  │
-        │  │ (IRF-based macro) │  │
-        │  └───────────────────┘  │
-        └────────────┬────────────┘
-                     │
-                     ▼
-        ┌─────────────────────────┐
-        │   Key Results Output    │
-        │  - ETRs & Price Effects │
-        │  - Revenue Estimates    │
-        │  - GDP/Employment       │
-        │  - Sector Effects       │
-        │  - Distribution         │
-        └─────────────────────────┘
-```
+Main stages:
 
-## Prerequisites
+| Step | Module | Description |
+|------|--------|-------------|
+| 0 | `00_run_tariff_etrs.R` | Runs Tariff-ETRs and writes tariff matrices |
+| 0b | `00b_run_gtap.R` | Runs the GTAP trade model |
+| 1 | `01_load_inputs.R` | Loads baselines, mappings, assumptions, and model inputs |
+| 2 | `02_calculate_etr.R` | Calculates weighted effective tariff rates |
+| 3 | `run_model.R` + `io_price_model.R` | Computes pre-sub, post-sub, and GE price effects |
+| 3a | `05a_usmm_surrogate.R` | Constructs the USMM surrogate macro response |
+| 4 | `04_calculate_revenue.R` | Calculates conventional revenue |
+| 5 | `05_calculate_macro.R` | Calculates macro effects |
+| 6 | `06_calculate_sectors.R` | Calculates sector output effects |
+| 7 | `07_calculate_dynamic_revenue.R` | Calculates dynamic revenue effects |
+| 8 | `08_calculate_foreign_gdp.R` | Calculates foreign GDP effects |
+| 9 | `09_calculate_distribution.R` | Calculates pre-sub and post-sub household burdens |
+| 10 | `11_write_outputs.R` | Writes result CSVs |
+| 11 | `12_export_excel.R` | Builds report workbook tables from saved outputs |
 
-### Required Software
+## Requirements
 
-| Software | Version | Purpose |
-|----------|---------|---------|
-| R | 4.0+ | Core runtime |
-| Tariff-ETRs repo | - | ETR calculations (sibling directory) |
-| GTAP + GEMPACK | v7 | Trade model simulations |
-| USMM IRFs | - | Pre-computed impulse response functions (included) |
+Required software:
 
-### Required R Packages
+| Software | Purpose |
+|----------|---------|
+| R 4.0+ | Main runtime |
+| Tariff-ETRs repo | Tariff matrix generation |
+| GTAP + GEMPACK | Trade model simulation and extraction |
+
+Required R packages:
 
 ```r
-# Core packages (required)
-install.packages(c('tidyverse', 'yaml', 'HARr'))
-
-# Excel export (optional)
-install.packages(c('openxlsx'))
+install.packages(c('tidyverse', 'yaml', 'HARr', 'openxlsx'))
 ```
 
-### External Dependencies
+External dependencies:
 
-1. **Tariff-ETRs**: Clone to `../Tariff-ETRs` (sibling directory)
-2. **GTAP + GEMPACK**: See [GTAP Setup](#gtap-setup) section below
-3. **USMM IRFs**: Included in `resources/usmm/` (no external setup needed)
-
-### For Excel Data Download (Optional)
-
-- `openxlsx` installed for workbook export
+1. Clone `Tariff-ETRs` as a sibling repo at `../Tariff-ETRs`.
+2. Install GTAP and GEMPACK.
+3. Create a local GTAP config from the example file.
 
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/Budget-Lab-Yale/Tariff-Model.git
 cd Tariff-Model
 
-# Clone Tariff-ETRs as sibling
 cd ..
 git clone https://github.com/Budget-Lab-Yale/Tariff-ETRs.git
 cd Tariff-Model
 
-# Install R packages
-Rscript -e "install.packages(c('tidyverse', 'yaml', 'HARr'))"
+Rscript -e "install.packages(c('tidyverse', 'yaml', 'HARr', 'openxlsx'))"
 ```
 
 ## GTAP Setup
 
-The model requires GTAP (Global Trade Analysis Project) and GEMPACK for trade simulations. Follow these steps to configure GTAP for your system.
+Copy the example config and edit it for your machine:
 
-### 1. Install Required Software
+```bash
+cp config/gtap_config.yaml.example config/gtap_config.yaml
+```
 
-| Component | Source | Purpose |
-|-----------|--------|---------|
-| **RunGTAP** | [GTAP Website](https://www.gtap.agecon.purdue.edu/products/rungtap/) | GTAP model executable (gtapv7.exe) |
-| **GEMPACK** | [COPSMODELS](https://www.copsmodels.com/gempack.htm) | Solution extraction tools (sltoht.exe) |
-| **GTAP Database** | Included with RunGTAP | Data files (sets.har, basedata.har, default.prm) |
+```powershell
+Copy-Item config/gtap_config.yaml.example config/gtap_config.yaml
+```
 
-### 2. Configure GTAP Paths
-
-Edit `config/gtap_config.yaml` with your installation paths:
+Example contents:
 
 ```yaml
-# Path to GTAP executable (gtapv7.exe)
 gtap_executable: 'C:/runGTAP375/gtapv7.exe'
-
-# GTAP working directory
 gtap_work_dir: 'C:/runGTAP375/work'
-
-# GTAP data directory (contains sets.har, basedata.har, default.prm)
 gtap_data_dir: 'C:/runGTAP375/tbltarv7'
-
-# GTAP auxiliary files directory
 gtap_aux_dir: 'C:/runGTAP375'
-
-# Path to sltoht executable (GEMPACK)
 sltoht_executable: 'C:/GP/sltoht.exe'
 ```
 
-### 3. Verify Installation
-
-The model will automatically validate your GTAP configuration on startup. If components are missing, you'll see detailed error messages:
-
-```
-============================================================
-GTAP SETUP ISSUES DETECTED
-============================================================
-
-- GTAP executable not found: C:/runGTAP375/gtapv7.exe
-  -> Install RunGTAP from https://www.gtap.agecon.purdue.edu/
-
-- sltoht executable not found: C:/GP/sltoht.exe
-  -> Install GEMPACK from https://www.copsmodels.com/gempack.htm
-
-Please update config/gtap_config.yaml with correct paths.
-============================================================
-```
-
-### Common GTAP Installation Paths
-
-| System | Typical RunGTAP Location | Typical GEMPACK Location |
-|--------|--------------------------|--------------------------|
-| Windows | `C:/runGTAP375/` | `C:/GP/` |
-| Windows (user) | `C:/Users/{name}/Documents/GTAP/` | `C:/GP/` |
-
-### Required GTAP Files
-
-The model needs these files in your `gtap_data_dir`:
-
-| File | Description |
-|------|-------------|
-| `sets.har` | GTAP region/sector definitions |
-| `basedata.har` | Baseline trade flow data |
-| `default.prm` | Default parameter values |
+The model validates these paths on startup and reports missing executables,
+directories, or GTAP data files.
 
 ## Command Line Usage
 
-### Basic Syntax
+Basic usage:
 
 ```bash
 Rscript run.R <scenario_name> [options]
 ```
 
-### Options
+Options:
 
 | Option | Description |
 |--------|-------------|
-| `--markup constant_percentage` | Default markup assumption |
+| `--markup average` | Average of upper and lower markup bounds (default) |
+| `--markup constant_percentage` | Upper-bound markup assumption |
 | `--markup constant_dollar` | Lower-bound markup assumption |
+| `--bea-io-level summary` | Use summary BEA I-O tables (default) |
+| `--bea-io-level detail` | Use detail BEA I-O tables |
 
-### Examples
+Examples:
 
 ```bash
-# Run model
-Rscript run.R 11-17
-
-# Run with alternative markup assumption
-Rscript run.R 11-17 --markup constant_dollar
-
-# List available scenarios (run without arguments)
+Rscript run.R 2-21_perm
+Rscript run.R 2-21_perm --markup constant_dollar
+Rscript run.R 2-21_perm --bea-io-level detail
 Rscript run.R
 ```
 
-### Running from R Console
+From an R session:
 
 ```r
 source('src/run_model.R')
-run_scenario('11-17')
-```
-
-## Pipeline Steps
-
-The model executes these steps in sequence:
-
-| Step | Module | Description |
-|------|--------|-------------|
-| 0 | `00_run_tariff_etrs.R` | Calls Tariff-ETRs to generate ETR matrix |
-| 0b | `00b_run_gtap.R` | Runs GTAP trade model simulation |
-| 1 | `01_load_inputs.R` | Loads all inputs (baselines, parameters, USMM IRFs) |
-| 2 | `02_calculate_etr.R` | Calculates weighted effective tariff rates |
-| 3 | `03_calculate_prices.R` | Computes consumer price effects |
-| 4a | `05a_usmm_surrogate.R` | Decomposes tariff shocks and constructs USMM macro response |
-| 4 | `04_calculate_revenue.R` | Estimates tariff revenue (conventional) |
-| 5 | `05_calculate_macro.R` | Computes macro effects (GDP, unemployment, PCE, fed funds) |
-| 6 | `06_calculate_sectors.R` | Calculates sector output effects |
-| 7 | `07_calculate_dynamic_revenue.R` | Adjusts revenue for GDP feedback (USMM→GTAP blend) |
-| 8 | `08_calculate_foreign_gdp.R` | Estimates foreign country GDP impacts |
-| 9 | `09_calculate_distribution.R` | Distributes costs by income decile |
-| 10 | `10_calculate_products.R` | Product-level price effects |
-| 11 | `11_write_outputs.R` | Writes results to CSV files |
-
-## Directory Structure
-
-```
-Tariff-Model/
-├── run.R                      # Command-line entry point
-├── src/
-│   ├── run_model.R            # Main orchestrator
-│   ├── 00_run_tariff_etrs.R   # Step 0: ETR calculation
-│   ├── 00b_run_gtap.R         # Step 0b: GTAP simulation
-│   ├── 01_load_inputs.R       # Step 1: Load inputs
-│   ├── ...                    # Steps 2-11
-│   ├── 05a_usmm_surrogate.R  # USMM IRF-based macro surrogate
-│   ├── helpers.R              # Shared utilities
-│   ├── read_gtap.R            # GTAP HAR file reader
-│   └── util/
-│       └── extract_usmm_irfs.R  # Extract IRFs from USMM Excel output
-├── config/
-│   ├── gtap_config.yaml       # Global GTAP installation paths
-│   ├── global_assumptions.yaml # Model-wide parameters
-│   └── scenarios/
-│       ├── 11-17/             # Example scenario
-│       │   ├── tariff_etrs/   # Tariff-ETRs config (232.yaml, ieepa_*.yaml)
-│       │   ├── retaliation/   # Retaliation shock definitions
-│       │   └── model_params.yaml  # Scenario-specific settings
-│       └── {other-scenarios}/
-├── resources/
-│   ├── baselines/             # CBO baseline projections
-│   ├── mappings/              # GTAP sector crosswalks
-│   ├── gtap/                  # GTAP CMF template and mappings
-│   ├── usmm/                  # USMM impulse response functions
-│   └── distribution/          # Consumption weight data
-├── output/
-│   └── {scenario}/
-│       ├── results/           # CSV output files
-│       ├── gtap/              # GTAP run outputs
-│       ├── tariff_etrs/       # ETR matrix outputs
-│       └── report/            # Excel data download output
-└── reports/
-    ├── README.md              # Excel export notes
-    └── data_download_template.xlsx
+run_scenario('2-21_perm')
 ```
 
 ## Scenarios
 
-### Available Scenarios
+Current scenario directories:
 
-Run `Rscript run.R` without arguments to list available scenarios:
-
-```
-Available scenarios:
-  1-8
-  1-8-ex-ieepa
-  1-8-ex-ieepa-refund
-  11-17
-  11-17-ex-ieepa
-  1-11_hypothetical
+```text
+2-19
+2-20
+2-21_perm
+2-21_perm_15
+2-21_temp
+2-21_temp_15
 ```
 
-### Creating a New Scenario
+To create a new scenario:
 
-1. Copy an existing scenario directory:
-   ```bash
-   cp -r config/scenarios/11-17 config/scenarios/my-scenario
-   ```
+```bash
+cp -r config/scenarios/2-21_perm config/scenarios/my-scenario
+```
 
-2. Edit tariff parameters in `tariff_etrs/`:
-   - `232.yaml` - Section 232 tariffs
-   - `ieepa_fentanyl.yaml` - IEEPA fentanyl tariffs
-   - `ieepa_reciprocal.yaml` - IEEPA reciprocal tariffs
-   - `other_params.yaml` - Other tariff parameters
+Then edit:
 
-3. Edit scenario-specific parameters in `model_params.yaml`:
-   ```yaml
-   gtap:
-     include_retaliation: true  # Include retaliation shocks
-
-   refund_2026: 0.0  # Optional refund amount in billions
-   ```
-
-   > **Note:** GTAP installation paths are configured globally in `config/gtap_config.yaml`, not per-scenario.
-
-4. (Optional) Add retaliation shocks in `retaliation/shocks.txt`
-
-5. Run the scenario:
-   ```bash
-   Rscript run.R my-scenario
-   ```
+- `config/scenarios/my-scenario/model_params.yaml`
+- baseline tariff config files under `baseline/`
+- date-specific tariff config files under `tariff_etrs/`
+- optional retaliation shocks in `retaliation/shocks.txt`
 
 ## Outputs
 
-Results are written to `output/{scenario}/results/`:
+Scenario results are written to `output/{scenario}/results/`.
+
+Key files:
 
 | File | Description |
 |------|-------------|
-| `key_results.csv` | Summary of headline results |
-| `revenue_by_year.csv` | Annual revenue estimates (conventional) |
-| `dynamic_revenue_by_year.csv` | Revenue with GDP feedback adjustment |
-| `distribution.csv` | Cost burden by income decile |
-| `sector_effects.csv` | Output changes by sector |
+| `key_results.csv` | Headline results |
+| `goods_weighted_etrs.csv` | Weighted ETRs by goods category |
+| `revenue_by_year.csv` | Conventional annual revenue |
+| `dynamic_revenue_by_year.csv` | Revenue with GDP feedback |
+| `macro_quarterly.csv` | Quarterly macro series |
+| `sector_effects.csv` | Sector output effects |
+| `foreign_gdp.csv` | Foreign GDP effects |
+| `distribution.csv` | Pre-substitution household burden by decile |
+| `distribution_postsub.csv` | Post-substitution household burden by decile |
 | `pce_category_prices.csv` | Consumer-category price effects |
 | `bea_commodity_prices.csv` | BEA commodity price effects |
-| `macro_quarterly.csv` | Quarterly GDP/employment projections |
-| `foreign_gdp.csv` | GDP effects on trading partners |
-| `goods_weighted_etrs.csv` | Weighted ETRs by goods category |
 
-### Key Results Summary
+## Excel Export
 
-After a successful run, the model prints a summary:
-
-```
-----------------------------------------------------------
-KEY RESULTS
-----------------------------------------------------------
-Pre-substitution ETR increase:  17.45%
-Post-substitution ETR increase: 12.31%
-Pre-sub price increase:         2.234%
-Post-sub price increase:        1.567%
-Pre-sub per-HH cost:            $3,800
-Post-sub per-HH cost:           $2,700
-10-yr conventional revenue:     $3,450B
-10-yr dynamic effect:           -$890B
-10-yr dynamic revenue:          $2,560B
-----------------------------------------------------------
-```
-
-## USMM Integration
-
-The model uses a USMM (US Macro Model) surrogate based on pre-computed impulse response functions (IRFs) to generate quarterly macroeconomic projections. This replaces the previous MAUS surrogate and runs entirely within the pipeline — no external model run is needed.
-
-### How It Works
-
-1. **Shock decomposition**: The ETR schedule is decomposed into permanent, temporary, and refund components (`decompose_shocks()`)
-2. **IRF interpolation**: Each component is matched to the appropriate IRF type (permanent or temporary) and linearly interpolated between pre-computed 2pp, 5pp, and 10pp brackets
-3. **Response construction**: Component IRFs are shifted, scaled, and summed to build the composite macro response
-4. **Conversion to levels**: Diffs are applied to the USMM baseline to produce quarterly time series
-
-The surrogate produces two variants:
-- **Base case**: Respects temp/perm IRF assignments from `model_params.yaml`
-- **All-perm variant**: Treats all components as permanent (for comparison)
-
-### IRF Data
-
-Pre-computed IRFs are stored in `resources/usmm/`:
-
-| File | Description |
-|------|-------------|
-| `perm2_fed.csv`, `perm5_fed.csv`, `perm10_fed.csv` | Permanent tariff shock IRFs (2, 5, 10 pp) |
-| `temp2_fed.csv`, `temp5_fed.csv`, `temp10_fed.csv` | Temporary tariff shock IRFs (2, 5, 10 pp) |
-| `refund_fed.csv` | Tariff revenue refund IRF |
-| `baseline.csv` | USMM baseline levels |
-
-### USMM Variables
-
-| Variable | Description | Diff Type |
-|----------|-------------|-----------|
-| `gdpr` | Real GDP | % deviation from baseline |
-| `jpc` | PCE price level | % deviation from baseline |
-| `ruc` | Unemployment rate | Percentage point diff |
-| `ehhc` | Employment | % deviation from baseline |
-| `rmff` | Federal funds rate | Percentage point diff |
-
-### Scenario Configuration
-
-Time-varying scenarios can specify which date window uses the temporary IRF in `model_params.yaml`:
-
-```yaml
-temp_component_dates:
-  - '2026-02-24'  # onset date
-  - '2026-07-24'  # offset date
-
-refund_2026: 0.0  # Refund amount in billions (optional)
-```
-
-### GDP Blending
-
-For GDP Q4-Q4 growth calculations, the model linearly blends from the USMM short-run response to the GTAP long-run equilibrium over 16 quarters (2025Q1 through 2028Q4).
-
-## Excel Data Download
-
-Export the State of Tariffs data-download workbook:
+Export a single-scenario report workbook:
 
 ```r
 source('src/helpers.R')
 source('src/12_export_excel.R')
 
-export_excel_tables('2-21_temp', 'March 09, 2026')
+export_excel_tables(
+  scenario = '2-21_temp',
+  report_date = 'March 09, 2026'
+)
 ```
 
-The workbook is saved to `output/{scenario}/report/data_download.xlsx`.
+This writes to `output/{scenario}/report/data_download.xlsx`.
+
+Build the combined four-scenario workbook used for the report:
+
+```bash
+Rscript src/update_state_of_tariffs.R \
+  --template reports/data_download_template.xlsx \
+  --output output/combined/state_of_tariffs_data_download.xlsx \
+  --report-date "March 09, 2026"
+```
+
+Append the 15% Section 122 columns:
+
+```bash
+Rscript src/add_s122_15_columns.R \
+  --input output/combined/state_of_tariffs_data_download.xlsx \
+  --output output/combined/state_of_tariffs_data_download_15.xlsx
+```
+
+## Repo Layout
+
+```text
+Tariff-Model/
+|-- run.R
+|-- config/
+|   |-- global_assumptions.yaml
+|   |-- gtap_config.yaml.example
+|   `-- scenarios/
+|-- reports/
+|   |-- README.md
+|   `-- data_download_template.xlsx
+|-- resources/
+|-- src/
+|   |-- run_model.R
+|   |-- helpers.R
+|   |-- read_gtap.R
+|   |-- io_price_model.R
+|   `-- util/
+`-- output/
+```

@@ -2,19 +2,64 @@
 # update_state_of_tariffs.R - Update State of Tariffs Excel data download
 # =============================================================================
 #
-# Updates the data_download.xlsx file with fresh model results from all
-# 4 scenarios (2-19, 2-20, 2-21_perm, 2-21_temp) for the March 9, 2026 report.
+# Updates a combined State of Tariffs data-download workbook with fresh model
+# results from four scenarios: 2-19, 2-20, 2-21_perm, and 2-21_temp.
 #
 # Usage:
-#   source('src/update_state_of_tariffs.R')
+#   Rscript src/update_state_of_tariffs.R
+#   Rscript src/update_state_of_tariffs.R --template reports/data_download_template.xlsx
+#   Rscript src/update_state_of_tariffs.R --template reports/data_download_template.xlsx ^
+#     --output output/combined/state_of_tariffs_data_download.xlsx ^
+#     --report-date "March 09, 2026"
 #
 # =============================================================================
 
+source('src/helpers.R')
 source('src/12_export_excel.R')
 
-TEMPLATE_PATH <- 'C:/Users/jar335/Downloads/OneDrive_2026-03-08/2026 02 February 27 State of Tariffs/data_download.xlsx'
-OUTPUT_PATH <- 'C:/Users/jar335/Downloads/OneDrive_2026-03-08/2026 03 March 09 State of Tariffs/data_download.xlsx'
-REPORT_DATE <- 'March 9, 2026'
+parse_args <- function(args) {
+  defaults <- list(
+    template = file.path('reports', 'data_download_template.xlsx'),
+    output = file.path('output', 'combined', 'state_of_tariffs_data_download.xlsx'),
+    report_date = format(Sys.Date(), '%B %d, %Y')
+  )
+
+  if (length(args) == 0) {
+    return(defaults)
+  }
+
+  values <- defaults
+  i <- 1
+  while (i <= length(args)) {
+    arg <- args[[i]]
+    if (!startsWith(arg, '--')) {
+      stop('Unexpected argument: ', arg)
+    }
+    if (i == length(args)) {
+      stop('Missing value for argument: ', arg)
+    }
+
+    value <- args[[i + 1]]
+    key <- sub('^--', '', arg)
+    if (!key %in% c('template', 'output', 'report-date')) {
+      stop('Unknown argument: ', arg)
+    }
+
+    if (key == 'report-date') {
+      values$report_date <- value
+    } else {
+      values[[key]] <- value
+    }
+    i <- i + 2
+  }
+
+  values
+}
+
+args <- parse_args(commandArgs(trailingOnly = TRUE))
+TEMPLATE_PATH <- args$template
+OUTPUT_PATH <- args$output
+REPORT_DATE <- args$report_date
 
 
 # =============================================================================
@@ -23,17 +68,8 @@ REPORT_DATE <- 'March 9, 2026'
 
 message('Loading template workbook...')
 
-suppress_openxlsx_warnings <- function(expr) {
-  withCallingHandlers(
-    expr,
-    warning = function(w) {
-      msg <- conditionMessage(w)
-      if (grepl('externalLink', msg, fixed = TRUE) ||
-          grepl('one argument not used by format', msg, fixed = TRUE)) {
-        invokeRestart('muffleWarning')
-      }
-    }
-  )
+if (!file.exists(TEMPLATE_PATH)) {
+  stop('Template workbook not found: ', TEMPLATE_PATH)
 }
 
 wb <- suppress_openxlsx_warnings(loadWorkbook(TEMPLATE_PATH))
@@ -43,37 +79,6 @@ out_219 <- load_model_outputs('2-19')
 out_220 <- load_model_outputs('2-20')
 out_temp <- load_model_outputs('2-21_temp')
 out_perm <- load_model_outputs('2-21_perm')
-
-
-# =============================================================================
-# Helper: write a block of data into the workbook
-# =============================================================================
-
-write_block <- function(sheet, data, start_row, start_col) {
-  if (is.null(dim(data))) {
-    data <- as.data.frame(data)
-  }
-  if (nrow(data) == 0 || ncol(data) == 0) {
-    return(invisible(NULL))
-  }
-
-  deleteData(
-    wb,
-    sheet = sheet,
-    cols = start_col:(start_col + ncol(data) - 1),
-    rows = start_row:(start_row + nrow(data) - 1),
-    gridExpand = TRUE
-  )
-
-  writeData(
-    wb,
-    sheet = sheet,
-    x = data,
-    startCol = start_col,
-    startRow = start_row,
-    colNames = FALSE
-  )
-}
 
 
 # =============================================================================
@@ -106,10 +111,10 @@ t1_temp <- build_t1(out_temp)
 t1_perm <- build_t1(out_perm)
 
 # Write each scenario as a column (B=2, C=3, D=4, E=5), starting at row 7
-write_block('T1', t1_219, start_row = 7, start_col = 2)
-write_block('T1', t1_220, start_row = 7, start_col = 3)
-write_block('T1', t1_temp, start_row = 7, start_col = 4)
-write_block('T1', t1_perm, start_row = 7, start_col = 5)
+write_block(wb, 'T1', t1_219, start_row = 7, start_col = 2)
+write_block(wb, 'T1', t1_220, start_row = 7, start_col = 3)
+write_block(wb, 'T1', t1_temp, start_row = 7, start_col = 4)
+write_block(wb, 'T1', t1_perm, start_row = 7, start_col = 5)
 
 # Number formatting for T1 (all 4 data columns)
 t1_pct_style <- createStyle(numFmt = '0.0%')
@@ -180,10 +185,10 @@ t2_temp <- build_t2(out_temp)
 t2_perm <- build_t2(out_perm)
 
 # Section 1: "Section 122 Expires" = 2-21_temp (rows 8-12, cols A-G)
-write_block('T2', t2_temp, start_row = 8, start_col = 1)
+write_block(wb, 'T2', t2_temp, start_row = 8, start_col = 1)
 
 # Section 2: "Section 122 Extended" = 2-21_perm (rows 17-21, cols A-G)
-write_block('T2', t2_perm, start_row = 17, start_col = 1)
+write_block(wb, 'T2', t2_perm, start_row = 17, start_col = 1)
 
 
 # =============================================================================
@@ -193,7 +198,7 @@ write_block('T2', t2_perm, start_row = 17, start_col = 1)
 message('  Updating F1 (Historical ETR)...')
 
 f1 <- build_f1(out_temp)  # Use 2-21_temp for current rates
-write_block('F1', f1, start_row = 6, start_col = 1)
+write_block(wb, 'F1', f1, start_row = 6, start_col = 1)
 
 
 # =============================================================================
@@ -206,10 +211,10 @@ f2_temp <- build_f2(out_temp)
 f2_perm <- build_f2(out_perm)
 
 # Write dates (column A) and temp data (column B) from f2_temp
-write_block('F2', f2_temp, start_row = 6, start_col = 1)
+write_block(wb, 'F2', f2_temp, start_row = 6, start_col = 1)
 
 # Overwrite column C with perm data
-write_block('F2', f2_perm %>% select(`All 2025 Tariffs to Date`),
+write_block(wb, 'F2', f2_perm %>% select(`All 2025 Tariffs to Date`),
             start_row = 6, start_col = 3)
 
 
@@ -223,10 +228,10 @@ f3_temp <- build_f3(out_temp)
 f3_perm <- build_f3(out_perm)
 
 # Write sector names + temp data
-write_block('F3', f3_temp, start_row = 7, start_col = 1)
+write_block(wb, 'F3', f3_temp, start_row = 7, start_col = 1)
 
 # Overwrite column C with perm data
-write_block('F3', f3_perm %>% select(`All 2025 Tariffs to Date`),
+write_block(wb, 'F3', f3_perm %>% select(`All 2025 Tariffs to Date`),
             start_row = 7, start_col = 3)
 
 
@@ -240,10 +245,10 @@ f4_temp <- build_f4(out_temp)
 f4_perm <- build_f4(out_perm)
 
 # Write region names + temp data
-write_block('F4', f4_temp, start_row = 7, start_col = 1)
+write_block(wb, 'F4', f4_temp, start_row = 7, start_col = 1)
 
 # Overwrite column C with perm data
-write_block('F4', f4_perm %>% select(`All 2025 Tariffs to Date`),
+write_block(wb, 'F4', f4_perm %>% select(`All 2025 Tariffs to Date`),
             start_row = 7, start_col = 3)
 
 
@@ -257,10 +262,10 @@ t3_temp <- build_t3(out_temp)
 t3_perm <- build_t3(out_perm)
 
 # Section 1: "Section 122 Expires" = temp (rows 7-9, cols A-L)
-write_block('T3', t3_temp, start_row = 7, start_col = 1)
+write_block(wb, 'T3', t3_temp, start_row = 7, start_col = 1)
 
 # Section 2: "Section 122 Extended" = perm (rows 13-15, cols A-L)
-write_block('T3', t3_perm, start_row = 13, start_col = 1)
+write_block(wb, 'T3', t3_perm, start_row = 13, start_col = 1)
 
 
 # =============================================================================
@@ -276,15 +281,15 @@ f5_perm <- build_f5(out_perm)
 # pct at row 9, cols B-K; cost at row 13, cols B-K
 pct_temp <- as.data.frame(as.list(f5_temp$pct))
 cost_temp <- as.data.frame(as.list(f5_temp$cost))
-write_block('F5', pct_temp, start_row = 9, start_col = 2)
-write_block('F5', cost_temp, start_row = 13, start_col = 2)
+write_block(wb, 'F5', pct_temp, start_row = 9, start_col = 2)
+write_block(wb, 'F5', cost_temp, start_row = 13, start_col = 2)
 
 # Section 2: "Section 122 Extended" = perm
 # pct at row 19, cols B-K; cost at row 23, cols B-K
 pct_perm <- as.data.frame(as.list(f5_perm$pct))
 cost_perm <- as.data.frame(as.list(f5_perm$cost))
-write_block('F5', pct_perm, start_row = 19, start_col = 2)
-write_block('F5', cost_perm, start_row = 23, start_col = 2)
+write_block(wb, 'F5', pct_perm, start_row = 19, start_col = 2)
+write_block(wb, 'F5', cost_perm, start_row = 23, start_col = 2)
 
 
 # =============================================================================
@@ -297,7 +302,7 @@ f6_temp <- build_f6(out_temp)
 f6_perm <- build_f6(out_perm)
 
 # Write names + temp SR (cols A-B)
-write_block('F6', f6_temp, start_row = 8, start_col = 1)
+write_block(wb, 'F6', f6_temp, start_row = 8, start_col = 1)
 
 # Align perm data to temp's category sort order before writing col C
 f6_perm_aligned <- f6_temp %>%
@@ -305,7 +310,7 @@ f6_perm_aligned <- f6_temp %>%
   left_join(f6_perm, by = 'Name') %>%
   select(`Short-Run`)
 
-write_block('F6', f6_perm_aligned, start_row = 8, start_col = 3)
+write_block(wb, 'F6', f6_perm_aligned, start_row = 8, start_col = 3)
 
 
 # =============================================================================
@@ -331,6 +336,7 @@ for (sheet_name in c('Data TOC', 'T1', 'T2', 'F1', 'F2', 'F3', 'F4', 'T3', 'F5',
   apply_white_background(sheet_name)
 }
 
+dir.create(dirname(OUTPUT_PATH), recursive = TRUE, showWarnings = FALSE)
 suppress_openxlsx_warnings(saveWorkbook(wb, OUTPUT_PATH, overwrite = TRUE))
 
 message(sprintf('Done! Output saved to: %s', OUTPUT_PATH))

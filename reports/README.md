@@ -25,3 +25,20 @@ export_excel_tables(
 ```
 
 The workbook is written to `output/{scenario}/report/data_download.xlsx`.
+
+To build the combined four-scenario workbook used for the report:
+
+```bash
+Rscript src/update_state_of_tariffs.R \
+  --template reports/data_download_template.xlsx \
+  --output output/combined/state_of_tariffs_data_download.xlsx \
+  --report-date "March 09, 2026"
+```
+
+To append the 15% Section 122 columns to that combined workbook:
+
+```bash
+Rscript src/add_s122_15_columns.R \
+  --input output/combined/state_of_tariffs_data_download.xlsx \
+  --output output/combined/state_of_tariffs_data_download_15.xlsx
+```
