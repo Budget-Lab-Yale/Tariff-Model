@@ -168,7 +168,7 @@ write_outputs <- function(results, scenario) {
   message('    distribution.csv (10 deciles)')
 
   # ============================
-  # PCE Category Prices (Boston Fed)
+  # PCE Category Prices (I-O model)
   # ============================
 
   if (is.null(results$inputs$pce_category_prices)) {
@@ -180,7 +180,7 @@ write_outputs <- function(results, scenario) {
                   nrow(results$inputs$pce_category_prices)))
 
   # ============================
-  # BEA Commodity Prices (Boston Fed)
+  # BEA Commodity Prices (I-O model)
   # ============================
 
   if (!is.null(results$inputs$bea_commodity_prices)) {

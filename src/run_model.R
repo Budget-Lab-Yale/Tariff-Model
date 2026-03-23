@@ -34,7 +34,7 @@ source('src/12_export_excel.R')
 
 #' Average two sets of price results (element-wise)
 #'
-#' @param a Price results list from compute_boston_fed_prices() or compute_ge_prices()
+#' @param a Price results list from compute_io_prices() or compute_ge_prices()
 #' @param b Price results list from same function with different markup_assumption
 #' @return Averaged price results list
 average_price_results <- function(a, b) {
@@ -130,7 +130,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
   }
 
   #---------------------------
-  # Step 3: Calculate consumer price effects (Boston Fed)
+  # Step 3: Calculate consumer price effects (I-O model)
   #---------------------------
 
   message('\nStep 3: Calculating consumer price effects...')
@@ -141,7 +141,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
     ppa_usa <- inputs$ppa[, 'usa']
 
     # Pre-substitution
-    presub <- compute_boston_fed_prices(
+    presub <- compute_io_prices(
       tau_M = inputs$tau_M,
       B_MD = matrices$B_MD,
       leontief_domestic = inputs$bea_leontief_domestic,
@@ -165,7 +165,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
     omega_D_post <- 1 - omega_M_post
     omega_D_post[zero_use] <- 0
 
-    pe_postsub <- compute_boston_fed_prices(
+    pe_postsub <- compute_io_prices(
       tau_M = tau_M_post,
       B_MD = matrices$B_MD,
       leontief_domestic = inputs$bea_leontief_domestic,
@@ -210,16 +210,16 @@ run_scenario <- function(scenario, markup_assumption = 'average',
 
   if (markup_assumption == 'average') {
     message('  Running constant_percentage (upper bound):')
-    cp_prices <- compute_all_prices('constant_percentage', inputs$boston_fed_matrices_cp)
+    cp_prices <- compute_all_prices('constant_percentage', inputs$io_matrices_cp)
     message('  Running constant_dollar (lower bound):')
-    cd_prices <- compute_all_prices('constant_dollar', inputs$boston_fed_matrices_cd)
+    cd_prices <- compute_all_prices('constant_dollar', inputs$io_matrices_cd)
 
     message('  Averaging upper and lower bounds...')
     presub_results <- average_price_results(cp_prices$presub, cd_prices$presub)
     pe_postsub_results <- average_price_results(cp_prices$pe_postsub, cd_prices$pe_postsub)
     ge_results <- average_price_results(cp_prices$ge, cd_prices$ge)
   } else {
-    prices <- compute_all_prices(markup_assumption, inputs$boston_fed_matrices)
+    prices <- compute_all_prices(markup_assumption, inputs$io_matrices)
     presub_results <- prices$presub
     pe_postsub_results <- prices$pe_postsub
     ge_results <- prices$ge
@@ -433,7 +433,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
   }
 
   message('----------------------------------------------------------')
-  message('BEA COMMODITY PRICE EFFECTS (Boston Fed)')
+  message('BEA COMMODITY PRICE EFFECTS (I-O model)')
   message('----------------------------------------------------------')
   message(sprintf('Aggregate SR (PCE-weighted):     %.4f%%', presub_results$aggregate * 100))
   message(sprintf('  Direct import channel:         %.4f%%', presub_results$direct_aggregate * 100))
@@ -458,7 +458,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
 
     message('')
     message('----------------------------------------------------------')
-    message('CONSUMER PRICE EFFECTS BY PCE CATEGORY (Boston Fed)')
+    message('CONSUMER PRICE EFFECTS BY PCE CATEGORY (I-O model)')
     message('----------------------------------------------------------')
     message(sprintf('Aggregate (PCE-weighted):        %.4f%%', pce_agg))
     message('')

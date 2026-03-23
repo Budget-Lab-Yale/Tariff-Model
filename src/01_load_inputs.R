@@ -126,7 +126,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$assumptions <- load_global_assumptions()
 
   # ============================
-  # Boston Fed I-O data (always loaded)
+  # BEA I-O data (always loaded)
   # ============================
 
   bea_io_level <- bea_io_level_override %||% inputs$assumptions$bea_io_level %||% 'summary'
@@ -146,10 +146,10 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # Industry variable cost (for constant-percentage B normalization)
   inputs$bea_industry_variable_cost <- load_bea_industry_variable_cost(io_data_dir)
 
-  # Pre-compute Boston Fed matrices (B_MD, omega_M, omega_D)
+  # Pre-compute I-O matrices (B_MD, omega_M, omega_D)
   # When averaging, build both variants; otherwise build just the requested one
   build_matrices <- function(ma) {
-    build_boston_fed_matrices(
+    build_io_matrices(
       use_import = inputs$bea_use_import,
       use_domestic = inputs$bea_use_domestic,
       industry_output = inputs$bea_industry_output,
@@ -160,15 +160,15 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   if (markup_assumption == 'average') {
-    inputs$boston_fed_matrices_cp <- build_matrices('constant_percentage')
-    inputs$boston_fed_matrices_cd <- build_matrices('constant_dollar')
-    inputs$boston_fed_matrices <- inputs$boston_fed_matrices_cp  # default for downstream
+    inputs$io_matrices_cp <- build_matrices('constant_percentage')
+    inputs$io_matrices_cd <- build_matrices('constant_dollar')
+    inputs$io_matrices <- inputs$io_matrices_cp  # default for downstream
   } else {
-    inputs$boston_fed_matrices <- build_matrices(markup_assumption)
+    inputs$io_matrices <- build_matrices(markup_assumption)
   }
-  message(sprintf('  Built Boston Fed matrices: %d commodities x %d industries',
-                  nrow(inputs$boston_fed_matrices$B_MD),
-                  ncol(inputs$boston_fed_matrices$B_MD)))
+  message(sprintf('  Built I-O matrices: %d commodities x %d industries',
+                  nrow(inputs$io_matrices$B_MD),
+                  ncol(inputs$io_matrices$B_MD)))
 
   # GTAP-BEA crosswalk (for post-substitution adjustments)
   inputs$gtap_bea_crosswalk <- load_gtap_bea_crosswalk(io_data_dir)

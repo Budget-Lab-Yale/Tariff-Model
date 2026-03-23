@@ -393,7 +393,7 @@ load_pce_bridge <- function(data_dir = 'resources/io') {
 
 # ==== Core computation =======================================================
 
-#' Build Boston Fed matrices from BEA Use tables
+#' Build I-O matrices from BEA Use tables
 #'
 #' Computes the import input coefficients matrix (B_MD), domestic input
 #' coefficients matrix (B_D), and import/domestic shares of commodity supply
@@ -423,7 +423,7 @@ load_pce_bridge <- function(data_dir = 'resources/io') {
 #'   - B_D: CxI domestic input coefficients matrix
 #'   - omega_M: named vector of import shares by commodity
 #'   - omega_D: named vector of domestic shares by commodity
-build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
+build_io_matrices <- function(use_import, use_domestic, industry_output,
                                      markup_assumption = 'constant_dollar',
                                      commodity_use_totals,
                                      industry_variable_cost) {
@@ -557,7 +557,7 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
     omega_D[adj_mask] <- 1
   }
 
-  message(sprintf('  Built Boston Fed matrices:'))
+  message(sprintf('  Built I-O matrices:'))
   message(sprintf('    B normalization: %s', norm_label))
   message(sprintf('    B_MD: %d x %d (CxI)', nrow(B_MD), ncol(B_MD)))
   message(sprintf('    B_D:  %d x %d (CxI)', nrow(B_D), ncol(B_D)))
@@ -576,7 +576,7 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
 }
 
 
-#' Compute Boston Fed price effects from tariff shocks
+#' Compute I-O price effects from tariff shocks
 #'
 #' Applies the Barbiero & Stein (2025) Leontief price model to compute
 #' consumer price effects at the NIPA PCE category level. Decomposes into
@@ -609,7 +609,7 @@ build_boston_fed_matrices <- function(use_import, use_domestic, industry_output,
 #'   - direct_aggregate: PCE-weighted aggregate from direct effects only (fractional)
 #'   - supply_chain_aggregate: PCE-weighted aggregate from supply chain only (fractional)
 #'   - markup_assumption: which assumption was used
-compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
+compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
                                      omega_M, omega_D, pce_bridge,
                                      usd_offset,
                                      markup_assumption = 'constant_percentage') {
@@ -782,7 +782,7 @@ compute_boston_fed_prices <- function(tau_M, B_MD, leontief_domestic,
                sum(pce_category_prices$purchasers_value)
 
   # ---- Diagnostics ----
-  message(sprintf('  Boston Fed price effects (%s markups):', markup_assumption))
+  message(sprintf('  I-O price effects (%s markups):', markup_assumption))
   message(sprintf('    Commodities with nonzero tariff: %d of %d',
                   sum(tau_aligned > 0), length(tau_aligned)))
   message(sprintf('    Aggregate price effect: %.4f%%', aggregate * 100))

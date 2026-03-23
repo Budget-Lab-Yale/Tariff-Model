@@ -572,7 +572,7 @@ build_f5 <- function(outputs) {
 
 
 # =============================================================================
-# F6: Consumer Category Price Effects (Boston Fed)
+# F6: Consumer Category Price Effects (I-O model)
 # =============================================================================
 
 build_f6 <- function(outputs) {

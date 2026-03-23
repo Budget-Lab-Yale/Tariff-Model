@@ -29,17 +29,17 @@ commodity_use_totals <- load_bea_commodity_use_totals(io_data_dir)
 industry_variable_cost <- load_bea_industry_variable_cost(io_data_dir)
 
 # ---- Build matrices ----
-message('Building Boston Fed matrices...')
-bf <- build_boston_fed_matrices(
+message('Building I-O matrices...')
+io_mats <- build_io_matrices(
   use_import, use_domestic, industry_output,
   markup_assumption = markup_assumption,
   commodity_use_totals = commodity_use_totals,
   industry_variable_cost = industry_variable_cost
 )
 
-B_MD <- bf$B_MD
-omega_M <- bf$omega_M
-omega_D <- bf$omega_D
+B_MD <- io_mats$B_MD
+omega_M <- io_mats$omega_M
+omega_D <- io_mats$omega_D
 commodities <- rownames(B_MD)
 
 # ---- Compute import shares per commodity ----
