@@ -23,6 +23,9 @@ scripts/
 # Stray data files
 decile_incomes.csv
 
+# BEA detail Excel files (extracted from zips, large)
+resources/io/detail/*.xlsx
+
 # Extra Excel files
 excel_model/61183-Rules-of-Thumb-2025.xlsx
 excel_model/TBL Data TEMPLATE.xlsx

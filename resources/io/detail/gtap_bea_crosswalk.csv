@@ -1,0 +1,823 @@
+gtap_code,bea_code,bea_description
+PDR,311111,Dog and cat food manufacturing
+PDR,311119,Other animal food manufacturing
+PDR,311210,Flour milling and malt manufacturing
+PDR,311221,Wet corn milling
+PDR,311224,Soybean and other oilseed processing
+PDR,311225,Fats and oils refining and blending
+PDR,311230,Breakfast cereal manufacturing
+PDR,311300,Sugar and confectionery product manufacturing
+PDR,311410,Frozen food manufacturing
+PDR,311420,"Fruit and vegetable canning, pickling, and drying"
+PDR,31151A,Fluid milk and butter manufacturing
+PDR,311513,Cheese manufacturing
+PDR,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+PDR,311520,Ice cream and frozen dessert manufacturing
+PDR,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+PDR,311615,Poultry processing
+PDR,311700,Seafood product preparation and packaging
+PDR,311810,Bread and bakery product manufacturing
+PDR,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+PDR,311910,Snack food manufacturing
+PDR,311920,Coffee and tea manufacturing
+PDR,311930,Flavoring syrup and concentrate manufacturing
+PDR,311940,Seasoning and dressing manufacturing
+PDR,311990,All other food manufacturing
+PDR,312110,Soft drink and ice manufacturing
+PDR,312120,Breweries
+PDR,312130,Wineries
+PDR,312140,Distilleries
+PDR,312200,Tobacco manufacturing
+WHT,311111,Dog and cat food manufacturing
+WHT,311119,Other animal food manufacturing
+WHT,311210,Flour milling and malt manufacturing
+WHT,311221,Wet corn milling
+WHT,311224,Soybean and other oilseed processing
+WHT,311225,Fats and oils refining and blending
+WHT,311230,Breakfast cereal manufacturing
+WHT,311300,Sugar and confectionery product manufacturing
+WHT,311410,Frozen food manufacturing
+WHT,311420,"Fruit and vegetable canning, pickling, and drying"
+WHT,31151A,Fluid milk and butter manufacturing
+WHT,311513,Cheese manufacturing
+WHT,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+WHT,311520,Ice cream and frozen dessert manufacturing
+WHT,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+WHT,311615,Poultry processing
+WHT,311700,Seafood product preparation and packaging
+WHT,311810,Bread and bakery product manufacturing
+WHT,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+WHT,311910,Snack food manufacturing
+WHT,311920,Coffee and tea manufacturing
+WHT,311930,Flavoring syrup and concentrate manufacturing
+WHT,311940,Seasoning and dressing manufacturing
+WHT,311990,All other food manufacturing
+WHT,312110,Soft drink and ice manufacturing
+WHT,312120,Breweries
+WHT,312130,Wineries
+WHT,312140,Distilleries
+WHT,312200,Tobacco manufacturing
+GRO,311111,Dog and cat food manufacturing
+GRO,311119,Other animal food manufacturing
+GRO,311210,Flour milling and malt manufacturing
+GRO,311221,Wet corn milling
+GRO,311224,Soybean and other oilseed processing
+GRO,311225,Fats and oils refining and blending
+GRO,311230,Breakfast cereal manufacturing
+GRO,311300,Sugar and confectionery product manufacturing
+GRO,311410,Frozen food manufacturing
+GRO,311420,"Fruit and vegetable canning, pickling, and drying"
+GRO,31151A,Fluid milk and butter manufacturing
+GRO,311513,Cheese manufacturing
+GRO,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+GRO,311520,Ice cream and frozen dessert manufacturing
+GRO,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+GRO,311615,Poultry processing
+GRO,311700,Seafood product preparation and packaging
+GRO,311810,Bread and bakery product manufacturing
+GRO,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+GRO,311910,Snack food manufacturing
+GRO,311920,Coffee and tea manufacturing
+GRO,311930,Flavoring syrup and concentrate manufacturing
+GRO,311940,Seasoning and dressing manufacturing
+GRO,311990,All other food manufacturing
+GRO,312110,Soft drink and ice manufacturing
+GRO,312120,Breweries
+GRO,312130,Wineries
+GRO,312140,Distilleries
+GRO,312200,Tobacco manufacturing
+V_F,311111,Dog and cat food manufacturing
+V_F,311119,Other animal food manufacturing
+V_F,311210,Flour milling and malt manufacturing
+V_F,311221,Wet corn milling
+V_F,311224,Soybean and other oilseed processing
+V_F,311225,Fats and oils refining and blending
+V_F,311230,Breakfast cereal manufacturing
+V_F,311300,Sugar and confectionery product manufacturing
+V_F,311410,Frozen food manufacturing
+V_F,311420,"Fruit and vegetable canning, pickling, and drying"
+V_F,31151A,Fluid milk and butter manufacturing
+V_F,311513,Cheese manufacturing
+V_F,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+V_F,311520,Ice cream and frozen dessert manufacturing
+V_F,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+V_F,311615,Poultry processing
+V_F,311700,Seafood product preparation and packaging
+V_F,311810,Bread and bakery product manufacturing
+V_F,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+V_F,311910,Snack food manufacturing
+V_F,311920,Coffee and tea manufacturing
+V_F,311930,Flavoring syrup and concentrate manufacturing
+V_F,311940,Seasoning and dressing manufacturing
+V_F,311990,All other food manufacturing
+V_F,312110,Soft drink and ice manufacturing
+V_F,312120,Breweries
+V_F,312130,Wineries
+V_F,312140,Distilleries
+V_F,312200,Tobacco manufacturing
+OSD,311111,Dog and cat food manufacturing
+OSD,311119,Other animal food manufacturing
+OSD,311210,Flour milling and malt manufacturing
+OSD,311221,Wet corn milling
+OSD,311224,Soybean and other oilseed processing
+OSD,311225,Fats and oils refining and blending
+OSD,311230,Breakfast cereal manufacturing
+OSD,311300,Sugar and confectionery product manufacturing
+OSD,311410,Frozen food manufacturing
+OSD,311420,"Fruit and vegetable canning, pickling, and drying"
+OSD,31151A,Fluid milk and butter manufacturing
+OSD,311513,Cheese manufacturing
+OSD,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+OSD,311520,Ice cream and frozen dessert manufacturing
+OSD,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+OSD,311615,Poultry processing
+OSD,311700,Seafood product preparation and packaging
+OSD,311810,Bread and bakery product manufacturing
+OSD,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+OSD,311910,Snack food manufacturing
+OSD,311920,Coffee and tea manufacturing
+OSD,311930,Flavoring syrup and concentrate manufacturing
+OSD,311940,Seasoning and dressing manufacturing
+OSD,311990,All other food manufacturing
+OSD,312110,Soft drink and ice manufacturing
+OSD,312120,Breweries
+OSD,312130,Wineries
+OSD,312140,Distilleries
+OSD,312200,Tobacco manufacturing
+C_B,311111,Dog and cat food manufacturing
+C_B,311119,Other animal food manufacturing
+C_B,311210,Flour milling and malt manufacturing
+C_B,311221,Wet corn milling
+C_B,311224,Soybean and other oilseed processing
+C_B,311225,Fats and oils refining and blending
+C_B,311230,Breakfast cereal manufacturing
+C_B,311300,Sugar and confectionery product manufacturing
+C_B,311410,Frozen food manufacturing
+C_B,311420,"Fruit and vegetable canning, pickling, and drying"
+C_B,31151A,Fluid milk and butter manufacturing
+C_B,311513,Cheese manufacturing
+C_B,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+C_B,311520,Ice cream and frozen dessert manufacturing
+C_B,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+C_B,311615,Poultry processing
+C_B,311700,Seafood product preparation and packaging
+C_B,311810,Bread and bakery product manufacturing
+C_B,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+C_B,311910,Snack food manufacturing
+C_B,311920,Coffee and tea manufacturing
+C_B,311930,Flavoring syrup and concentrate manufacturing
+C_B,311940,Seasoning and dressing manufacturing
+C_B,311990,All other food manufacturing
+C_B,312110,Soft drink and ice manufacturing
+C_B,312120,Breweries
+C_B,312130,Wineries
+C_B,312140,Distilleries
+C_B,312200,Tobacco manufacturing
+PFB,311111,Dog and cat food manufacturing
+PFB,311119,Other animal food manufacturing
+PFB,311210,Flour milling and malt manufacturing
+PFB,311221,Wet corn milling
+PFB,311224,Soybean and other oilseed processing
+PFB,311225,Fats and oils refining and blending
+PFB,311230,Breakfast cereal manufacturing
+PFB,311300,Sugar and confectionery product manufacturing
+PFB,311410,Frozen food manufacturing
+PFB,311420,"Fruit and vegetable canning, pickling, and drying"
+PFB,31151A,Fluid milk and butter manufacturing
+PFB,311513,Cheese manufacturing
+PFB,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+PFB,311520,Ice cream and frozen dessert manufacturing
+PFB,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+PFB,311615,Poultry processing
+PFB,311700,Seafood product preparation and packaging
+PFB,311810,Bread and bakery product manufacturing
+PFB,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+PFB,311910,Snack food manufacturing
+PFB,311920,Coffee and tea manufacturing
+PFB,311930,Flavoring syrup and concentrate manufacturing
+PFB,311940,Seasoning and dressing manufacturing
+PFB,311990,All other food manufacturing
+PFB,312110,Soft drink and ice manufacturing
+PFB,312120,Breweries
+PFB,312130,Wineries
+PFB,312140,Distilleries
+PFB,312200,Tobacco manufacturing
+OCR,1111A0,Oilseed farming
+OCR,1111B0,Grain farming
+OCR,111200,Vegetable and melon farming
+OCR,111300,Fruit and tree nut farming
+OCR,111400,"Greenhouse, nursery, and floriculture production"
+OCR,111900,Other crop farming
+OCR,1121A0,"Beef cattle ranching and farming, including feedlots and dual-purpose ranching and farming"
+OCR,112120,Dairy cattle and milk production
+OCR,112A00,"Animal production, except cattle and poultry and eggs"
+OCR,112300,Poultry and egg production
+CTL,1111A0,Oilseed farming
+CTL,1111B0,Grain farming
+CTL,111200,Vegetable and melon farming
+CTL,111300,Fruit and tree nut farming
+CTL,111400,"Greenhouse, nursery, and floriculture production"
+CTL,111900,Other crop farming
+CTL,1121A0,"Beef cattle ranching and farming, including feedlots and dual-purpose ranching and farming"
+CTL,112120,Dairy cattle and milk production
+CTL,112A00,"Animal production, except cattle and poultry and eggs"
+CTL,112300,Poultry and egg production
+OAP,1111A0,Oilseed farming
+OAP,1111B0,Grain farming
+OAP,111200,Vegetable and melon farming
+OAP,111300,Fruit and tree nut farming
+OAP,111400,"Greenhouse, nursery, and floriculture production"
+OAP,111900,Other crop farming
+OAP,1121A0,"Beef cattle ranching and farming, including feedlots and dual-purpose ranching and farming"
+OAP,112120,Dairy cattle and milk production
+OAP,112A00,"Animal production, except cattle and poultry and eggs"
+OAP,112300,Poultry and egg production
+RMK,311111,Dog and cat food manufacturing
+RMK,311119,Other animal food manufacturing
+RMK,311210,Flour milling and malt manufacturing
+RMK,311221,Wet corn milling
+RMK,311224,Soybean and other oilseed processing
+RMK,311225,Fats and oils refining and blending
+RMK,311230,Breakfast cereal manufacturing
+RMK,311300,Sugar and confectionery product manufacturing
+RMK,311410,Frozen food manufacturing
+RMK,311420,"Fruit and vegetable canning, pickling, and drying"
+RMK,31151A,Fluid milk and butter manufacturing
+RMK,311513,Cheese manufacturing
+RMK,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+RMK,311520,Ice cream and frozen dessert manufacturing
+RMK,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+RMK,311615,Poultry processing
+RMK,311700,Seafood product preparation and packaging
+RMK,311810,Bread and bakery product manufacturing
+RMK,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+RMK,311910,Snack food manufacturing
+RMK,311920,Coffee and tea manufacturing
+RMK,311930,Flavoring syrup and concentrate manufacturing
+RMK,311940,Seasoning and dressing manufacturing
+RMK,311990,All other food manufacturing
+RMK,312110,Soft drink and ice manufacturing
+RMK,312120,Breweries
+RMK,312130,Wineries
+RMK,312140,Distilleries
+RMK,312200,Tobacco manufacturing
+MIL,311111,Dog and cat food manufacturing
+MIL,311119,Other animal food manufacturing
+MIL,311210,Flour milling and malt manufacturing
+MIL,311221,Wet corn milling
+MIL,311224,Soybean and other oilseed processing
+MIL,311225,Fats and oils refining and blending
+MIL,311230,Breakfast cereal manufacturing
+MIL,311300,Sugar and confectionery product manufacturing
+MIL,311410,Frozen food manufacturing
+MIL,311420,"Fruit and vegetable canning, pickling, and drying"
+MIL,31151A,Fluid milk and butter manufacturing
+MIL,311513,Cheese manufacturing
+MIL,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+MIL,311520,Ice cream and frozen dessert manufacturing
+MIL,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+MIL,311615,Poultry processing
+MIL,311700,Seafood product preparation and packaging
+MIL,311810,Bread and bakery product manufacturing
+MIL,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+MIL,311910,Snack food manufacturing
+MIL,311920,Coffee and tea manufacturing
+MIL,311930,Flavoring syrup and concentrate manufacturing
+MIL,311940,Seasoning and dressing manufacturing
+MIL,311990,All other food manufacturing
+MIL,312110,Soft drink and ice manufacturing
+MIL,312120,Breweries
+MIL,312130,Wineries
+MIL,312140,Distilleries
+MIL,312200,Tobacco manufacturing
+WOL,313100,"Fiber, yarn, and thread mills"
+WOL,313200,Fabric mills
+WOL,313300,Textile and fabric finishing and fabric coating mills
+WOL,314110,Carpet and rug mills
+WOL,314120,Curtain and linen mills
+WOL,314900,Other textile product mills
+FRS,113000,Forestry and logging
+FRS,114000,"Fishing, hunting and trapping"
+FRS,115000,Support activities for agriculture and forestry
+FSH,113000,Forestry and logging
+FSH,114000,"Fishing, hunting and trapping"
+FSH,115000,Support activities for agriculture and forestry
+COA,212100,Coal mining
+COA,2122A0,"Iron, gold, silver, and other metal ore mining"
+COA,212230,"Copper, nickel, lead, and zinc mining"
+COA,212310,Stone mining and quarrying
+COA,2123A0,Other nonmetallic mineral mining and quarrying
+OIL,211000,Oil and gas extraction
+GAS,211000,Oil and gas extraction
+OXT,212100,Coal mining
+OXT,2122A0,"Iron, gold, silver, and other metal ore mining"
+OXT,212230,"Copper, nickel, lead, and zinc mining"
+OXT,212310,Stone mining and quarrying
+OXT,2123A0,Other nonmetallic mineral mining and quarrying
+CMT,311111,Dog and cat food manufacturing
+CMT,311119,Other animal food manufacturing
+CMT,311210,Flour milling and malt manufacturing
+CMT,311221,Wet corn milling
+CMT,311224,Soybean and other oilseed processing
+CMT,311225,Fats and oils refining and blending
+CMT,311230,Breakfast cereal manufacturing
+CMT,311300,Sugar and confectionery product manufacturing
+CMT,311410,Frozen food manufacturing
+CMT,311420,"Fruit and vegetable canning, pickling, and drying"
+CMT,31151A,Fluid milk and butter manufacturing
+CMT,311513,Cheese manufacturing
+CMT,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+CMT,311520,Ice cream and frozen dessert manufacturing
+CMT,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+CMT,311615,Poultry processing
+CMT,311700,Seafood product preparation and packaging
+CMT,311810,Bread and bakery product manufacturing
+CMT,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+CMT,311910,Snack food manufacturing
+CMT,311920,Coffee and tea manufacturing
+CMT,311930,Flavoring syrup and concentrate manufacturing
+CMT,311940,Seasoning and dressing manufacturing
+CMT,311990,All other food manufacturing
+CMT,312110,Soft drink and ice manufacturing
+CMT,312120,Breweries
+CMT,312130,Wineries
+CMT,312140,Distilleries
+CMT,312200,Tobacco manufacturing
+OMT,311111,Dog and cat food manufacturing
+OMT,311119,Other animal food manufacturing
+OMT,311210,Flour milling and malt manufacturing
+OMT,311221,Wet corn milling
+OMT,311224,Soybean and other oilseed processing
+OMT,311225,Fats and oils refining and blending
+OMT,311230,Breakfast cereal manufacturing
+OMT,311300,Sugar and confectionery product manufacturing
+OMT,311410,Frozen food manufacturing
+OMT,311420,"Fruit and vegetable canning, pickling, and drying"
+OMT,31151A,Fluid milk and butter manufacturing
+OMT,311513,Cheese manufacturing
+OMT,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+OMT,311520,Ice cream and frozen dessert manufacturing
+OMT,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+OMT,311615,Poultry processing
+OMT,311700,Seafood product preparation and packaging
+OMT,311810,Bread and bakery product manufacturing
+OMT,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+OMT,311910,Snack food manufacturing
+OMT,311920,Coffee and tea manufacturing
+OMT,311930,Flavoring syrup and concentrate manufacturing
+OMT,311940,Seasoning and dressing manufacturing
+OMT,311990,All other food manufacturing
+OMT,312110,Soft drink and ice manufacturing
+OMT,312120,Breweries
+OMT,312130,Wineries
+OMT,312140,Distilleries
+OMT,312200,Tobacco manufacturing
+VOL,311111,Dog and cat food manufacturing
+VOL,311119,Other animal food manufacturing
+VOL,311210,Flour milling and malt manufacturing
+VOL,311221,Wet corn milling
+VOL,311224,Soybean and other oilseed processing
+VOL,311225,Fats and oils refining and blending
+VOL,311230,Breakfast cereal manufacturing
+VOL,311300,Sugar and confectionery product manufacturing
+VOL,311410,Frozen food manufacturing
+VOL,311420,"Fruit and vegetable canning, pickling, and drying"
+VOL,31151A,Fluid milk and butter manufacturing
+VOL,311513,Cheese manufacturing
+VOL,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+VOL,311520,Ice cream and frozen dessert manufacturing
+VOL,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+VOL,311615,Poultry processing
+VOL,311700,Seafood product preparation and packaging
+VOL,311810,Bread and bakery product manufacturing
+VOL,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+VOL,311910,Snack food manufacturing
+VOL,311920,Coffee and tea manufacturing
+VOL,311930,Flavoring syrup and concentrate manufacturing
+VOL,311940,Seasoning and dressing manufacturing
+VOL,311990,All other food manufacturing
+VOL,312110,Soft drink and ice manufacturing
+VOL,312120,Breweries
+VOL,312130,Wineries
+VOL,312140,Distilleries
+VOL,312200,Tobacco manufacturing
+SGR,311111,Dog and cat food manufacturing
+SGR,311119,Other animal food manufacturing
+SGR,311210,Flour milling and malt manufacturing
+SGR,311221,Wet corn milling
+SGR,311224,Soybean and other oilseed processing
+SGR,311225,Fats and oils refining and blending
+SGR,311230,Breakfast cereal manufacturing
+SGR,311300,Sugar and confectionery product manufacturing
+SGR,311410,Frozen food manufacturing
+SGR,311420,"Fruit and vegetable canning, pickling, and drying"
+SGR,31151A,Fluid milk and butter manufacturing
+SGR,311513,Cheese manufacturing
+SGR,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+SGR,311520,Ice cream and frozen dessert manufacturing
+SGR,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+SGR,311615,Poultry processing
+SGR,311700,Seafood product preparation and packaging
+SGR,311810,Bread and bakery product manufacturing
+SGR,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+SGR,311910,Snack food manufacturing
+SGR,311920,Coffee and tea manufacturing
+SGR,311930,Flavoring syrup and concentrate manufacturing
+SGR,311940,Seasoning and dressing manufacturing
+SGR,311990,All other food manufacturing
+SGR,312110,Soft drink and ice manufacturing
+SGR,312120,Breweries
+SGR,312130,Wineries
+SGR,312140,Distilleries
+SGR,312200,Tobacco manufacturing
+OFD,311111,Dog and cat food manufacturing
+OFD,311119,Other animal food manufacturing
+OFD,311210,Flour milling and malt manufacturing
+OFD,311221,Wet corn milling
+OFD,311224,Soybean and other oilseed processing
+OFD,311225,Fats and oils refining and blending
+OFD,311230,Breakfast cereal manufacturing
+OFD,311300,Sugar and confectionery product manufacturing
+OFD,311410,Frozen food manufacturing
+OFD,311420,"Fruit and vegetable canning, pickling, and drying"
+OFD,31151A,Fluid milk and butter manufacturing
+OFD,311513,Cheese manufacturing
+OFD,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+OFD,311520,Ice cream and frozen dessert manufacturing
+OFD,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+OFD,311615,Poultry processing
+OFD,311700,Seafood product preparation and packaging
+OFD,311810,Bread and bakery product manufacturing
+OFD,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+OFD,311910,Snack food manufacturing
+OFD,311920,Coffee and tea manufacturing
+OFD,311930,Flavoring syrup and concentrate manufacturing
+OFD,311940,Seasoning and dressing manufacturing
+OFD,311990,All other food manufacturing
+OFD,312110,Soft drink and ice manufacturing
+OFD,312120,Breweries
+OFD,312130,Wineries
+OFD,312140,Distilleries
+OFD,312200,Tobacco manufacturing
+B_T,311111,Dog and cat food manufacturing
+B_T,311119,Other animal food manufacturing
+B_T,311210,Flour milling and malt manufacturing
+B_T,311221,Wet corn milling
+B_T,311224,Soybean and other oilseed processing
+B_T,311225,Fats and oils refining and blending
+B_T,311230,Breakfast cereal manufacturing
+B_T,311300,Sugar and confectionery product manufacturing
+B_T,311410,Frozen food manufacturing
+B_T,311420,"Fruit and vegetable canning, pickling, and drying"
+B_T,31151A,Fluid milk and butter manufacturing
+B_T,311513,Cheese manufacturing
+B_T,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+B_T,311520,Ice cream and frozen dessert manufacturing
+B_T,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+B_T,311615,Poultry processing
+B_T,311700,Seafood product preparation and packaging
+B_T,311810,Bread and bakery product manufacturing
+B_T,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+B_T,311910,Snack food manufacturing
+B_T,311920,Coffee and tea manufacturing
+B_T,311930,Flavoring syrup and concentrate manufacturing
+B_T,311940,Seasoning and dressing manufacturing
+B_T,311990,All other food manufacturing
+B_T,312110,Soft drink and ice manufacturing
+B_T,312120,Breweries
+B_T,312130,Wineries
+B_T,312140,Distilleries
+B_T,312200,Tobacco manufacturing
+PCR,311111,Dog and cat food manufacturing
+PCR,311119,Other animal food manufacturing
+PCR,311210,Flour milling and malt manufacturing
+PCR,311221,Wet corn milling
+PCR,311224,Soybean and other oilseed processing
+PCR,311225,Fats and oils refining and blending
+PCR,311230,Breakfast cereal manufacturing
+PCR,311300,Sugar and confectionery product manufacturing
+PCR,311410,Frozen food manufacturing
+PCR,311420,"Fruit and vegetable canning, pickling, and drying"
+PCR,31151A,Fluid milk and butter manufacturing
+PCR,311513,Cheese manufacturing
+PCR,311514,"Dry, condensed, and evaporated dairy product manufacturing"
+PCR,311520,Ice cream and frozen dessert manufacturing
+PCR,31161A,"Animal (except poultry) slaughtering, rendering, and processing"
+PCR,311615,Poultry processing
+PCR,311700,Seafood product preparation and packaging
+PCR,311810,Bread and bakery product manufacturing
+PCR,3118A0,"Cookie, cracker, pasta, and tortilla manufacturing"
+PCR,311910,Snack food manufacturing
+PCR,311920,Coffee and tea manufacturing
+PCR,311930,Flavoring syrup and concentrate manufacturing
+PCR,311940,Seasoning and dressing manufacturing
+PCR,311990,All other food manufacturing
+PCR,312110,Soft drink and ice manufacturing
+PCR,312120,Breweries
+PCR,312130,Wineries
+PCR,312140,Distilleries
+PCR,312200,Tobacco manufacturing
+TEX,313100,"Fiber, yarn, and thread mills"
+TEX,313200,Fabric mills
+TEX,313300,Textile and fabric finishing and fabric coating mills
+TEX,314110,Carpet and rug mills
+TEX,314120,Curtain and linen mills
+TEX,314900,Other textile product mills
+WAP,315000,Apparel manufacturing
+WAP,316000,Leather and allied product manufacturing
+LEA,315000,Apparel manufacturing
+LEA,316000,Leather and allied product manufacturing
+LUM,321100,Sawmills and wood preservation
+LUM,321200,"Veneer, plywood, and engineered wood product manufacturing"
+LUM,321910,Millwork
+LUM,3219A0,All other wood product manufacturing
+PPP,322110,Pulp mills
+PPP,322120,Paper mills
+PPP,322130,Paperboard mills
+PPP,322210,Paperboard container manufacturing
+PPP,322220,Paper bag and coated and treated paper manufacturing
+PPP,322230,Stationery product manufacturing
+PPP,322291,Sanitary paper product manufacturing
+PPP,322299,All other converted paper product manufacturing
+P_C,324110,Petroleum refineries
+P_C,324121,Asphalt paving mixture and block manufacturing
+P_C,324122,Asphalt shingle and coating materials manufacturing
+P_C,324190,Other petroleum and coal products manufacturing
+CHM,325110,Petrochemical manufacturing
+CHM,325120,Industrial gas manufacturing
+CHM,325130,Synthetic dye and pigment manufacturing
+CHM,325180,Other basic inorganic chemical manufacturing
+CHM,325190,Other basic organic chemical manufacturing
+CHM,325211,Plastics material and resin manufacturing
+CHM,3252A0,Synthetic rubber and artificial and synthetic fibers and filaments manufacturing
+CHM,325411,Medicinal and botanical manufacturing
+CHM,325412,Pharmaceutical preparation manufacturing
+CHM,325413,In-vitro diagnostic substance manufacturing
+CHM,325414,Biological product (except diagnostic) manufacturing
+CHM,325310,Fertilizer manufacturing
+CHM,325320,Pesticide and other agricultural chemical manufacturing
+CHM,325510,Paint and coating manufacturing
+CHM,325520,Adhesive manufacturing
+CHM,325610,Soap and cleaning compound manufacturing
+CHM,325620,Toilet preparation manufacturing
+CHM,325910,Printing ink manufacturing
+CHM,3259A0,All other chemical product and preparation manufacturing
+BPH,325110,Petrochemical manufacturing
+BPH,325120,Industrial gas manufacturing
+BPH,325130,Synthetic dye and pigment manufacturing
+BPH,325180,Other basic inorganic chemical manufacturing
+BPH,325190,Other basic organic chemical manufacturing
+BPH,325211,Plastics material and resin manufacturing
+BPH,3252A0,Synthetic rubber and artificial and synthetic fibers and filaments manufacturing
+BPH,325411,Medicinal and botanical manufacturing
+BPH,325412,Pharmaceutical preparation manufacturing
+BPH,325413,In-vitro diagnostic substance manufacturing
+BPH,325414,Biological product (except diagnostic) manufacturing
+BPH,325310,Fertilizer manufacturing
+BPH,325320,Pesticide and other agricultural chemical manufacturing
+BPH,325510,Paint and coating manufacturing
+BPH,325520,Adhesive manufacturing
+BPH,325610,Soap and cleaning compound manufacturing
+BPH,325620,Toilet preparation manufacturing
+BPH,325910,Printing ink manufacturing
+BPH,3259A0,All other chemical product and preparation manufacturing
+RPP,326110,Plastics packaging materials and unlaminated film and sheet manufacturing
+RPP,326120,"Plastics pipe, pipe fitting, and unlaminated profile shape manufacturing"
+RPP,326130,"Laminated plastics plate, sheet (except packaging), and shape manufacturing"
+RPP,326140,Polystyrene foam product manufacturing
+RPP,326150,Urethane and other foam product (except polystyrene) manufacturing
+RPP,326160,Plastics bottle manufacturing
+RPP,326190,Other plastics product manufacturing
+RPP,326210,Tire manufacturing
+RPP,326220,Rubber and plastics hoses and belting manufacturing
+RPP,326290,Other rubber product manufacturing
+NMM,327100,Clay product and refractory manufacturing
+NMM,327200,Glass and glass product manufacturing
+NMM,327310,Cement manufacturing
+NMM,327320,Ready-mix concrete manufacturing
+NMM,327330,"Concrete pipe, brick, and block manufacturing"
+NMM,327390,Other concrete product manufacturing
+NMM,327400,Lime and gypsum product manufacturing
+NMM,327910,Abrasive product manufacturing
+NMM,327991,Cut stone and stone product manufacturing
+NMM,327992,Ground or treated mineral and earth manufacturing
+NMM,327993,Mineral wool manufacturing
+NMM,327999,Miscellaneous nonmetallic mineral products
+I_S,331110,Iron and steel mills and ferroalloy manufacturing
+I_S,331200,Steel product manufacturing from purchased steel
+I_S,331313,Alumina refining and primary aluminum production
+I_S,331314,Secondary smelting and alloying of aluminum
+I_S,33131B,Aluminum product manufacturing from purchased aluminum
+I_S,331410,Nonferrous metal (except aluminum) smelting and refining
+I_S,331420,"Copper rolling, drawing, extruding and alloying"
+I_S,331490,"Nonferrous metal (except copper and aluminum) rolling, drawing, extruding and alloying"
+I_S,331510,Ferrous metal foundries
+I_S,331520,Nonferrous metal foundries
+NFM,331110,Iron and steel mills and ferroalloy manufacturing
+NFM,331200,Steel product manufacturing from purchased steel
+NFM,331313,Alumina refining and primary aluminum production
+NFM,331314,Secondary smelting and alloying of aluminum
+NFM,33131B,Aluminum product manufacturing from purchased aluminum
+NFM,331410,Nonferrous metal (except aluminum) smelting and refining
+NFM,331420,"Copper rolling, drawing, extruding and alloying"
+NFM,331490,"Nonferrous metal (except copper and aluminum) rolling, drawing, extruding and alloying"
+NFM,331510,Ferrous metal foundries
+NFM,331520,Nonferrous metal foundries
+FMP,33211A,"All other forging, stamping, and sintering"
+FMP,332114,Custom roll forming
+FMP,332119,"Metal crown, closure, and other metal stamping (except automotive)"
+FMP,332200,Cutlery and handtool manufacturing
+FMP,332310,Plate work and fabricated structural product manufacturing
+FMP,332320,Ornamental and architectural metal products manufacturing
+FMP,332410,Power boiler and heat exchanger manufacturing
+FMP,332420,Metal tank (heavy gauge) manufacturing
+FMP,332430,"Metal can, box, and other metal container (light gauge) manufacturing"
+FMP,332500,Hardware manufacturing
+FMP,332600,Spring and wire product manufacturing
+FMP,332710,Machine shops
+FMP,332720,"Turned product and screw, nut, and bolt manufacturing"
+FMP,332800,"Coating, engraving, heat treating and allied activities"
+FMP,33291A,Valve and fittings other than plumbing
+FMP,332913,Plumbing fixture fitting and trim manufacturing
+FMP,332991,Ball and roller bearing manufacturing
+FMP,33299A,"Ammunition, arms, ordnance, and accessories manufacturing"
+FMP,332996,Fabricated pipe and pipe fitting manufacturing
+FMP,332999,Other fabricated metal manufacturing
+OME,333111,Farm machinery and equipment manufacturing
+OME,333112,Lawn and garden equipment manufacturing
+OME,333120,Construction machinery manufacturing
+OME,333130,Mining and oil and gas field machinery manufacturing
+OME,333242,Semiconductor machinery manufacturing
+OME,33329A,Other industrial machinery manufacturing
+OME,333314,Optical instrument and lens manufacturing
+OME,333316,Photographic and photocopying equipment manufacturing
+OME,333318,Other commercial and service industry machinery manufacturing
+OME,333413,Industrial and commercial fan and blower and air purification equipment manufacturing
+OME,333414,Heating equipment (except warm air furnaces) manufacturing
+OME,333415,"Air conditioning, refrigeration, and warm air heating equipment manufacturing"
+OME,333511,Industrial mold manufacturing
+OME,333517,Machine tool manufacturing
+OME,333514,"Special tool, die, jig, and fixture manufacturing"
+OME,33351B,"Cutting and machine tool accessory, rolling mill, and other metalworking machinery manufacturing"
+OME,333611,Turbine and turbine generator set units manufacturing
+OME,333612,"Speed changer, industrial high-speed drive, and gear manufacturing"
+OME,333613,Mechanical power transmission equipment manufacturing
+OME,333618,Other engine equipment manufacturing
+OME,333914,"Measuring, dispensing, and other pumping equipment manufacturing"
+OME,333912,Air and gas compressor manufacturing
+OME,333920,Material handling equipment manufacturing
+OME,333991,Power-driven handtool manufacturing
+OME,33399A,Other general purpose machinery manufacturing
+OME,333993,Packaging machinery manufacturing
+OME,333994,Industrial process furnace and oven manufacturing
+OME,33399B,Fluid power process machinery
+ELE,334111,Electronic computer manufacturing
+ELE,334112,Computer storage device manufacturing
+ELE,334118,Computer terminals and other computer peripheral equipment manufacturing
+ELE,334210,Telephone apparatus manufacturing
+ELE,334220,Broadcast and wireless communications equipment
+ELE,334290,Other communications equipment manufacturing
+ELE,334413,Semiconductor and related device manufacturing
+ELE,334418,Printed circuit assembly (electronic assembly) manufacturing
+ELE,33441A,Other electronic component manufacturing
+ELE,334510,Electromedical and electrotherapeutic apparatus manufacturing
+ELE,334511,"Search, detection, and navigation instruments manufacturing"
+ELE,334512,Automatic environmental control manufacturing
+ELE,334513,Industrial process variable instruments manufacturing
+ELE,334514,Totalizing fluid meter and counting device manufacturing
+ELE,334515,Electricity and signal testing instruments manufacturing
+ELE,334516,Analytical laboratory instrument manufacturing
+ELE,334517,Irradiation apparatus manufacturing
+ELE,33451A,"Watch, clock, and other measuring and controlling device manufacturing"
+ELE,334300,Audio and video equipment manufacturing
+ELE,334610,Manufacturing and reproducing magnetic and optical media
+EEQ,335110,Electric lamp bulb and part manufacturing
+EEQ,335120,Lighting fixture manufacturing
+EEQ,335210,Small electrical appliance manufacturing
+EEQ,335220,Major household appliance manufacturing
+EEQ,335311,"Power, distribution, and specialty transformer manufacturing"
+EEQ,335312,Motor and generator manufacturing
+EEQ,335313,Switchgear and switchboard apparatus manufacturing
+EEQ,335314,Relay and industrial control manufacturing
+EEQ,335911,Storage battery manufacturing
+EEQ,335912,Primary battery manufacturing
+EEQ,335920,Communication and energy wire and cable manufacturing
+EEQ,335930,Wiring device manufacturing
+EEQ,335991,Carbon and graphite product manufacturing
+EEQ,335999,All other miscellaneous electrical equipment and component manufacturing
+MVH,336111,Automobile manufacturing
+MVH,336112,Light truck and utility vehicle manufacturing
+MVH,336120,Heavy duty truck manufacturing
+MVH,336211,Motor vehicle body manufacturing
+MVH,336212,Truck trailer manufacturing
+MVH,336213,Motor home manufacturing
+MVH,336214,Travel trailer and camper manufacturing
+MVH,336310,Motor vehicle gasoline engine and engine parts manufacturing
+MVH,336320,Motor vehicle electrical and electronic equipment manufacturing
+MVH,3363A0,"Motor vehicle steering, suspension component (except spring), and brake systems manufacturing"
+MVH,336350,Motor vehicle transmission and power train parts manufacturing
+MVH,336360,Motor vehicle seating and interior trim manufacturing
+MVH,336370,Motor vehicle metal stamping
+MVH,336390,Other motor vehicle parts manufacturing
+OTN,336411,Aircraft manufacturing
+OTN,336412,Aircraft engine and engine parts manufacturing
+OTN,336413,Other aircraft parts and auxiliary equipment manufacturing
+OTN,336414,Guided missile and space vehicle manufacturing
+OTN,33641A,Propulsion units and parts for space vehicles and guided missiles
+OTN,336500,Railroad rolling stock manufacturing
+OTN,336611,Ship building and repairing
+OTN,336612,Boat building
+OTN,336991,"Motorcycle, bicycle, and parts manufacturing"
+OTN,336992,"Military armored vehicle, tank, and tank component manufacturing"
+OTN,336999,All other transportation equipment manufacturing
+OMF,339112,Surgical and medical instrument manufacturing
+OMF,339113,Surgical appliance and supplies manufacturing
+OMF,339114,Dental equipment and supplies manufacturing
+OMF,339115,Ophthalmic goods manufacturing
+OMF,339116,Dental laboratories
+OMF,339910,Jewelry and silverware manufacturing
+OMF,339920,Sporting and athletic goods manufacturing
+OMF,339930,"Doll, toy, and game manufacturing"
+OMF,339940,Office supplies (except paper) manufacturing
+OMF,339950,Sign manufacturing
+OMF,339990,All other miscellaneous manufacturing
+ELY,221100,"Electric power generation, transmission, and distribution"
+ELY,221200,Natural gas distribution
+ELY,221300,"Water, sewage and other systems"
+GDT,221100,"Electric power generation, transmission, and distribution"
+GDT,221200,Natural gas distribution
+GDT,221300,"Water, sewage and other systems"
+WTR,221100,"Electric power generation, transmission, and distribution"
+WTR,221200,Natural gas distribution
+WTR,221300,"Water, sewage and other systems"
+CNS,233210,Health care structures
+CNS,233262,Educational and vocational structures
+CNS,2332A0,Office and commercial structures
+CNS,233240,Power and communication structures
+CNS,2332C0,Transportation structures and highways and streets
+CNS,233230,Manufacturing structures
+CNS,2332D0,Other nonresidential structures
+CNS,233411,Single-family residential structures
+CNS,233412,Multifamily residential structures
+CNS,2334A0,Other residential structures
+CNS,230301,Nonresidential maintenance and repair
+CNS,230302,Residential maintenance and repair
+TRD,423100,Motor vehicle and motor vehicle parts and supplies
+TRD,423400,Professional and commercial equipment and supplies
+TRD,423600,Household appliances and electrical and electronic goods
+TRD,423800,"Machinery, equipment, and supplies"
+TRD,423A00,Other durable goods merchant wholesalers
+TRD,424200,Drugs and druggists' sundries
+TRD,424400,Grocery and related product wholesalers
+TRD,424700,Petroleum and petroleum products
+TRD,424A00,Other nondurable goods merchant wholesalers
+TRD,425000,Wholesale electronic markets and agents and brokers
+TRD,4200ID,Customs duties
+AFS,722110,Full-service restaurants
+AFS,722211,Limited-service restaurants
+AFS,722A00,All other food and drinking places
+OTP,484000,Truck transportation
+WTP,483000,Water transportation
+ATP,481000,Air transportation
+WHS,493000,Warehousing and storage
+CMN,515100,Radio and television broadcasting
+CMN,515200,Cable and other subscription programming
+CMN,517110,Wired telecommunications carriers
+CMN,517210,Wireless telecommunications carriers (except satellite)
+CMN,517A00,"Satellite, telecommunications resellers, and all other telecommunications"
+OFI,52A000,Monetary authorities and depository credit intermediation
+OFI,522A00,Nondepository credit intermediation and related activities
+INS,524113,Direct life insurance carriers
+INS,5241XX,"Insurance carriers, except direct life"
+INS,524200,"Insurance agencies, brokerages, and related activities"
+RSA,531ORE,Other real estate
+OBS,541200,"Accounting, tax preparation, bookkeeping, and payroll services"
+OBS,541300,"Architectural, engineering, and related services"
+OBS,541610,Management consulting services
+OBS,5416A0,Environmental and other technical consulting services
+OBS,541700,Scientific research and development services
+OBS,541800,"Advertising, public relations, and related services"
+OBS,541400,Specialized design services
+OBS,5419A0,"All other miscellaneous professional, scientific, and technical services"
+OBS,541920,Photographic services
+OBS,541940,Veterinary services
+ROS,711100,Performing arts companies
+ROS,711200,Spectator sports
+ROS,711A00,Promoters of performing arts and sports and agents for public figures
+ROS,711500,"Independent artists, writers, and performers"
+ROS,712000,"Museums, historical sites, zoos, and parks"
+OSG,GSLGE,State and local government (educational services)
+OSG,GSLGH,State and local government (hospitals and health services)
+OSG,GSLGO,State and local government (other services)
+EDU,611100,Elementary and secondary schools
+EDU,611A00,"Junior colleges, colleges, universities, and professional schools"
+EDU,611B00,Other educational services
+HHT,621100,Offices of physicians
+HHT,621200,Offices of dentists
+HHT,621300,Offices of other health practitioners
+HHT,621400,Outpatient care centers
+HHT,621500,Medical and diagnostic laboratories
+HHT,621600,Home health care services
+HHT,621900,Other ambulatory health care services
+DWE,531HSO,Owner-occupied housing
+DWE,531HST,Tenant-occupied housing

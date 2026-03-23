@@ -125,11 +125,16 @@ load_inputs <- function(scenario) {
   # Boston Fed I-O data (always loaded)
   # ============================
 
-  inputs$bea_use_import <- load_bea_use_data('import')
-  inputs$bea_use_domestic <- load_bea_use_data('domestic')
-  inputs$bea_pce_weights <- load_bea_pce_weights()
-  inputs$bea_industry_output <- load_bea_industry_output()
-  inputs$bea_leontief_domestic <- load_bea_requirements('domestic')
+  bea_io_level <- inputs$assumptions$bea_io_level %||% 'summary'
+  io_data_dir <- resolve_io_data_dir(bea_io_level)
+  inputs$io_data_dir <- io_data_dir
+  message(sprintf('  BEA I-O level: %s (%s)', bea_io_level, io_data_dir))
+
+  inputs$bea_use_import <- load_bea_use_data('import', io_data_dir)
+  inputs$bea_use_domestic <- load_bea_use_data('domestic', io_data_dir)
+  inputs$bea_pce_weights <- load_bea_pce_weights(io_data_dir)
+  inputs$bea_industry_output <- load_bea_industry_output(io_data_dir)
+  inputs$bea_leontief_domestic <- load_bea_requirements('domestic', io_data_dir)
 
   # Pre-compute Boston Fed matrices (B_MD, omega_M, omega_D)
   inputs$boston_fed_matrices <- build_boston_fed_matrices(
@@ -142,10 +147,10 @@ load_inputs <- function(scenario) {
                   ncol(inputs$boston_fed_matrices$B_MD)))
 
   # GTAP-BEA crosswalk (for post-substitution adjustments)
-  inputs$gtap_bea_crosswalk <- load_gtap_bea_crosswalk()
+  inputs$gtap_bea_crosswalk <- load_gtap_bea_crosswalk(io_data_dir)
 
   # PCE bridge for consumer category reporting
-  inputs$pce_bridge <- load_pce_bridge()
+  inputs$pce_bridge <- load_pce_bridge(io_data_dir)
 
   # ============================
   # Baseline data
@@ -295,6 +300,11 @@ load_inputs <- function(scenario) {
   inputs$tau_M <- setNames(inputs$bea_deltas$etr_delta, inputs$bea_deltas$bea_code)
   message(sprintf('  tau_M vector: %d BEA commodities, mean=%.4f%%',
                   length(inputs$tau_M), mean(inputs$tau_M) * 100))
+
+  # Disaggregate tau_M to detail BEA codes if using detail-level tables
+  if (bea_io_level == 'detail') {
+    inputs$tau_M <- disaggregate_tau_M(inputs$tau_M, io_data_dir)
+  }
 
   # ============================
   # Mappings

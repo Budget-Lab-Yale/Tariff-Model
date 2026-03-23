@@ -121,7 +121,11 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
     inputs$nvpp_commodity_ratio, inputs$baselines$viws_baseline
   )
   # omega_M + omega_D = 1 by BEA use table construction (import + domestic = total)
+  # Preserve zero-use commodities: pre-sub has omega_M=0, omega_D=0 for these,
+  # so post-sub must keep both at 0 rather than letting 1 - 0 = 1 create a fake share
+  zero_use <- inputs$boston_fed_matrices$omega_M == 0 & inputs$boston_fed_matrices$omega_D == 0
   omega_D_post <- 1 - omega_M_post
+  omega_D_post[zero_use] <- 0
 
   postsub_results <- compute_boston_fed_prices(
     tau_M = tau_M_post,
@@ -141,12 +145,37 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage') {
     postsub = postsub_results
   )
 
+  # When using detail-level tables, reaggregate commodity prices to summary-level
+  # NIPA categories for the distribution pipeline (which needs 2024 NIPA line numbers)
+  bea_io_level <- inputs$assumptions$bea_io_level %||% 'summary'
+  if (bea_io_level == 'detail') {
+    message('  Reaggregating detail prices to summary NIPA categories for distribution:')
+    summary_to_detail <- read_csv(
+      file.path(inputs$io_data_dir, 'bea_summary_to_detail.csv'),
+      show_col_types = FALSE
+    )
+    summary_bridge <- load_pce_bridge('resources/io')
+
+    message('  Pre-substitution:')
+    price_results$presub$pce_category_prices <- reaggregate_to_summary_pce(
+      presub_results$bea_commodity_prices,
+      inputs$bea_use_import, inputs$bea_use_domestic,
+      summary_to_detail, summary_bridge, markup_assumption
+    )
+    message('  Post-substitution:')
+    price_results$postsub$pce_category_prices <- reaggregate_to_summary_pce(
+      postsub_results$bea_commodity_prices,
+      inputs$bea_use_import, inputs$bea_use_domestic,
+      summary_to_detail, summary_bridge, markup_assumption
+    )
+  }
+
   # Store PCE category prices and BEA commodity prices for outputs
-  inputs$pce_category_prices <- presub_results$pce_category_prices
+  inputs$pce_category_prices <- price_results$presub$pce_category_prices
 
   # Build BEA commodity detail table
   bea_prices_vec <- presub_results$bea_commodity_prices
-  desc_file <- 'resources/io/bea_commodity_descriptions.csv'
+  desc_file <- file.path(inputs$io_data_dir, 'bea_commodity_descriptions.csv')
   if (file.exists(desc_file)) {
     bea_desc <- read_csv(desc_file, show_col_types = FALSE) %>%
       rename(bea_code = `Commodity Code`, description = Description)

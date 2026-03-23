@@ -38,11 +38,154 @@ library(tidyverse)
 
 # ==== Loading functions ======================================================
 
+#' Resolve the BEA I-O data directory based on table level
+#'
+#' @param level Either 'summary' (73 commodities, 2024) or 'detail' (~400, 2017)
+#' @return Path to the data directory
+resolve_io_data_dir <- function(level = 'summary') {
+  if (level == 'detail') {
+    return('resources/io/detail')
+  }
+  return('resources/io')
+}
+
+
+#' Disaggregate summary-level tau_M to detail-level BEA codes
+#'
+#' When using detail-level BEA tables, the tariff vector (tau_M) from
+#' Tariff-ETRs uses summary BEA codes (e.g., 311FT). This function expands
+#' it to detail codes (e.g., 311111, 311119, ...) using the summary-to-detail
+#' mapping. Each detail code inherits its parent summary code's tariff.
+#'
+#' @param tau_M Named vector of tariff shocks keyed by summary BEA codes
+#' @param data_dir Path to detail BEA I-O data directory
+#' @return Named vector of tariff shocks keyed by detail BEA codes
+disaggregate_tau_M <- function(tau_M, data_dir) {
+
+  mapping_path <- file.path(data_dir, 'bea_summary_to_detail.csv')
+  if (!file.exists(mapping_path)) {
+    stop('Summary-to-detail mapping not found: ', mapping_path,
+         '\n  Run python src/util/extract_bea_detail.py')
+  }
+
+  mapping <- read_csv(mapping_path, show_col_types = FALSE)
+
+  # For each detail code, look up its summary code's tariff
+  detail_tau <- setNames(
+    tau_M[mapping$summary_code],
+    mapping$detail_code
+  )
+
+  # Codes with no tariff (services, etc.) get 0
+  detail_tau[is.na(detail_tau)] <- 0
+
+  matched <- sum(mapping$summary_code %in% names(tau_M))
+  nonzero <- sum(detail_tau > 0)
+  message(sprintf('  Disaggregated tau_M: %d summary -> %d detail codes (%d nonzero)',
+                  length(tau_M), length(detail_tau), nonzero))
+
+  return(detail_tau)
+}
+
+
+#' Reaggregate detail commodity prices to summary-level NIPA categories
+#'
+#' When using detail-level BEA tables, the price model produces ~400 commodity
+#' prices and maps them through the 2017 detail PCE bridge (212 NIPA categories).
+#' The distribution pipeline requires 2024 summary NIPA line numbers (76 categories)
+#' to join with the BLS distributional spending data.
+#'
+#' This function:
+#'   1. Aggregates detail commodity prices to summary BEA codes, weighted by
+#'      total commodity use (import + domestic intermediate use)
+#'   2. Applies the summary PCE bridge to get 76 categories with correct line numbers
+#'
+#' @param bea_commodity_prices Named vector of per-commodity price effects (fractional)
+#' @param use_import Detail-level CxI import use matrix
+#' @param use_domestic Detail-level CxI domestic use matrix
+#' @param summary_to_detail Tibble with summary_code, detail_code columns
+#' @param summary_bridge Summary-level PCE bridge tibble
+#' @param markup_assumption Either 'constant_percentage' or 'constant_dollar'
+#'
+#' @return Tibble matching pce_category_prices format (nipa_line, pce_category,
+#'   sr_price_effect, purchasers_value, pce_share)
+reaggregate_to_summary_pce <- function(bea_commodity_prices,
+                                       use_import, use_domestic,
+                                       summary_to_detail,
+                                       summary_bridge,
+                                       markup_assumption = 'constant_percentage') {
+
+  # ---- Total commodity use as weights ----
+  total_use <- rowSums(use_import) + rowSums(use_domestic)
+
+  # ---- Build detail prices tibble ----
+  detail_prices <- tibble(
+    detail_code = names(bea_commodity_prices),
+    price = as.numeric(bea_commodity_prices),
+    use_weight = as.numeric(total_use[names(bea_commodity_prices)])
+  ) %>%
+    mutate(use_weight = coalesce(use_weight, 0))
+
+  # ---- Aggregate to summary codes ----
+  summary_prices <- detail_prices %>%
+    inner_join(summary_to_detail, by = 'detail_code') %>%
+    group_by(summary_code) %>%
+    summarise(
+      price = if (sum(use_weight) > 0) {
+        sum(price * use_weight) / sum(use_weight)
+      } else {
+        mean(price)
+      },
+      total_use = sum(use_weight),
+      n_detail = n(),
+      .groups = 'drop'
+    ) %>%
+    rename(bea_code = summary_code)
+
+  nonzero <- sum(summary_prices$price > 0)
+  message(sprintf('  Reaggregated %d detail -> %d summary commodity prices (%d nonzero)',
+                  nrow(detail_prices), nrow(summary_prices), nonzero))
+
+  # ---- Apply summary PCE bridge (C matrix) ----
+  if (markup_assumption == 'constant_dollar') {
+    numerator_col <- 'producers_value'
+  } else {
+    numerator_col <- 'purchasers_value'
+  }
+
+  pce_category_prices <- summary_bridge %>%
+    left_join(summary_prices %>% select(bea_code, price), by = 'bea_code') %>%
+    mutate(price = coalesce(price, 0)) %>%
+    group_by(nipa_line, pce_category) %>%
+    summarise(
+      sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
+        sum(price * .data[[numerator_col]]) / sum(purchasers_value)
+      } else {
+        0
+      },
+      purchasers_value = sum(purchasers_value),
+      n_commodities = n(),
+      .groups = 'drop'
+    ) %>%
+    mutate(
+      sr_price_effect = sr_price_effect * 100,
+      pce_share = purchasers_value / sum(purchasers_value) * 100
+    ) %>%
+    arrange(nipa_line)
+
+  message(sprintf('  Summary PCE categories for distribution: %d categories',
+                  nrow(pce_category_prices)))
+
+  return(pce_category_prices)
+}
+
+
 #' Load BEA requirements matrix (Leontief inverse)
 #'
 #' @param type Either 'domestic' or 'total'
+#' @param data_dir Path to BEA I-O data directory
 #' @return Named matrix (rows = industries, cols = commodities)
-load_bea_requirements <- function(type = 'domestic') {
+load_bea_requirements <- function(type = 'domestic', data_dir = 'resources/io') {
 
   valid_types <- c('domestic', 'total')
   if (!type %in% valid_types) {
@@ -50,7 +193,7 @@ load_bea_requirements <- function(type = 'domestic') {
          paste(valid_types, collapse = ', '))
   }
 
-  path <- file.path('resources', 'io', paste0('bea_requirements_', type, '.csv'))
+  path <- file.path(data_dir, paste0('bea_requirements_', type, '.csv'))
   if (!file.exists(path)) {
     stop('BEA requirements file not found: ', path)
   }
@@ -68,10 +211,11 @@ load_bea_requirements <- function(type = 'domestic') {
 
 #' Load GTAP-BEA crosswalk (full, including services)
 #'
+#' @param data_dir Path to BEA I-O data directory
 #' @return Tibble with gtap_code, bea_code, bea_description
-load_gtap_bea_crosswalk <- function() {
+load_gtap_bea_crosswalk <- function(data_dir = 'resources/io') {
 
-  path <- 'resources/io/gtap_bea_crosswalk.csv'
+  path <- file.path(data_dir, 'gtap_bea_crosswalk.csv')
   if (!file.exists(path)) {
     stop('GTAP-BEA crosswalk not found: ', path)
   }
@@ -88,8 +232,9 @@ load_gtap_bea_crosswalk <- function() {
 #' bea_code (commodity), remaining columns are BEA industry codes.
 #'
 #' @param type Either 'import' or 'domestic'
+#' @param data_dir Path to BEA I-O data directory
 #' @return Named matrix (rows = BEA commodity codes, cols = BEA industry codes)
-load_bea_use_data <- function(type) {
+load_bea_use_data <- function(type, data_dir = 'resources/io') {
 
   valid_types <- c('import', 'domestic')
   if (!type %in% valid_types) {
@@ -97,7 +242,7 @@ load_bea_use_data <- function(type) {
          paste(valid_types, collapse = ', '))
   }
 
-  path <- file.path('resources', 'io', paste0('bea_use_', type, '.csv'))
+  path <- file.path(data_dir, paste0('bea_use_', type, '.csv'))
   if (!file.exists(path)) {
     stop('BEA use table not found: ', path)
   }
@@ -118,10 +263,11 @@ load_bea_use_data <- function(type) {
 #'
 #' Reads PCE (personal consumption expenditure) by BEA commodity code.
 #'
+#' @param data_dir Path to BEA I-O data directory
 #' @return Named numeric vector (names = bea_code, values = pce)
-load_bea_pce_weights <- function() {
+load_bea_pce_weights <- function(data_dir = 'resources/io') {
 
-  path <- 'resources/io/bea_pce_by_commodity.csv'
+  path <- file.path(data_dir, 'bea_pce_by_commodity.csv')
   if (!file.exists(path)) {
     stop('BEA PCE weights file not found: ', path)
   }
@@ -139,10 +285,11 @@ load_bea_pce_weights <- function() {
 #'
 #' Reads total output by BEA industry code.
 #'
+#' @param data_dir Path to BEA I-O data directory
 #' @return Named numeric vector (names = bea_code, values = output)
-load_bea_industry_output <- function() {
+load_bea_industry_output <- function(data_dir = 'resources/io') {
 
-  path <- 'resources/io/bea_industry_output.csv'
+  path <- file.path(data_dir, 'bea_industry_output.csv')
   if (!file.exists(path)) {
     stop('BEA industry output file not found: ', path)
   }
@@ -158,11 +305,12 @@ load_bea_industry_output <- function() {
 
 #' Load PCE Bridge Table (BEA commodity -> consumer PCE category)
 #'
+#' @param data_dir Path to BEA I-O data directory
 #' @return Tibble with nipa_line, pce_category, bea_code, commodity_description,
 #'   producers_value, purchasers_value
-load_pce_bridge <- function() {
+load_pce_bridge <- function(data_dir = 'resources/io') {
 
-  path <- 'resources/io/pce_bridge_2024.csv'
+  path <- file.path(data_dir, 'pce_bridge.csv')
   if (!file.exists(path)) {
     stop('PCE bridge file not found: ', path,
          '\n  Run scripts/build_use_table_data.R or extract from PCEBridge_Summary.xlsx')
