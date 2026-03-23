@@ -31,7 +31,8 @@ GTAP_HEADERS <- list(
   qmwreg = '0181',    # Aggregate import % change by region (9 values)
   ppa = '0095',       # Private consumption price by commodity (65 x 9)
   ppm = '0022',       # Private-household imported commodity price (65 x 9)
-  ppd = '0021'        # Private-household domestic commodity price (65 x 9)
+  ppd = '0021',       # Private-household domestic commodity price (65 x 9)
+  ppriv = '0036'      # Aggregate private consumption price by region (9 values)
 )
 
 # Header mappings from .slc file (updated/level values)
@@ -135,6 +136,13 @@ extract_sol_data <- function(sol, regions, commodities) {
     }
     colnames(ppd) <- regions
     result$ppd <- ppd
+  }
+
+  # Extract ppriv (aggregate private consumption price by region)
+  if (!is.null(sol[[GTAP_HEADERS$ppriv]])) {
+    ppriv <- as.vector(sol[[GTAP_HEADERS$ppriv]])
+    names(ppriv) <- regions
+    result$ppriv <- ppriv
   }
 
   return(result)
@@ -428,10 +436,6 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
   }
   names(commodity_ratio) <- commodities
 
-  # NVPP baseline consumption totals per commodity (for GTAP-native price aggregation)
-  nvpp_consumption <- dom_bl + imp_bl
-  names(nvpp_consumption) <- commodities
-
   return(list(
     goods_adjustment = goods_adjustment,
     import_adjustment = import_adjustment,
@@ -441,8 +445,7 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
     import_share_baseline = import_share_baseline,
     import_share_postsim = import_share_postsim,
     # Per-commodity data
-    commodity_ratio = commodity_ratio,
-    nvpp_consumption = nvpp_consumption
+    commodity_ratio = commodity_ratio
   ))
 }
 
@@ -733,6 +736,7 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$ppm <- gtap_data$ppm
   result$ppd <- gtap_data$ppd
   result$ppa <- gtap_data$ppa
+  result$ppriv <- gtap_data$ppriv
   result$qva <- gtap_data$qva
   result$vom <- gtap_data$vom
   result$qgdp <- gtap_data$qgdp
@@ -757,9 +761,6 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
 
   # Per-commodity NVPP import share ratio (for post-substitution omega_M)
   result$nvpp_commodity_ratio <- gtap_data$nvpp_adjustment$commodity_ratio
-
-  # NVPP baseline consumption totals (for GTAP-native aggregate price)
-  result$nvpp_consumption <- gtap_data$nvpp_adjustment$nvpp_consumption
 
   return(result)
 }

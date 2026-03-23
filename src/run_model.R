@@ -153,12 +153,10 @@ run_scenario <- function(scenario, markup_assumption = 'constant_percentage',
     markup_assumption = markup_assumption
   )
 
-  # GTAP-native aggregate: NVPP consumption-weighted ppa (no BEA/PCE mapping)
-  if (!is.null(inputs$nvpp_consumption)) {
-    nvpp_wt <- inputs$nvpp_consumption
-    ppa_aligned <- ppa_usa[names(nvpp_wt)]
-    gtap_native_ppriv <- sum(ppa_aligned * nvpp_wt) / sum(nvpp_wt)
-    message(sprintf('  GTAP-native aggregate (NVPP-weighted ppa): %.4f%%', gtap_native_ppriv))
+  # GTAP ppriv: aggregate private consumption price (CDE utility-weighted)
+  if (!is.null(inputs$ppriv)) {
+    gtap_ppriv <- inputs$ppriv['usa']
+    message(sprintf('  GTAP ppriv (aggregate consumption price):  %.4f%%', gtap_ppriv))
     message(sprintf('  GE via BEA/PCE bridge:                     %.4f%%',
                     ge_results$aggregate * 100))
   }
