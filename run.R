@@ -41,7 +41,3 @@ if ('--markup' %in% args) {
 # Run model
 source('src/run_model.R')
 run_scenario(scenario, markup_assumption = markup_assumption)
-
-# Generate figure mockups after model run
-source('reports/figure_mockups.R')
-save_mockups(scenario = scenario)

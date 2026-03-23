@@ -13,7 +13,7 @@ An R-based pipeline that calculates the economic impacts of U.S. tariff policies
 - [Scenarios](#scenarios)
 - [Outputs](#outputs)
 - [USMM Integration](#usmm-integration)
-- [Report Generation](#report-generation)
+- [Excel Data Download](#excel-data-download)
 
 ## Overview
 
@@ -66,8 +66,8 @@ The model orchestrates multiple components to produce tariff impact estimates:
 # Core packages (required)
 install.packages(c('tidyverse', 'yaml', 'HARr'))
 
-# Report generation (optional)
-install.packages(c('openxlsx', 'httr2', 'jsonlite'))
+# Excel export (optional)
+install.packages(c('openxlsx'))
 ```
 
 ### External Dependencies
@@ -76,14 +76,9 @@ install.packages(c('openxlsx', 'httr2', 'jsonlite'))
 2. **GTAP + GEMPACK**: See [GTAP Setup](#gtap-setup) section below
 3. **USMM IRFs**: Included in `resources/usmm/` (no external setup needed)
 
-### For Report Generation (Optional)
+### For Excel Data Download (Optional)
 
-- [Pandoc](https://pandoc.org/installing.html) installed and on PATH
-- Anthropic API key set as environment variable:
-  ```bash
-  # In .Renviron or shell profile
-  ANTHROPIC_API_KEY=your-api-key-here
-  ```
+- `openxlsx` installed for workbook export
 
 ## Installation
 
@@ -182,9 +177,8 @@ Rscript run.R <scenario_name> [options]
 
 | Option | Description |
 |--------|-------------|
-| `--report` | Generate State of Tariffs report after model run |
-| `--report-date YYYY-MM-DD` | Date for report header (required with `--report`) |
-| `--policy-changes "text"` | Policy changes description for report (optional) |
+| `--markup constant_percentage` | Default markup assumption |
+| `--markup constant_dollar` | Lower-bound markup assumption |
 
 ### Examples
 
@@ -192,11 +186,8 @@ Rscript run.R <scenario_name> [options]
 # Run model
 Rscript run.R 11-17
 
-# Run and generate report
-Rscript run.R 11-17 --report --report-date 2025-11-17
-
-# Run with report and policy changes note
-Rscript run.R 11-17 --report --report-date 2025-11-17 --policy-changes "Added steel exemptions"
+# Run with alternative markup assumption
+Rscript run.R 11-17 --markup constant_dollar
 
 # List available scenarios (run without arguments)
 Rscript run.R
@@ -266,11 +257,10 @@ Tariff-Model/
 │       ├── results/           # CSV output files
 │       ├── gtap/              # GTAP run outputs
 │       ├── tariff_etrs/       # ETR matrix outputs
-│       ├── images/            # Generated figures
-│       └── report/            # Generated reports
+│       └── report/            # Excel data download output
 └── reports/
-    ├── report_instructions.md # Report generation docs
-    └── tariff_report_template.docx
+    ├── README.md              # Excel export notes
+    └── data_download_template.xlsx
 ```
 
 ## Scenarios
@@ -330,7 +320,8 @@ Results are written to `output/{scenario}/results/`:
 | `dynamic_revenue_by_year.csv` | Revenue with GDP feedback adjustment |
 | `distribution.csv` | Cost burden by income decile |
 | `sector_effects.csv` | Output changes by sector |
-| `product_prices.csv` | Product-level price effects |
+| `pce_category_prices.csv` | Consumer-category price effects |
+| `bea_commodity_prices.csv` | BEA commodity price effects |
 | `macro_quarterly.csv` | Quarterly GDP/employment projections |
 | `foreign_gdp.csv` | GDP effects on trading partners |
 | `goods_weighted_etrs.csv` | Weighted ETRs by goods category |
@@ -407,24 +398,15 @@ refund_2026: 0.0  # Refund amount in billions (optional)
 
 For GDP Q4-Q4 growth calculations, the model linearly blends from the USMM short-run response to the GTAP long-run equilibrium over 16 quarters (2025Q1 through 2028Q4).
 
-## Report Generation
+## Excel Data Download
 
-Generate a formatted "State of Tariffs" report:
+Export the State of Tariffs data-download workbook:
 
-```bash
-Rscript run.R 11-17 --report --report-date 2025-11-17
+```r
+source('src/helpers.R')
+source('src/12_export_excel.R')
+
+export_excel_tables('2-21_temp', 'March 09, 2026')
 ```
 
-### Requirements
-
-- Pandoc installed and on PATH
-- `ANTHROPIC_API_KEY` environment variable set
-- Completed model run (generates data for report)
-
-### Output
-
-Reports are saved to `output/{scenario}/report/`:
-- `tariff_report.md` - Markdown source
-- `tariff_report.docx` - Word document (via Pandoc)
-
-See `reports/report_instructions.md` for detailed report customization options.
+The workbook is saved to `output/{scenario}/report/data_download.xlsx`.
