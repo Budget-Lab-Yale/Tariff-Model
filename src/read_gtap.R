@@ -428,6 +428,10 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
   }
   names(commodity_ratio) <- commodities
 
+  # NVPP baseline consumption totals per commodity (for GTAP-native price aggregation)
+  nvpp_consumption <- dom_bl + imp_bl
+  names(nvpp_consumption) <- commodities
+
   return(list(
     goods_adjustment = goods_adjustment,
     import_adjustment = import_adjustment,
@@ -437,7 +441,8 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
     import_share_baseline = import_share_baseline,
     import_share_postsim = import_share_postsim,
     # Per-commodity data
-    commodity_ratio = commodity_ratio
+    commodity_ratio = commodity_ratio,
+    nvpp_consumption = nvpp_consumption
   ))
 }
 
@@ -752,6 +757,9 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
 
   # Per-commodity NVPP import share ratio (for post-substitution omega_M)
   result$nvpp_commodity_ratio <- gtap_data$nvpp_adjustment$commodity_ratio
+
+  # NVPP baseline consumption totals (for GTAP-native aggregate price)
+  result$nvpp_consumption <- gtap_data$nvpp_adjustment$nvpp_consumption
 
   return(result)
 }

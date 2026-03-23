@@ -389,6 +389,9 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # Per-commodity NVPP import share ratios (for post-sub omega_M)
   inputs$nvpp_commodity_ratio <- gtap_data$nvpp_commodity_ratio
 
+  # NVPP baseline consumption totals (for GTAP-native aggregate price)
+  inputs$nvpp_consumption <- gtap_data$nvpp_consumption
+
   # ============================
   # USMM IRFs (impulse response functions)
   # ============================
