@@ -22,7 +22,7 @@ inflation_2024_to_2025: 0.027
 # Which BEA input-output tables to use for the Boston Fed price model:
 #   'summary'  = 73 commodities, 2024 annual data (default)
 #   'detail'   = ~400 commodities, 2017 benchmark data
-bea_io_level: 'summary'
+bea_io_level: 'detail'
 
 # -----------------------------------------------------------------------------
 # Price Effect Parameters
