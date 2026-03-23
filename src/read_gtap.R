@@ -29,9 +29,9 @@ GTAP_HEADERS <- list(
   qva = '0058',       # Value-added % change (65 x 9) - for sector GDP aggregation
   qxwreg = '0177',    # Aggregate export % change by region (9 values)
   qmwreg = '0181',    # Aggregate import % change by region (9 values)
-  ppa = '0095',       # Import price from all sources (65 x 9)
-  ppm = '0022',       # Import market price (65 x 9)
-  ppd = '0021'        # Domestic price (65 x 9)
+  ppa = '0095',       # Private consumption price by commodity (65 x 9)
+  ppm = '0022',       # Private-household imported commodity price (65 x 9)
+  ppd = '0021'        # Private-household domestic commodity price (65 x 9)
 )
 
 # Header mappings from .slc file (updated/level values)
@@ -107,7 +107,7 @@ extract_sol_data <- function(sol, regions, commodities) {
     result$qxwreg <- qxwreg
   }
 
-  # Extract ppa (import prices from all sources)
+  # Extract ppa (private consumption price by commodity)
   if (!is.null(sol[[GTAP_HEADERS$ppa]])) {
     ppa <- sol[[GTAP_HEADERS$ppa]]
     if (!is.null(commodities)) {
@@ -117,7 +117,7 @@ extract_sol_data <- function(sol, regions, commodities) {
     result$ppa <- ppa
   }
 
-  # Extract ppm (import market price)
+  # Extract ppm (private-household imported commodity price)
   if (!is.null(sol[[GTAP_HEADERS$ppm]])) {
     ppm <- sol[[GTAP_HEADERS$ppm]]
     if (!is.null(commodities)) {
@@ -127,7 +127,7 @@ extract_sol_data <- function(sol, regions, commodities) {
     result$ppm <- ppm
   }
 
-  # Extract ppd (domestic price)
+  # Extract ppd (private-household domestic commodity price)
   if (!is.null(sol[[GTAP_HEADERS$ppd]])) {
     ppd <- sol[[GTAP_HEADERS$ppd]]
     if (!is.null(commodities)) {
@@ -212,12 +212,12 @@ get_export_change <- function(gtap_data, target_region = 'usa') {
   return(gtap_data$qxwreg[target_region])
 }
 
-#' Get import prices by commodity
+#' Get private consumption prices by commodity
 #'
 #' @param gtap_data Result from read_gtap_full()
 #' @param target_region Region to extract (default 'usa')
 #' @return Data frame with gtap_sector and price_pct_change columns
-get_import_prices <- function(gtap_data, target_region = 'usa') {
+get_private_consumption_prices <- function(gtap_data, target_region = 'usa') {
   if (is.null(gtap_data$ppa)) {
     stop('ppa not found in GTAP data')
   }
@@ -237,6 +237,18 @@ get_import_prices <- function(gtap_data, target_region = 'usa') {
   rownames(result) <- NULL
 
   return(result)
+}
+
+#' Get import prices by commodity
+#'
+#' Backward-compatible wrapper for the old helper name. Despite the historical
+#' name, this returns GTAP private consumption prices (`ppa`), not import prices.
+#'
+#' @param gtap_data Result from read_gtap_full()
+#' @param target_region Region to extract (default 'usa')
+#' @return Data frame with gtap_sector and price_pct_change columns
+get_import_prices <- function(gtap_data, target_region = 'usa') {
+  get_private_consumption_prices(gtap_data, target_region = target_region)
 }
 
 # ============================================================================
@@ -307,9 +319,18 @@ extract_vgdp <- function(slc, regions) {
 #' @param slc Parsed .slc HAR object
 #' @param commodities Character vector of commodity names (from stel)
 #' @param sector_mapping Data frame with gtap_code and aggregate_sector columns
+#' @param ppm_usa Numeric vector of GTAP private-household imported commodity
+#'   price % changes for USA by commodity (from sol ppm, column for
+#'   target_region). Used as the import-side deflator for NVPP values. NULL
+#'   falls back to value-based ratios.
+#' @param ppd_usa Numeric vector of GTAP private-household domestic price %
+#'   changes for USA by commodity (from sol ppd, column for target_region). Used
+#'   as the domestic-side deflator for NVPP values. NULL falls back to value-based
+#'   ratios.
 #' @param target_region Index of region (default 1 = USA)
 #' @return List with goods_adjustment and import_adjustment factors
 extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
+                                    ppm_usa = NULL, ppd_usa = NULL,
                                     target_region = 1) {
 
   # Extract NVPP arrays (65 commodities x 9 regions)
@@ -368,11 +389,43 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
   import_adjustment <- import_share_postsim / import_share_baseline
 
   # Per-commodity import share ratio (for post-substitution omega_M adjustment)
-  imp_share_bl <- imp_bl / (imp_bl + dom_bl)
-  imp_share_ps <- imp_ps / (imp_ps + dom_ps)
-  commodity_ratio <- imp_share_ps / imp_share_bl
-  # Handle NaN from zero totals
-  commodity_ratio[is.nan(commodity_ratio) | is.infinite(commodity_ratio)] <- 1.0
+  # Use quantity-based deflation when price data is available
+  if (!is.null(ppm_usa) && !is.null(ppd_usa)) {
+    # NVPP is in value terms (price * quantity). Deflate to isolate quantity changes.
+    # value_postsim / value_baseline = (1 + pct_price/100) * (qty_postsim / qty_baseline)
+    # So: qty_ratio = (value_postsim / value_baseline) / (1 + pct_price/100)
+    imp_qty_ratio <- (imp_ps / imp_bl) / (1 + ppm_usa / 100)
+    dom_qty_ratio <- (dom_ps / dom_bl) / (1 + ppd_usa / 100)
+
+    # Handle zero baselines (0/0 -> NaN)
+    imp_qty_ratio[is.nan(imp_qty_ratio) | is.infinite(imp_qty_ratio)] <- 1.0
+    dom_qty_ratio[is.nan(dom_qty_ratio) | is.infinite(dom_qty_ratio)] <- 1.0
+
+    # Compute new quantity-based import share
+    omega_M_bl <- imp_bl / (imp_bl + dom_bl)
+    omega_D_bl <- 1 - omega_M_bl
+    # Handle commodities with zero total use
+    omega_M_bl[is.nan(omega_M_bl)] <- 0
+    omega_D_bl[is.nan(omega_D_bl)] <- 0
+
+    omega_M_qty <- omega_M_bl * imp_qty_ratio /
+      (omega_M_bl * imp_qty_ratio + omega_D_bl * dom_qty_ratio)
+    # Handle 0/0 for commodities with no use
+    omega_M_qty[is.nan(omega_M_qty)] <- 0
+
+    commodity_ratio <- omega_M_qty / omega_M_bl
+    commodity_ratio[is.nan(commodity_ratio) | is.infinite(commodity_ratio)] <- 1.0
+
+    message('    NVPP omega_M ratio: quantity-deflated (using ppm/ppd price changes)')
+  } else {
+    # Fallback: value-based ratios (original method)
+    imp_share_bl <- imp_bl / (imp_bl + dom_bl)
+    imp_share_ps <- imp_ps / (imp_ps + dom_ps)
+    commodity_ratio <- imp_share_ps / imp_share_bl
+    commodity_ratio[is.nan(commodity_ratio) | is.infinite(commodity_ratio)] <- 1.0
+
+    message('    NVPP omega_M ratio: value-based (no price data available)')
+  }
   names(commodity_ratio) <- commodities
 
   return(list(
@@ -489,7 +542,11 @@ read_gtap_full <- function(sol_path, slc_path, sl4_path, sector_mapping) {
   result$mtax_data <- mtax_data
 
   # Read NVPP adjustment factors (goods indices derived from sector_mapping)
+  # Pass price % changes from sol to enable quantity-based deflation
+  ppm_usa <- if (!is.null(result$ppm)) result$ppm[, 1] else NULL
+  ppd_usa <- if (!is.null(result$ppd)) result$ppd[, 1] else NULL
   nvpp_adjustment <- extract_nvpp_adjustment(slc, commodities, sector_mapping,
+                                             ppm_usa = ppm_usa, ppd_usa = ppd_usa,
                                              target_region = 1)
   result$nvpp_adjustment <- nvpp_adjustment
 

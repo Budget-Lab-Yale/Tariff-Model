@@ -539,6 +539,8 @@ PPP,322220,Paper bag and coated and treated paper manufacturing
 PPP,322230,Stationery product manufacturing
 PPP,322291,Sanitary paper product manufacturing
 PPP,322299,All other converted paper product manufacturing
+PPP,323110,Printing
+PPP,323120,Support activities for printing
 P_C,324110,Petroleum refineries
 P_C,324121,Asphalt paving mixture and block manufacturing
 P_C,324122,Asphalt shingle and coating materials manufacturing
@@ -728,6 +730,14 @@ OTN,336612,Boat building
 OTN,336991,"Motorcycle, bicycle, and parts manufacturing"
 OTN,336992,"Military armored vehicle, tank, and tank component manufacturing"
 OTN,336999,All other transportation equipment manufacturing
+OMF,337110,Wood kitchen cabinet and countertop manufacturing
+OMF,337121,Upholstered household furniture manufacturing
+OMF,337122,Nonupholstered wood household furniture manufacturing
+OMF,33712N,Other household nonupholstered furniture
+OMF,337127,Institutional furniture manufacturing
+OMF,33721A,Office furniture and custom architectural woodwork and millwork manufacturing
+OMF,337215,"Showcase, partition, shelving, and locker manufacturing"
+OMF,337900,Other furniture related product manufacturing
 OMF,339112,Surgical and medical instrument manufacturing
 OMF,339113,Surgical appliance and supplies manufacturing
 OMF,339114,Dental equipment and supplies manufacturing

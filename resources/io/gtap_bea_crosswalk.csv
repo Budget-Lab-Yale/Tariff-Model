@@ -30,6 +30,7 @@ WAP,315AL,Apparel and leather and allied products
 LEA,315AL,Apparel and leather and allied products
 LUM,321,Wood products
 PPP,322,Paper products
+PPP,323,Printing and related support activities
 P_C,324,Petroleum and coal products
 CHM,325,Chemical products
 BPH,325,Chemical products
@@ -43,6 +44,7 @@ ELE,334,Computer and electronic products
 EEQ,335,"Electrical equipment, appliances, and components"
 MVH,3361MV,"Motor vehicles, bodies and trailers, and parts"
 OTN,3364OT,Other transportation equipment
+OMF,337,Furniture and related products
 OMF,339,Miscellaneous manufacturing
 ELY,22,Utilities
 GDT,22,Utilities

@@ -103,9 +103,13 @@ load_baselines <- function() {
 #' Load all inputs for a scenario
 #'
 #' @param scenario Name of the scenario
+#' @param bea_io_level_override Override for BEA I-O table level
+#' @param markup_assumption 'constant_percentage' or 'constant_dollar'; affects
+#'   B-matrix normalization per Boston Fed appendix
 #'
 #' @return List containing all input data
-load_inputs <- function(scenario, bea_io_level_override = NULL) {
+load_inputs <- function(scenario, bea_io_level_override = NULL,
+                        markup_assumption = 'constant_percentage') {
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
 
@@ -137,11 +141,19 @@ load_inputs <- function(scenario, bea_io_level_override = NULL) {
   inputs$bea_industry_output <- load_bea_industry_output(io_data_dir)
   inputs$bea_leontief_domestic <- load_bea_requirements('domestic', io_data_dir)
 
+  # Full commodity use totals (intermediate + final demand) for omega_M
+  inputs$bea_commodity_use_totals <- load_bea_commodity_use_totals(io_data_dir)
+  # Industry variable cost (for constant-percentage B normalization)
+  inputs$bea_industry_variable_cost <- load_bea_industry_variable_cost(io_data_dir)
+
   # Pre-compute Boston Fed matrices (B_MD, omega_M, omega_D)
   inputs$boston_fed_matrices <- build_boston_fed_matrices(
     use_import = inputs$bea_use_import,
     use_domestic = inputs$bea_use_domestic,
-    industry_output = inputs$bea_industry_output
+    industry_output = inputs$bea_industry_output,
+    markup_assumption = markup_assumption,
+    commodity_use_totals = inputs$bea_commodity_use_totals,
+    industry_variable_cost = inputs$bea_industry_variable_cost
   )
   message(sprintf('  Built Boston Fed matrices: %d commodities x %d industries',
                   nrow(inputs$boston_fed_matrices$B_MD),
@@ -289,6 +301,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL) {
     inputs$bea_deltas <- bea_deltas_raw %>%
       filter(date == as.character(inputs$gtap_reference_date)) %>%
       select(-date)
+    stopifnot(nrow(inputs$bea_deltas) > 0)
     message(sprintf('  Loaded time-varying BEA deltas: %d dates',
                     length(unique(inputs$bea_deltas_by_date$date))))
   } else {

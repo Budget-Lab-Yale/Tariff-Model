@@ -36,8 +36,8 @@ OUTPUT_DIR = os.path.join(IO_DIR, 'detail')
 SHEET = '2017'
 
 # Source Excel files (extracted from zips)
-IMPORT_XLSX = os.path.join(OUTPUT_DIR, 'ImportMatrices_Before_Redefinitions_Detail.xlsx')
-USE_XLSX = os.path.join(OUTPUT_DIR, 'IOUse_Before_Redefinitions_PRO_Detail.xlsx')
+IMPORT_XLSX = os.path.join(OUTPUT_DIR, 'ImportMatrices_After_Redefinitions_Detail.xlsx')
+USE_XLSX = os.path.join(OUTPUT_DIR, 'IOUse_After_Redefinitions_PRO_Detail.xlsx')
 IXC_XLSX = os.path.join(OUTPUT_DIR, 'IxC_Domestic_Detail.xlsx')
 PCE_BRIDGE_XLSX = os.path.join(IO_DIR, 'PCEBridge_Detail.xlsx')
 
@@ -91,7 +91,7 @@ def read_use_table(xlsx_path):
       Rows 5-6: headers (names/codes)
       Rows 7+: commodity data until a T-code row (T005 = Total Intermediate)
       Cols 1-2: commodity code + description
-      Cols 3+: industry codes until T001 column
+      Cols 3+: industry codes until T001 column, then final demand F-columns
 
     Returns:
       commodity_codes: list of str
@@ -100,6 +100,8 @@ def read_use_table(xlsx_path):
       data_matrix: list of lists (commodity x industry, float values)
       extra_rows: dict of {row_code: list of float} for T005, V*, T006, T008
       pce_col_values: dict of {commodity_code: float} for F01000 column
+      commodity_full_totals: dict of {commodity_code: float} total use
+        (intermediate + final demand, excluding F05000 import balancing column)
     """
     print(f'  Reading {os.path.basename(xlsx_path)} sheet {SHEET}...')
     wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
@@ -108,20 +110,31 @@ def read_use_table(xlsx_path):
     # Read row 6 to get column codes
     row6 = list(ws.iter_rows(min_row=6, max_row=6, values_only=True))[0]
 
-    # Find T001 column (end of industry columns)
+    # Find T001 column (end of industry columns) and final demand columns
     t001_idx = None
     f01000_idx = None
+    final_demand_indices = []
     for i, val in enumerate(row6):
-        if val and str(val).strip() == 'T001':
+        code = str(val).strip() if val else ''
+        if code == 'T001':
             t001_idx = i
-        if val and str(val).strip() == 'F01000':
+        elif code == 'F01000':
             f01000_idx = i
+        # Final demand columns for domestic absorption:
+        # Exclude F04/F04000 (exports — not domestic expenditure)
+        # Exclude F05/F05000 (negative import balancing entry)
+        if code.startswith('F') and not code.startswith(('F04', 'F05')):
+            final_demand_indices.append(i)
 
     # Industry codes: col 3 (idx 2) to T001 (exclusive)
+    industry_indices = list(range(2, t001_idx))
     industry_codes = []
-    for i in range(2, t001_idx):
+    for i in industry_indices:
         code = str(row6[i]).strip() if row6[i] else ''
         industry_codes.append(code)
+
+    # All use indices = industry + final demand (for full commodity totals)
+    all_use_indices = industry_indices + final_demand_indices
 
     # Read all data rows (row 7 onwards)
     commodity_codes = []
@@ -129,6 +142,7 @@ def read_use_table(xlsx_path):
     data_matrix = []
     extra_rows = {}
     pce_col_values = {}
+    commodity_full_totals = {}
 
     for row in ws.iter_rows(min_row=7, values_only=True):
         code = str(row[0]).strip() if row[0] else ''
@@ -139,36 +153,42 @@ def read_use_table(xlsx_path):
 
         # Check if this is a total/value-added row
         if code.startswith('T') or code.startswith('V'):
-            vals = [safe_float(row[i]) for i in range(2, t001_idx)]
+            vals = [safe_float(row[i]) for i in industry_indices]
             extra_rows[code] = vals
             continue
 
         # Regular commodity row
         commodity_codes.append(code)
         commodity_descs.append(desc)
-        vals = [safe_float(row[i]) for i in range(2, t001_idx)]
+        vals = [safe_float(row[i]) for i in industry_indices]
         data_matrix.append(vals)
 
         # PCE column value
         if f01000_idx is not None:
             pce_col_values[code] = safe_float(row[f01000_idx])
 
+        # Full commodity total (intermediate + final demand, excl F05000)
+        commodity_full_totals[code] = sum(safe_float(row[i]) for i in all_use_indices)
+
     wb.close()
-    print(f'    {len(commodity_codes)} commodities x {len(industry_codes)} industries')
+    print(f'    {len(commodity_codes)} commodities x {len(industry_codes)} industries, '
+          f'{len(final_demand_indices)} final demand columns')
     return (commodity_codes, commodity_descs, industry_codes,
-            data_matrix, extra_rows, pce_col_values)
+            data_matrix, extra_rows, pce_col_values, commodity_full_totals)
 
 
 def extract_use_tables():
-    """Extract import use, domestic use, industry output, and PCE weights."""
+    """Extract import use, domestic use, industry output, PCE weights,
+    full commodity use totals, and industry variable cost."""
 
     # Read import use table
     (comm_codes, comm_descs, ind_codes,
-     import_matrix, _, _) = read_use_table(IMPORT_XLSX)
+     import_matrix, _, _, import_full_totals) = read_use_table(IMPORT_XLSX)
 
     # Read total use table
     (comm_codes_t, _, ind_codes_t,
-     total_matrix, extra_rows, pce_values) = read_use_table(USE_XLSX)
+     total_matrix, extra_rows, pce_values,
+     total_full_totals) = read_use_table(USE_XLSX)
 
     # Verify alignment
     assert comm_codes == comm_codes_t, 'Commodity codes differ between import and total use tables'
@@ -208,6 +228,33 @@ def extract_use_tables():
     rows = [[comm_codes[i], comm_descs[i]] for i in range(len(comm_codes))]
     write_csv(os.path.join(OUTPUT_DIR, 'bea_commodity_descriptions.csv'),
               ['Commodity Code', 'Description'], rows)
+
+    # ---- bea_commodity_use_totals.csv (full commodity absorption incl final demand) ----
+    # Used for omega_M computation per Boston Fed appendix (April 2025):
+    # omega_M = import_total / (import_total + domestic_total)
+    rows = []
+    for code in comm_codes:
+        imp = import_full_totals.get(code, 0.0)
+        tot = total_full_totals.get(code, 0.0)
+        dom = tot - imp
+        rows.append([code, int(round(imp)), int(round(dom))])
+    write_csv(os.path.join(OUTPUT_DIR, 'bea_commodity_use_totals.csv'),
+              ['bea_code', 'import_total', 'domestic_total'], rows)
+
+    # ---- bea_industry_variable_cost.csv (for constant-percentage B normalization) ----
+    # Per Boston Fed appendix: constant-percentage markup normalizes B matrices by
+    # total intermediates + compensation of employees (not industry output)
+    if 'T005' not in extra_rows:
+        raise ValueError('T005 (Total Intermediate) row not found in total use table')
+    v001_key = 'V00100' if 'V00100' in extra_rows else 'V001'
+    if v001_key not in extra_rows:
+        raise ValueError('V001/V00100 (Compensation of employees) not found')
+    t005 = extra_rows['T005']
+    v001 = extra_rows[v001_key]
+    rows = [[ind_codes[j], int(round(t005[j] + v001[j]))]
+            for j in range(len(ind_codes))]
+    write_csv(os.path.join(OUTPUT_DIR, 'bea_industry_variable_cost.csv'),
+              ['bea_code', 'variable_cost'], rows)
 
     return comm_codes
 
@@ -432,14 +479,14 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Extract Excel files from zips if needed
-    make_use_zip = os.path.join(IO_DIR, 'MAKE-USE-IMPORTS (BEFORE REDEFINITIONS).zip')
+    make_use_zip = os.path.join(IO_DIR, 'MAKE-USE-IMPORTS (AFTER REDEFINITIONS).zip')
     requirements_zip = os.path.join(IO_DIR, 'TOTAL AND DOMESTIC REQUIREMENTS.zip')
 
     print('Step 1: Extracting Excel files from zips...')
     extract_from_zip(make_use_zip,
-                     'ImportMatrices_Before_Redefinitions_Detail.xlsx', OUTPUT_DIR)
+                     'ImportMatrices_After_Redefinitions_Detail.xlsx', OUTPUT_DIR)
     extract_from_zip(make_use_zip,
-                     'IOUse_Before_Redefinitions_PRO_Detail.xlsx', OUTPUT_DIR)
+                     'IOUse_After_Redefinitions_PRO_Detail.xlsx', OUTPUT_DIR)
     extract_from_zip(requirements_zip,
                      'IxC_Domestic_Detail.xlsx', OUTPUT_DIR)
 
