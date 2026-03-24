@@ -282,8 +282,6 @@ calculate_distribution <- function(price_results, inputs) {
     # Distribution by decile
     by_decile = pre_distribution %>%
       select(decile, income, pct_of_income, cost_per_hh),
-    by_decile_pre_sub = pre_distribution %>%
-      select(decile, income, pct_of_income, cost_per_hh),
     by_decile_post_sub = post_distribution %>%
       select(decile, income, pct_of_income, cost_per_hh),
 
@@ -293,13 +291,8 @@ calculate_distribution <- function(price_results, inputs) {
     post_sub_per_hh_cost = post_sub_avg_cost,
     post_sub_median_cost = post_sub_median_cost,
 
-    # Legacy field for backwards compatibility
-    avg_per_hh_cost = pre_sub_avg_cost,
-    median_per_hh_cost = pre_sub_median_cost,
-
     # Method used
     method = pre_effects$method,
-    method_pre_sub = pre_effects$method,
     method_post_sub = post_effects$method
   )
 

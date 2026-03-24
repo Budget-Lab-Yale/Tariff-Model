@@ -199,7 +199,12 @@ load_model_outputs <- function(scenario) {
     outputs[[name]] <- read_csv(path, show_col_types = FALSE)
   }
 
-  optional_files <- c('distribution_postsub.csv')
+  optional_files <- c(
+    'gtap_ge_decomp_summary.csv',
+    'gtap_ge_decomp_by_commodity.csv',
+    'gtap_ge_decomp_by_bea_commodity.csv',
+    'gtap_ge_decomp_by_pce_category.csv'
+  )
   for (f in optional_files) {
     path <- file.path(results_dir, f)
     if (file.exists(path)) {
@@ -587,10 +592,14 @@ build_f5 <- function(outputs) {
 build_f6 <- function(outputs) {
   prices <- outputs$pce_category_prices
 
+  if (!'pre_sub' %in% names(prices)) {
+    stop('pce_category_prices must contain pre_sub')
+  }
+
   result <- prices %>%
     select(
       Name = pce_category,
-      `Short-Run` = sr_price_effect
+      `Short-Run` = pre_sub
     ) %>%
     arrange(desc(`Short-Run`))
 

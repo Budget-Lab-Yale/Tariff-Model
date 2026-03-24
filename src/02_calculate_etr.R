@@ -398,9 +398,6 @@ calculate_etr <- function(inputs) {
     pre_sub_all_in = pre_sub_all_in * 100,
     pe_postsub_increase = post_sub_etr,
     pe_postsub_all_in = post_sub_all_in * 100,
-    # Legacy aliases retained for downstream scripts
-    post_sub_increase = post_sub_etr,
-    post_sub_all_in = post_sub_all_in * 100,
     # Baseline ETR computed from levels (as percentage)
     baseline_etr = baseline_etr * 100,
     # etr_increase for revenue calculations (from mtax, post-sub)

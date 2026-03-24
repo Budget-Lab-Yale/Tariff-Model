@@ -33,10 +33,10 @@ write_outputs <- function(results, scenario) {
   key_results <- tibble(
     metric = c(
       # ETR
-      'pre_sub_etr_increase', 'pe_postsub_etr_increase', 'post_sub_etr_increase',
-      'baseline_etr', 'pre_sub_all_in_etr', 'pe_postsub_all_in_etr', 'post_sub_all_in_etr',
+      'pre_sub_etr_increase', 'pe_postsub_etr_increase',
+      'baseline_etr', 'pre_sub_all_in_etr', 'pe_postsub_all_in_etr',
       # Prices
-      'pre_sub_price_increase', 'pe_postsub_price_increase', 'post_sub_price_increase',
+      'pre_sub_price_increase', 'pe_postsub_price_increase',
       'ge_price_increase', 'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
       # Price decomposition (Boston Fed)
       'direct_aggregate', 'supply_chain_aggregate',
@@ -52,11 +52,10 @@ write_outputs <- function(results, scenario) {
       'fed_funds_2025_q4', 'fed_funds_2026_q4'
     ),
     value = c(
-      results$etr$pre_sub_increase, results$etr$pe_postsub_increase, results$etr$post_sub_increase,
+      results$etr$pre_sub_increase, results$etr$pe_postsub_increase,
       results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$pe_postsub_all_in,
-      results$etr$post_sub_all_in,
       results$prices$pre_sub_price_increase, results$prices$pe_postsub_price_increase,
-      results$prices$post_sub_price_increase, results$prices$ge_price_increase,
+      results$prices$ge_price_increase,
       abs(results$distribution$pre_sub_per_hh_cost),
       abs(results$distribution$post_sub_per_hh_cost),
       results$prices$presub$direct_aggregate * 100,
@@ -70,9 +69,9 @@ write_outputs <- function(results, scenario) {
       results$macro$fed_funds_2025, results$macro$fed_funds_2026
     ),
     unit = c(
+      'pct', 'pct',
       'pct', 'pct', 'pct',
-      'pct', 'pct', 'pct', 'pct',
-      'pct', 'pct', 'pct', 'pct', 'dollars', 'dollars',
+      'pct', 'pct', 'pct', 'dollars', 'dollars',
       'pct', 'pct',
       'billions', 'billions',
       'billions', 'billions',
@@ -179,13 +178,64 @@ write_outputs <- function(results, scenario) {
   # PCE Category Prices (I-O model)
   # ============================
 
-  if (is.null(results$inputs$pce_category_prices)) {
-    stop('pce_category_prices not found in results$inputs')
+  if (is.null(results$prices$presub$pce_category_prices) ||
+      is.null(results$prices$pe_postsub$pce_category_prices) ||
+      is.null(results$prices$ge$pce_category_prices)) {
+    stop('pce_category_prices not found for one or more price concepts in results$prices')
   }
-  write_csv(results$inputs$pce_category_prices,
+
+  pce_category_prices <- results$prices$presub$pce_category_prices %>%
+    select(
+      nipa_line,
+      pce_category,
+      purchasers_value,
+      pce_share,
+      pre_sub = sr_price_effect
+    ) %>%
+    left_join(
+      results$prices$pe_postsub$pce_category_prices %>%
+        select(nipa_line, pe_postsub = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    left_join(
+      results$prices$ge$pce_category_prices %>%
+        select(nipa_line, ge = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    arrange(desc(pre_sub))
+
+  write_csv(pce_category_prices,
             file.path(output_dir, 'pce_category_prices.csv'))
   message(sprintf('    pce_category_prices.csv (%d consumer categories)',
-                  nrow(results$inputs$pce_category_prices)))
+                  nrow(pce_category_prices)))
+
+  # ============================
+  # PCE Major Category Prices (BEA Table 2.4.5 hierarchy)
+  # ============================
+
+  major_cat_file <- 'resources/mappings/nipa_pce_major_category.csv'
+  if (file.exists(major_cat_file)) {
+    major_cat_map <- read_csv(major_cat_file, show_col_types = FALSE)
+
+    pce_major_prices <- pce_category_prices %>%
+      inner_join(major_cat_map, by = 'nipa_line') %>%
+      group_by(top_level, major_category) %>%
+      summarise(
+        pre_sub = sum(pre_sub * purchasers_value) / sum(purchasers_value),
+        pe_postsub = sum(pe_postsub * purchasers_value) / sum(purchasers_value),
+        ge = sum(ge * purchasers_value) / sum(purchasers_value),
+        purchasers_value = sum(purchasers_value),
+        n_categories = n(),
+        .groups = 'drop'
+      ) %>%
+      mutate(pce_share = purchasers_value / sum(purchasers_value) * 100) %>%
+      arrange(desc(pre_sub))
+
+    write_csv(pce_major_prices,
+              file.path(output_dir, 'pce_major_category_prices.csv'))
+    message(sprintf('    pce_major_category_prices.csv (%d major categories)',
+                    nrow(pce_major_prices)))
+  }
 
   # ============================
   # BEA Commodity Prices (I-O model)
@@ -196,6 +246,40 @@ write_outputs <- function(results, scenario) {
               file.path(output_dir, 'bea_commodity_prices.csv'))
     message(sprintf('    bea_commodity_prices.csv (%d BEA commodities)',
                     nrow(results$inputs$bea_commodity_prices)))
+  }
+
+  # ============================
+  # GTAP GE Decomposition
+  # ============================
+
+  if (!is.null(results$ge_decomp)) {
+    if (!is.null(results$ge_decomp$summary)) {
+      write_csv(results$ge_decomp$summary,
+                file.path(output_dir, 'gtap_ge_decomp_summary.csv'))
+      message(sprintf('    gtap_ge_decomp_summary.csv (%d metrics)',
+                      nrow(results$ge_decomp$summary)))
+    }
+
+    if (!is.null(results$ge_decomp$gtap_commodity)) {
+      write_csv(results$ge_decomp$gtap_commodity,
+                file.path(output_dir, 'gtap_ge_decomp_by_commodity.csv'))
+      message(sprintf('    gtap_ge_decomp_by_commodity.csv (%d GTAP commodities)',
+                      nrow(results$ge_decomp$gtap_commodity)))
+    }
+
+    if (!is.null(results$ge_decomp$bea_commodity)) {
+      write_csv(results$ge_decomp$bea_commodity,
+                file.path(output_dir, 'gtap_ge_decomp_by_bea_commodity.csv'))
+      message(sprintf('    gtap_ge_decomp_by_bea_commodity.csv (%d BEA commodities)',
+                      nrow(results$ge_decomp$bea_commodity)))
+    }
+
+    if (!is.null(results$ge_decomp$pce_category)) {
+      write_csv(results$ge_decomp$pce_category,
+                file.path(output_dir, 'gtap_ge_decomp_by_pce_category.csv'))
+      message(sprintf('    gtap_ge_decomp_by_pce_category.csv (%d PCE categories)',
+                      nrow(results$ge_decomp$pce_category)))
+    }
   }
 
   # ============================
@@ -252,21 +336,13 @@ write_outputs <- function(results, scenario) {
       )
   }
 
-  goods_etrs <- goods_etrs %>%
-    mutate(
-      postsub_imports = pe_postsub_imports,
-      postsub_etr = pe_postsub_etr
-    )
-
   total_row <- tibble(
     country = 'TOTAL',
     country_code = 'all',
     pe_postsub_imports = sum(goods_etrs$pe_postsub_imports),
     pe_postsub_etr = results$etr$pe_postsub_increase,
     presub_imports = sum(goods_etrs$presub_imports),
-    presub_etr = results$etr$pre_sub_increase,
-    postsub_imports = sum(goods_etrs$postsub_imports),
-    postsub_etr = results$etr$post_sub_increase
+    presub_etr = results$etr$pre_sub_increase
   )
 
   if (has_levels) {
@@ -274,11 +350,8 @@ write_outputs <- function(results, scenario) {
       mutate(
         baseline_level = results$etr$baseline_etr,
         presub_level = results$etr$pre_sub_all_in,
-        pe_postsub_level = results$etr$pe_postsub_all_in,
-        postsub_level = results$etr$post_sub_all_in
+        pe_postsub_level = results$etr$pe_postsub_all_in
       )
-    goods_etrs <- goods_etrs %>%
-      mutate(postsub_level = pe_postsub_level)
   }
 
   goods_etrs <- bind_rows(goods_etrs, total_row)

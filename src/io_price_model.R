@@ -1122,3 +1122,229 @@ compute_ge_prices <- function(ppa_usa, gtap_bea_crosswalk, viws_baseline,
     markup_assumption = markup_assumption
   ))
 }
+
+
+#' Decompose GTAP GE price effects into import, domestic, and share-shift terms
+#'
+#' Produces a diagnostic decomposition of GTAP household consumption prices.
+#' The decomposition is approximate at the GTAP commodity level:
+#'   ppa ~= s0 * ppm + (1 - s0) * ppd + (s1 - s0) * (ppm - ppd) + residual
+#' where s0 is the baseline household import share and s1 is the post-simulation
+#' import share inferred from GTAP NVPP quantities when available.
+#'
+#' The same GTAP -> BEA -> PCE mapping used for GE prices is then applied to each
+#' term, so the category-level contributions sum to the reported GE price effect.
+#'
+#' @param ppa_usa Named vector of GTAP private consumption price changes (%)
+#' @param ppm_usa Named vector of GTAP imported household price changes (%)
+#' @param ppd_usa Named vector of GTAP domestic household price changes (%)
+#' @param gtap_bea_crosswalk Tibble with gtap_code, bea_code columns
+#' @param viws_baseline Matrix [commodity x source_region] of baseline imports
+#' @param pce_bridge PCE bridge tibble from load_pce_bridge()
+#' @param nvpp_adjustment List from extract_nvpp_adjustment()
+#' @param markup_assumption Either 'constant_percentage' or 'constant_dollar'
+#' @param presub_pce_category_prices Optional presub category table for gap calc
+#'
+#' @return List with gtap_commodity, bea_commodity, pce_category, and summary tibbles
+decompose_ge_prices <- function(ppa_usa, ppm_usa, ppd_usa,
+                                gtap_bea_crosswalk, viws_baseline, pce_bridge,
+                                nvpp_adjustment,
+                                markup_assumption = 'constant_percentage',
+                                presub_pce_category_prices = NULL) {
+
+  valid_markups <- c('constant_percentage', 'constant_dollar')
+  if (!markup_assumption %in% valid_markups) {
+    stop('Invalid markup_assumption: ', markup_assumption,
+         '. Must be one of: ', paste(valid_markups, collapse = ', '))
+  }
+  if (is.null(nvpp_adjustment$baseline_import_share) ||
+      is.null(nvpp_adjustment$postsim_import_share)) {
+    stop('nvpp_adjustment must contain baseline_import_share and postsim_import_share')
+  }
+
+  gtap_codes <- Reduce(intersect, list(
+    toupper(names(ppa_usa)),
+    toupper(names(ppm_usa)),
+    toupper(names(ppd_usa)),
+    toupper(names(nvpp_adjustment$baseline_import_share)),
+    toupper(names(nvpp_adjustment$postsim_import_share))
+  ))
+
+  baseline_share <- nvpp_adjustment$baseline_import_share
+  names(baseline_share) <- toupper(names(baseline_share))
+  postsim_share <- nvpp_adjustment$postsim_import_share
+  names(postsim_share) <- toupper(names(postsim_share))
+
+  ppa_lookup <- ppa_usa
+  names(ppa_lookup) <- toupper(names(ppa_lookup))
+  ppm_lookup <- ppm_usa
+  names(ppm_lookup) <- toupper(names(ppm_lookup))
+  ppd_lookup <- ppd_usa
+  names(ppd_lookup) <- toupper(names(ppd_lookup))
+
+  gtap_commodity <- tibble(
+    gtap_code = gtap_codes,
+    ppa = as.numeric(ppa_lookup[gtap_codes]),
+    ppm = as.numeric(ppm_lookup[gtap_codes]),
+    ppd = as.numeric(ppd_lookup[gtap_codes]),
+    baseline_import_share = as.numeric(baseline_share[gtap_codes]),
+    postsim_import_share = as.numeric(postsim_share[gtap_codes])
+  ) %>%
+    mutate(
+      import_price_component = baseline_import_share * ppm,
+      domestic_price_component = (1 - baseline_import_share) * ppd,
+      share_shift_component = (postsim_import_share - baseline_import_share) * (ppm - ppd),
+      reconstructed_price = import_price_component + domestic_price_component + share_shift_component,
+      residual_component = ppa - reconstructed_price
+    )
+
+  baseline_totals <- rowSums(viws_baseline)
+  names(baseline_totals) <- toupper(names(baseline_totals))
+
+  gtap_with_weights <- gtap_commodity %>%
+    mutate(baseline_imports = as.numeric(baseline_totals[gtap_code])) %>%
+    mutate(baseline_imports = coalesce(baseline_imports, 0))
+
+  bea_commodity <- gtap_bea_crosswalk %>%
+    mutate(gtap_code = toupper(gtap_code)) %>%
+    inner_join(gtap_with_weights, by = 'gtap_code') %>%
+    group_by(bea_code) %>%
+    summarise(
+      ppa = if (sum(baseline_imports) > 0) {
+        sum(ppa * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(ppa)
+      },
+      ppm = if (sum(baseline_imports) > 0) {
+        sum(ppm * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(ppm)
+      },
+      ppd = if (sum(baseline_imports) > 0) {
+        sum(ppd * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(ppd)
+      },
+      import_price_component = if (sum(baseline_imports) > 0) {
+        sum(import_price_component * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(import_price_component)
+      },
+      domestic_price_component = if (sum(baseline_imports) > 0) {
+        sum(domestic_price_component * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(domestic_price_component)
+      },
+      share_shift_component = if (sum(baseline_imports) > 0) {
+        sum(share_shift_component * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(share_shift_component)
+      },
+      residual_component = if (sum(baseline_imports) > 0) {
+        sum(residual_component * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(residual_component)
+      },
+      baseline_import_share = if (sum(baseline_imports) > 0) {
+        sum(baseline_import_share * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(baseline_import_share)
+      },
+      postsim_import_share = if (sum(baseline_imports) > 0) {
+        sum(postsim_import_share * baseline_imports) / sum(baseline_imports)
+      } else {
+        mean(postsim_import_share)
+      },
+      baseline_imports = sum(baseline_imports),
+      n_gtap = n(),
+      .groups = 'drop'
+    )
+
+  if (markup_assumption == 'constant_dollar') {
+    numerator_col <- 'producers_value'
+  } else {
+    numerator_col <- 'purchasers_value'
+  }
+
+  map_bea_to_pce <- function(bea_tbl, value_col) {
+    price_df <- bea_tbl %>%
+      transmute(bea_code, price = .data[[value_col]])
+
+    pce_bridge %>%
+      left_join(price_df, by = 'bea_code') %>%
+      mutate(price = if_else(is.na(price), 0, price)) %>%
+      group_by(nipa_line, pce_category) %>%
+      summarise(
+        value = if (sum(abs(.data[[numerator_col]])) > 0) {
+          sum(price * .data[[numerator_col]]) / sum(purchasers_value)
+        } else {
+          0
+        },
+        purchasers_value = sum(purchasers_value),
+        .groups = 'drop'
+      ) %>%
+      mutate(value = value)
+  }
+
+  pce_import <- map_bea_to_pce(bea_commodity, 'import_price_component') %>%
+    rename(import_price_component = value)
+  pce_domestic <- map_bea_to_pce(bea_commodity, 'domestic_price_component') %>%
+    select(nipa_line, domestic_price_component = value)
+  pce_share_shift <- map_bea_to_pce(bea_commodity, 'share_shift_component') %>%
+    select(nipa_line, share_shift_component = value)
+  pce_residual <- map_bea_to_pce(bea_commodity, 'residual_component') %>%
+    select(nipa_line, residual_component = value)
+  pce_ge <- map_bea_to_pce(bea_commodity, 'ppa') %>%
+    select(nipa_line, ge = value)
+
+  pce_category <- pce_import %>%
+    left_join(pce_domestic, by = 'nipa_line') %>%
+    left_join(pce_share_shift, by = 'nipa_line') %>%
+    left_join(pce_residual, by = 'nipa_line') %>%
+    left_join(pce_ge, by = 'nipa_line') %>%
+    mutate(
+      pce_share = purchasers_value / sum(purchasers_value) * 100
+    ) %>%
+    arrange(nipa_line)
+
+  if (!is.null(presub_pce_category_prices)) {
+    pce_category <- pce_category %>%
+      left_join(
+        presub_pce_category_prices %>%
+          select(nipa_line, pre_sub = sr_price_effect),
+        by = 'nipa_line'
+      ) %>%
+      mutate(ge_minus_pre_sub = ge - pre_sub)
+  }
+
+  summary <- tibble(
+        metric = c(
+          'import_price_component',
+          'domestic_price_component',
+          'share_shift_component',
+          'residual_component',
+          'ge_price_increase'
+        ),
+        value = c(
+      sum(pce_category$import_price_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$share_shift_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$residual_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$ge * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value)
+    ),
+    unit = 'pct'
+  )
+
+  return(list(
+    gtap_commodity = gtap_commodity,
+    bea_commodity = bea_commodity,
+    pce_category = pce_category,
+    summary = summary,
+    markup_assumption = markup_assumption
+  ))
+}

@@ -247,18 +247,6 @@ get_private_consumption_prices <- function(gtap_data, target_region = 'usa') {
   return(result)
 }
 
-#' Get import prices by commodity
-#'
-#' Backward-compatible wrapper for the old helper name. Despite the historical
-#' name, this returns GTAP private consumption prices (`ppa`), not import prices.
-#'
-#' @param gtap_data Result from read_gtap_full()
-#' @param target_region Region to extract (default 'usa')
-#' @return Data frame with gtap_sector and price_pct_change columns
-get_import_prices <- function(gtap_data, target_region = 'usa') {
-  get_private_consumption_prices(gtap_data, target_region = target_region)
-}
-
 # ============================================================================
 # SLC EXTRACTION FUNCTIONS (operate on pre-parsed slc object)
 # ============================================================================
@@ -433,8 +421,20 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
     commodity_ratio[is.nan(commodity_ratio) | is.infinite(commodity_ratio)] <- 1.0
 
     message('    NVPP omega_M ratio: value-based (no price data available)')
+
+    omega_M_bl <- imp_share_bl
+    omega_M_qty <- imp_share_ps
   }
   names(commodity_ratio) <- commodities
+  names(omega_M_bl) <- commodities
+  names(omega_M_qty) <- commodities
+
+  imp_share_bl <- imp_bl / (imp_bl + dom_bl)
+  imp_share_ps <- imp_ps / (imp_ps + dom_ps)
+  imp_share_bl[is.nan(imp_share_bl)] <- 0
+  imp_share_ps[is.nan(imp_share_ps)] <- 0
+  names(imp_share_bl) <- commodities
+  names(imp_share_ps) <- commodities
 
   return(list(
     goods_adjustment = goods_adjustment,
@@ -445,7 +445,11 @@ extract_nvpp_adjustment <- function(slc, commodities, sector_mapping,
     import_share_baseline = import_share_baseline,
     import_share_postsim = import_share_postsim,
     # Per-commodity data
-    commodity_ratio = commodity_ratio
+    commodity_ratio = commodity_ratio,
+    baseline_import_share = omega_M_bl,
+    postsim_import_share = omega_M_qty,
+    baseline_import_share_value = imp_share_bl,
+    postsim_import_share_value = imp_share_ps
   ))
 }
 

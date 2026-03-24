@@ -269,12 +269,21 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
       by = 'fiscal_year'
     )
 
-  # Handle years without dynamic effects (incomplete USMM data)
-  # Use 0 for missing years (dynamic revenue = conventional revenue)
+  # Require complete dynamic effects for the 10-year budget window (FY2026-2035).
+  # Missing years would silently zero out the dynamic effect, understating fiscal
+  # impact. Fail loudly so the USMM data gets extended rather than ignored.
+  budget_window <- dynamic_by_year %>%
+    filter(fiscal_year >= 2026, fiscal_year <= 2035)
+  missing_in_window <- budget_window$fiscal_year[is.na(budget_window$dynamic_effect)]
+  if (length(missing_in_window) > 0) {
+    stop(sprintf('Dynamic effect is NA for FY %s (within 10-year budget window). ',
+                 paste(missing_in_window, collapse = ', ')),
+         'Extend USMM data to cover FY2026-2035 or check convolution parameters.')
+  }
+
+  # Years outside the budget window (e.g., FY2025 and earlier) may lack dynamic
+  # effects — fill with 0 since they don't enter the 10-year totals.
   if (any(is.na(dynamic_by_year$dynamic_effect))) {
-    missing_years <- dynamic_by_year$fiscal_year[is.na(dynamic_by_year$dynamic_effect)]
-    message(sprintf('  Note: Using 0 dynamic effect for FY %s (incomplete USMM data)',
-                    paste(missing_years, collapse = ', ')))
     dynamic_by_year <- dynamic_by_year %>%
       mutate(
         fy_gdp_change = coalesce(fy_gdp_change, 0),

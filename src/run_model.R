@@ -65,6 +65,155 @@ average_price_results <- function(a, b) {
 }
 
 
+#' Average GE decomposition results across markup assumptions
+#'
+#' @param a GE decomposition result from decompose_ge_prices()
+#' @param b GE decomposition result from decompose_ge_prices()
+#' @return Averaged decomposition result
+average_ge_decomposition_results <- function(a, b) {
+  avg_numeric_join <- function(x, y, keys) {
+    numeric_cols <- setdiff(intersect(
+      names(x)[vapply(x, is.numeric, logical(1))],
+      names(y)[vapply(y, is.numeric, logical(1))]
+    ), keys)
+    keep_cols <- union(keys, setdiff(names(x), numeric_cols))
+
+    joined <- x %>%
+      inner_join(
+        y %>% select(all_of(c(keys, numeric_cols))),
+        by = keys,
+        suffix = c('_a', '_b')
+      )
+
+    for (col in numeric_cols) {
+      joined[[col]] <- (joined[[paste0(col, '_a')]] + joined[[paste0(col, '_b')]]) / 2
+    }
+
+    joined %>%
+      select(all_of(keep_cols), all_of(numeric_cols))
+  }
+
+  summarize_pce_decomp <- function(pce_category) {
+    summary <- tibble(
+      metric = c(
+        'import_price_component',
+        'domestic_price_component',
+        'share_shift_component',
+        'residual_component',
+        'ge_price_increase'
+      ),
+      value = c(
+        sum(pce_category$import_price_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$share_shift_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$residual_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$ge * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value)
+      ),
+      unit = 'pct'
+    )
+
+    summary
+  }
+
+  pce_category <- avg_numeric_join(a$pce_category, b$pce_category, 'nipa_line')
+
+  list(
+    gtap_commodity = a$gtap_commodity,
+    bea_commodity = avg_numeric_join(a$bea_commodity, b$bea_commodity, 'bea_code'),
+    pce_category = pce_category,
+    summary = summarize_pce_decomp(pce_category),
+    markup_assumption = 'average'
+  )
+}
+
+
+#' Reaggregate GE decomposition PCE outputs from detail to summary categories
+#'
+#' @param decomp GE decomposition result from decompose_ge_prices()
+#' @param use_import Detail import use matrix
+#' @param use_domestic Detail domestic use matrix
+#' @param summary_to_detail Detail-to-summary commodity mapping
+#' @param summary_bridge Summary-level PCE bridge
+#' @param markup_assumption Either constant_percentage or constant_dollar
+#' @param presub_pce_category_prices Summary-level presub category prices
+#' @return Decomposition result with summary-level PCE categories and summary metrics
+reaggregate_ge_decomp_to_summary <- function(decomp, use_import, use_domestic,
+                                             summary_to_detail, summary_bridge,
+                                             markup_assumption,
+                                             presub_pce_category_prices = NULL) {
+  reagg_term <- function(column_name) {
+    prices <- setNames(decomp$bea_commodity[[column_name]] / 100, decomp$bea_commodity$bea_code)
+    reaggregate_to_summary_pce(
+      prices,
+      use_import = use_import,
+      use_domestic = use_domestic,
+      summary_to_detail = summary_to_detail,
+      summary_bridge = summary_bridge,
+      markup_assumption = markup_assumption
+    ) %>%
+      select(nipa_line, pce_category, purchasers_value, pce_share, value = sr_price_effect)
+  }
+
+  pce_import <- reagg_term('import_price_component') %>%
+    rename(import_price_component = value)
+  pce_domestic <- reagg_term('domestic_price_component') %>%
+    select(nipa_line, domestic_price_component = value)
+  pce_share_shift <- reagg_term('share_shift_component') %>%
+    select(nipa_line, share_shift_component = value)
+  pce_residual <- reagg_term('residual_component') %>%
+    select(nipa_line, residual_component = value)
+  pce_ge <- reagg_term('ppa') %>%
+    select(nipa_line, ge = value)
+
+  pce_category <- pce_import %>%
+    left_join(pce_domestic, by = 'nipa_line') %>%
+    left_join(pce_share_shift, by = 'nipa_line') %>%
+    left_join(pce_residual, by = 'nipa_line') %>%
+    left_join(pce_ge, by = 'nipa_line')
+
+  if (!is.null(presub_pce_category_prices)) {
+    pce_category <- pce_category %>%
+      left_join(
+        presub_pce_category_prices %>% select(nipa_line, pre_sub = sr_price_effect),
+        by = 'nipa_line'
+      ) %>%
+      mutate(ge_minus_pre_sub = ge - pre_sub)
+  }
+
+  summary <- tibble(
+    metric = c(
+      'import_price_component',
+      'domestic_price_component',
+      'share_shift_component',
+      'residual_component',
+      'ge_price_increase'
+    ),
+    value = c(
+      sum(pce_category$import_price_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$share_shift_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$residual_component * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value),
+      sum(pce_category$ge * pce_category$purchasers_value) /
+        sum(pce_category$purchasers_value)
+    ),
+    unit = 'pct'
+  )
+
+  decomp$pce_category <- pce_category
+  decomp$summary <- summary
+  decomp
+}
+
+
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
@@ -185,6 +334,18 @@ run_scenario <- function(scenario, markup_assumption = 'average',
       markup_assumption = ma
     )
 
+    ge_decomp <- decompose_ge_prices(
+      ppa_usa = ppa_usa,
+      ppm_usa = inputs$ppm[, 'usa'],
+      ppd_usa = inputs$ppd[, 'usa'],
+      gtap_bea_crosswalk = inputs$gtap_bea_crosswalk,
+      viws_baseline = inputs$baselines$viws_baseline,
+      pce_bridge = inputs$pce_bridge,
+      nvpp_adjustment = inputs$nvpp_adjustment,
+      markup_assumption = ma,
+      presub_pce_category_prices = presub$pce_category_prices
+    )
+
     # Detail-level reaggregation if needed
     if (inputs$bea_io_level == 'detail') {
       summary_bridge <- load_pce_bridge('resources/io')
@@ -203,9 +364,18 @@ run_scenario <- function(scenario, markup_assumption = 'average',
         inputs$bea_use_import, inputs$bea_use_domestic,
         inputs$summary_to_detail, summary_bridge, ma
       )
+      ge_decomp <- reaggregate_ge_decomp_to_summary(
+        ge_decomp,
+        use_import = inputs$bea_use_import,
+        use_domestic = inputs$bea_use_domestic,
+        summary_to_detail = inputs$summary_to_detail,
+        summary_bridge = summary_bridge,
+        markup_assumption = ma,
+        presub_pce_category_prices = presub$pce_category_prices
+      )
     }
 
-    return(list(presub = presub, pe_postsub = pe_postsub, ge = ge))
+    return(list(presub = presub, pe_postsub = pe_postsub, ge = ge, ge_decomp = ge_decomp))
   }
 
   if (markup_assumption == 'average') {
@@ -218,11 +388,13 @@ run_scenario <- function(scenario, markup_assumption = 'average',
     presub_results <- average_price_results(cp_prices$presub, cd_prices$presub)
     pe_postsub_results <- average_price_results(cp_prices$pe_postsub, cd_prices$pe_postsub)
     ge_results <- average_price_results(cp_prices$ge, cd_prices$ge)
+    ge_decomp_results <- average_ge_decomposition_results(cp_prices$ge_decomp, cd_prices$ge_decomp)
   } else {
     prices <- compute_all_prices(markup_assumption, inputs$io_matrices)
     presub_results <- prices$presub
     pe_postsub_results <- prices$pe_postsub
     ge_results <- prices$ge
+    ge_decomp_results <- prices$ge_decomp
   }
 
   # GTAP ppriv: aggregate private consumption price (CDE utility-weighted)
@@ -236,11 +408,9 @@ run_scenario <- function(scenario, markup_assumption = 'average',
   price_results <- list(
     pre_sub_price_increase = presub_results$aggregate * 100,
     pe_postsub_price_increase = pe_postsub_results$aggregate * 100,
-    post_sub_price_increase = pe_postsub_results$aggregate * 100,
     ge_price_increase = ge_results$aggregate * 100,
     presub = presub_results,
     pe_postsub = pe_postsub_results,
-    post_sub = pe_postsub_results,
     ge = ge_results
   )
 
@@ -361,6 +531,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
     inputs = inputs,
     etr = etr_results,
     prices = price_results,
+    ge_decomp = ge_decomp_results,
     revenue = revenue_results,
     macro = macro_results,
     sectors = sector_results,
@@ -515,7 +686,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
                       format(round(abs(dist$cost_per_hh[i])), big.mark = ',', scientific = FALSE),
                       abs(dist$pct_of_income[i])))
     }
-    avg_cost <- distribution_results$avg_per_hh_cost
+    avg_cost <- distribution_results$pre_sub_per_hh_cost
     message(sprintf('Average per-HH cost:            $%s',
                     format(round(abs(avg_cost)), big.mark = ',', scientific = FALSE)))
   }
