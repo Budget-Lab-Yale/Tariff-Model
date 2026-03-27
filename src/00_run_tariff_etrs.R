@@ -4,34 +4,34 @@
 
 #' Run Tariff-ETRs for a scenario
 #'
-#' Calls the Tariff-ETRs model via Rscript, passing this model's config
-#' and receiving ETR outputs.
+#' Calls the Tariff-ETRs model via Rscript, using ETRs's own config directory.
+#' ETRs owns all tariff policy configs; we just pass the scenario name.
 #'
-#' @param scenario Name of the scenario
-#' @param tariff_etrs_path Path to Tariff-ETRs repo (default: ../Tariff-ETRs)
+#' @param scenario Name of this model's scenario (controls output directory)
+#' @param etrs_scenario Name of the scenario in Tariff-ETRs/config/
+#' @param tariff_etrs_path Path to Tariff-ETRs repo
 #'
 #' @return Invisibly returns the exit code
-run_tariff_etrs <- function(scenario, tariff_etrs_path = '../Tariff-ETRs') {
+run_tariff_etrs <- function(scenario, etrs_scenario, tariff_etrs_path) {
 
   # Paths
-  # Tariff-ETRs expects: config_dir/scenario/232.yaml
-  # Our structure: config/scenarios/{scenario}/tariff_etrs/232.yaml
-  # So we pass config_dir = config/scenarios/{scenario} and scenario = tariff_etrs
-  scenario_dir <- file.path('config', 'scenarios', scenario)
   output_dir <- file.path('output', scenario)
   script_path <- file.path(tariff_etrs_path, 'src', 'main.R')
 
-  # Verify paths exist
+  # Verify Tariff-ETRs script exists
   if (!file.exists(script_path)) {
-    stop(sprintf('Tariff-ETRs script not found: %s', normalizePath(script_path, mustWork = FALSE)))
+    stop(sprintf('Tariff-ETRs script not found: %s',
+                 normalizePath(script_path, mustWork = FALSE)))
   }
 
-  tariff_etrs_config <- file.path(scenario_dir, 'tariff_etrs')
-  if (!dir.exists(tariff_etrs_config)) {
-    stop(sprintf('Tariff-ETRs config not found: %s', tariff_etrs_config))
+  # Verify ETRs scenario config exists
+  etrs_config_dir <- file.path(tariff_etrs_path, 'config', etrs_scenario)
+  if (!dir.exists(etrs_config_dir)) {
+    stop(sprintf('Tariff-ETRs scenario config not found: %s', etrs_config_dir))
   }
 
-  message(sprintf('  Config: %s', tariff_etrs_config))
+  message(sprintf('  ETRs scenario: %s', etrs_scenario))
+  message(sprintf('  ETRs path: %s', tariff_etrs_path))
   message(sprintf('  Output: %s', output_dir))
 
   # Create output directory
@@ -45,10 +45,9 @@ run_tariff_etrs <- function(scenario, tariff_etrs_path = '../Tariff-ETRs') {
     'Rscript'
   }
 
-  # Run Tariff-ETRs
+  # Run Tariff-ETRs using its own config directory
   message('  Running Tariff-ETRs...')
 
-  # Change to Tariff-ETRs directory so relative paths in that script work
   old_wd <- getwd()
   setwd(tariff_etrs_path)
   on.exit(setwd(old_wd), add = TRUE)
@@ -57,8 +56,7 @@ run_tariff_etrs <- function(scenario, tariff_etrs_path = '../Tariff-ETRs') {
     rscript,
     args = c(
       'src/main.R',
-      '--scenario', 'tariff_etrs',
-      '--config-dir', normalizePath(file.path(old_wd, scenario_dir), mustWork = FALSE),
+      '--scenario', etrs_scenario,
       '--output-dir', normalizePath(file.path(old_wd, output_dir), mustWork = FALSE)
     ),
     stdout = TRUE,
@@ -73,7 +71,24 @@ run_tariff_etrs <- function(scenario, tariff_etrs_path = '../Tariff-ETRs') {
     stop(sprintf('Tariff-ETRs failed with exit code %d', exit_code))
   }
 
-  # Print summary from output
+  # Rename ETRs output directory for downstream compatibility
+  # ETRs creates: {output_dir}/{etrs_scenario}/
+  # Downstream expects: {output_dir}/tariff_etrs/
+  etrs_output <- file.path(old_wd, output_dir, etrs_scenario)
+  target_output <- file.path(old_wd, output_dir, 'tariff_etrs')
+
+  if (normalizePath(etrs_output, mustWork = FALSE) !=
+      normalizePath(target_output, mustWork = FALSE)) {
+    if (dir.exists(target_output)) {
+      unlink(target_output, recursive = TRUE)
+    }
+    if (!dir.exists(etrs_output)) {
+      stop(sprintf('Expected ETRs output not found: %s', etrs_output))
+    }
+    file.rename(etrs_output, target_output)
+    message(sprintf('  Renamed %s/ -> tariff_etrs/', etrs_scenario))
+  }
+
   message('  Tariff-ETRs complete')
 
   invisible(exit_code)

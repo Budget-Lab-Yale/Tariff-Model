@@ -10,7 +10,7 @@ This is the Yale Budget Lab Tariff Model - an R-based pipeline that automates ta
 
 The model orchestrates multiple components:
 
-1. **Tariff-ETRs** (external repo): Calculates ETR matrices from statutory tariff parameters
+1. **Tariff-ETRs** (external repo at `tariff_etrs_path`): Owns all tariff policy configs and calculates ETR matrices
 2. **GTAP results** (manual input for now): Trade model outputs for sector/GDP effects
 3. **MAUS results** (manual input for now): Macro model outputs for short-run GDP/unemployment
 4. **This model**: Combines all inputs to produce final estimates
@@ -25,10 +25,11 @@ GTAP/MAUS outputs (manual CSVs) ──────────────┘
 
 ```
 config/
+  global_assumptions.yaml   # Global params + tariff_etrs_path
   scenarios/{scenario_name}/
-    tariff_etrs/          # Config passed to Tariff-ETRs (232.yaml, ieepa_*.yaml, etc.)
+    model_params.yaml     # Scenario config incl. tariff_etrs.scenario pointer
+    retaliation/          # GTAP retaliation shocks (owned by this repo)
     other_models/         # GTAP and MAUS output CSVs (manual for now)
-    model_params.yaml     # Price passthrough, shares, elasticities
 
 resources/
   cbo_baselines/          # CBO import/duty projections
@@ -89,7 +90,7 @@ Based on the Excel model dependency map in `excel_model/tariff_model_dependency_
 
 ## External Dependencies
 
-- **Tariff-ETRs repo**: Located at `../Tariff-ETRs`, called via `Rscript`
+- **Tariff-ETRs repo**: Path configured in `global_assumptions.yaml` (`tariff_etrs_path`, default `../Tariff-ETRs`). Owns all tariff policy configs; this repo points to ETRs scenarios via `model_params.yaml`'s `tariff_etrs.scenario` field. Called via `Rscript`.
 - R packages: tidyverse, yaml
 
 ## Reading Excel Files
