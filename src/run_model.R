@@ -224,7 +224,7 @@ reaggregate_ge_decomp_to_summary <- function(decomp, use_import, use_domestic,
 #'   'detail' (~400 commodities, 2017). NULL uses value from global_assumptions.yaml.
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, markup_assumption = 'average',
+run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
                          bea_io_level = NULL) {
 
   message(sprintf('\n=========================================================='))
@@ -314,6 +314,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
       omega_D = matrices$omega_D,
       pce_bridge = inputs$pce_bridge,
       usd_offset = inputs$assumptions$usd_offset,
+      domestic_pricing = inputs$assumptions$domestic_pricing,
       markup_assumption = ma
     )
 
@@ -338,6 +339,7 @@ run_scenario <- function(scenario, markup_assumption = 'average',
       omega_D = omega_D_post,
       pce_bridge = inputs$pce_bridge,
       usd_offset = inputs$assumptions$usd_offset,
+      domestic_pricing = inputs$assumptions$domestic_pricing,
       markup_assumption = ma
     )
 

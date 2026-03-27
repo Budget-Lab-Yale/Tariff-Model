@@ -57,12 +57,12 @@ excel_model/              # Reference Excel model and documentation
 # Run a scenario (from project root):
 Rscript run.R 2-21_perm
 
-# With constant-dollar markup assumption (lower bound):
-Rscript run.R 2-21_perm --markup constant_dollar
+# With constant-percentage markup assumption (upper bound):
+Rscript run.R 2-21_perm --markup constant_percentage
 ```
 
 Options:
-- `--markup <type>`: `constant_percentage` (default, upper bound) or `constant_dollar` (lower bound)
+- `--markup <type>`: `constant_dollar` (default, lower bound), `constant_percentage` (upper bound), or `average` (mean of both)
 
 ## Key Calculations
 

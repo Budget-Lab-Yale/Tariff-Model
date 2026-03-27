@@ -8,7 +8,7 @@
 #
 # The key formula (Leontief price model with import/domestic decomposition):
 #
-#   P_commodity = [omega_M * tau + omega_D * (L_D' %*% B_MD' %*% tau)] * (1 - usd_offset)
+#   P_commodity = [omega_M * tau + omega_D * (L_D' %*% B_MD' %*% tau)] * (1 + domestic_pricing - usd_offset)
 #   P_pce_cat   = C %*% P_commodity  (weighted by PCE bridge purchaser's values)
 #
 # Where:
@@ -18,7 +18,8 @@
 #   B_MD        = CxI import input coefficients matrix
 #   L_D         = IxC domestic Leontief inverse (requirements matrix)
 #   C           = PCE bridge table (BEA commodities -> NIPA consumer categories)
-#   usd_offset  = dollar appreciation offset
+#   usd_offset        = dollar appreciation offset
+#   domestic_pricing  = domestic competitive pricing effect (0.5)
 #
 # Post-substitution adjustments use GTAP GE results to scale tau_M and omega_M:
 #   - tau_M_post: scaled by GTAP import volume ratios (viws_postsim / viws_baseline)
@@ -598,6 +599,10 @@ build_io_matrices <- function(use_import, use_domestic, industry_output,
 #' @param omega_D Named vector of domestic shares by commodity
 #' @param pce_bridge PCE bridge tibble from load_pce_bridge()
 #' @param usd_offset Scalar USD appreciation offset (e.g., 0.174)
+#' @param domestic_pricing Scalar domestic competitive pricing effect (e.g., 0.5).
+#'   Fraction of tariff-induced cost increases passed through to prices of
+#'   domestically produced competing goods. Combined with usd_offset as
+#'   (1 + domestic_pricing - usd_offset).
 #' @param markup_assumption Either 'constant_percentage' (default, upper bound)
 #'   or 'constant_dollar' (lower bound)
 #'
@@ -611,7 +616,7 @@ build_io_matrices <- function(use_import, use_domestic, industry_output,
 #'   - markup_assumption: which assumption was used
 compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
                                      omega_M, omega_D, pce_bridge,
-                                     usd_offset,
+                                     usd_offset, domestic_pricing,
                                      markup_assumption = 'constant_percentage') {
 
   valid_markups <- c('constant_percentage', 'constant_dollar')
@@ -696,10 +701,11 @@ compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
 
   supply_chain <- omega_D_aligned * propagated_aligned
 
-  # ---- Apply USD offset ----
-  total <- (direct + supply_chain) * (1 - usd_offset)
-  direct_scaled <- direct * (1 - usd_offset)
-  supply_chain_scaled <- supply_chain * (1 - usd_offset)
+  # ---- Apply domestic pricing and USD offset ----
+  scaling <- 1 + domestic_pricing - usd_offset
+  total <- (direct + supply_chain) * scaling
+  direct_scaled <- direct * scaling
+  supply_chain_scaled <- supply_chain * scaling
 
   # ---- Markup assumption: choose numerator weight ----
   # Constant-percentage: weight by purchasers_value (margins scale with cost)
@@ -788,7 +794,8 @@ compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
   message(sprintf('    Aggregate price effect: %.4f%%', aggregate * 100))
   message(sprintf('    Direct component:       %.4f%%', direct_aggregate * 100))
   message(sprintf('    Supply chain component: %.4f%%', supply_chain_aggregate * 100))
-  message(sprintf('    USD offset applied:     %.3f', usd_offset))
+  message(sprintf('    Scaling (1 + dp - fx):  %.3f  (domestic_pricing=%.3f, usd_offset=%.3f)',
+                  scaling, domestic_pricing, usd_offset))
   message(sprintf('    PCE categories:         %d', nrow(pce_category_prices)))
 
   return(list(

@@ -293,7 +293,7 @@ write_block(wb, 'F5', cost_perm, start_row = 23, start_col = 2)
 
 
 # =============================================================================
-# F6: Consumer Category Price Effects (2 data columns: temp SR = B, perm SR = C)
+# F6: Consumer Category Price Effects (4 data columns: temp pre/post, perm pre/post)
 # =============================================================================
 
 message('  Updating F6 (Consumer Categories)...')
@@ -301,16 +301,16 @@ message('  Updating F6 (Consumer Categories)...')
 f6_temp <- build_f6(out_temp)
 f6_perm <- build_f6(out_perm)
 
-# Write names + temp SR (cols A-B)
+# Write names + temp pre/post (cols A-C)
 write_block(wb, 'F6', f6_temp, start_row = 8, start_col = 1)
 
-# Align perm data to temp's category sort order before writing col C
+# Align perm data to temp's category sort order before writing cols D-E
 f6_perm_aligned <- f6_temp %>%
   select(Name) %>%
   left_join(f6_perm, by = 'Name') %>%
-  select(`Short-Run`)
+  select(`Pre-Substitution`, `Post-Substitution`)
 
-write_block(wb, 'F6', f6_perm_aligned, start_row = 8, start_col = 3)
+write_block(wb, 'F6', f6_perm_aligned, start_row = 8, start_col = 4)
 
 
 # =============================================================================

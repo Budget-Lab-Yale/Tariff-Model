@@ -200,6 +200,7 @@ load_model_outputs <- function(scenario) {
   }
 
   optional_files <- c(
+    'pce_major_category_prices.csv',
     'gtap_ge_decomp_summary.csv',
     'gtap_ge_decomp_by_commodity.csv',
     'gtap_ge_decomp_by_bea_commodity.csv',
@@ -247,7 +248,7 @@ build_data_toc <- function(report_date) {
       'Figure 3. Change in Long-Run Real US GDP by Sector from 2025 Tariffs',
       'Figure 4. Long-Run Change in Real GDP Level from 2025 Tariffs to Date',
       'Table 3. Estimated Revenue Effects of All 2025 Tariffs',
-      'Figure 5. Short-Run Distributional Effects of 2025 Tariffs',
+      'Figure 5. Pre-Substitution Distributional Effects of 2025 Tariffs',
       sprintf('Figure 6. Consumer Category Price Effects from 2025 Tariffs through %s', date_md)
     )
   )
@@ -590,18 +591,19 @@ build_f5 <- function(outputs) {
 # =============================================================================
 
 build_f6 <- function(outputs) {
-  prices <- outputs$pce_category_prices
+  prices <- outputs$pce_major_category_prices
 
-  if (!'pre_sub' %in% names(prices)) {
-    stop('pce_category_prices must contain pre_sub')
+  if (is.null(prices)) {
+    stop('pce_major_category_prices not found in outputs')
   }
 
   result <- prices %>%
     select(
-      Name = pce_category,
-      `Short-Run` = pre_sub
+      Name = major_category,
+      `Pre-Substitution` = pre_sub,
+      `Post-Substitution` = pe_postsub
     ) %>%
-    arrange(desc(`Short-Run`))
+    arrange(desc(`Pre-Substitution`))
 
   return(result)
 }

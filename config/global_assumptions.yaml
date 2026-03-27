@@ -32,6 +32,10 @@ bea_io_level: 'detail'
 # Calculated as: exchange_rate_response (0.3) * import_content (0.58)
 usd_offset: 0.174
 
+# Domestic pricing effect: fraction of tariff-induced cost increases
+# passed through to prices of domestically produced competing goods
+domestic_pricing: 0.5
+
 # -----------------------------------------------------------------------------
 # Revenue Parameters
 # -----------------------------------------------------------------------------
