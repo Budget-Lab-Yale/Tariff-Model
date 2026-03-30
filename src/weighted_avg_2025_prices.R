@@ -12,7 +12,7 @@
 # Defaults:
 #   scenario = 2026-04-02 (has full 2025 date history)
 #   markup   = average (mean of constant_dollar and constant_percentage)
-#   start    = 2025-01-01 (beginning of calendar year)
+#   start    = 2025-04-01 (April, when major tariff regime is in place)
 #
 # =============================================================================
 
@@ -26,8 +26,8 @@ source('src/io_price_model.R')
 
 args <- commandArgs(trailingOnly = TRUE)
 scenario <- '2026-04-02'
-markup_assumption <- 'average'
-start_date <- '2025-01-01'
+markup_assumption <- 'constant_dollar'
+start_date <- '2025-04-01'
 
 i <- 1
 while (i <= length(args)) {
@@ -98,11 +98,17 @@ deltas_2025 <- bea_deltas %>%
     days = as.numeric(clipped_until - clipped_from) + 1
   )
 
-# The first tariff date may not be Jan 1 — fill in baseline (delta=0) period
+# The first tariff date may be after the start — fill in baseline (delta=0) period
 first_tariff_date <- min(deltas_2025$valid_from)
-baseline_days <- as.numeric(first_tariff_date - YEAR_START)
-message(sprintf('First tariff date: %s (baseline period: %d days at delta=0)',
-                first_tariff_date, baseline_days))
+baseline_days <- max(0, as.numeric(first_tariff_date - YEAR_START))
+
+if (baseline_days > 0) {
+  message(sprintf('First tariff date: %s (baseline period: %d days at delta=0)',
+                  first_tariff_date, baseline_days))
+} else {
+  message(sprintf('First tariff date: %s (before start date, no baseline period)',
+                  first_tariff_date))
+}
 
 # Verify day coverage
 covered_days <- deltas_2025 %>%
@@ -110,9 +116,8 @@ covered_days <- deltas_2025 %>%
   pull(days) %>%
   sum()
 
-message(sprintf('Covered tariff days: %d / %d (+ %d baseline = %d total)',
-                covered_days, TOTAL_DAYS, baseline_days,
-                covered_days + baseline_days))
+message(sprintf('Covered tariff days: %d / %d total',
+                covered_days, TOTAL_DAYS))
 
 # Compute weighted average etr_delta for each BEA commodity
 # Include baseline days at delta=0 in the denominator
@@ -204,9 +209,11 @@ message(sprintf('  Scenario:         %s', scenario))
 message(sprintf('  Markup:           %s', markup_assumption))
 message(sprintf('  USD offset:       %.1f%%', assumptions$usd_offset * 100))
 message(sprintf('  Domestic pricing: %.0f%%', assumptions$domestic_pricing * 100))
-message(sprintf('  Year:             2025 (%d days)', TOTAL_DAYS))
-message(sprintf('  Baseline days:    %d (Jan 1 to %s)',
-                baseline_days, first_tariff_date - 1))
+message(sprintf('  Period:           %s to 2025-12-31 (%d days)', start_date, TOTAL_DAYS))
+if (baseline_days > 0) {
+  message(sprintf('  Baseline days:    %d (%s to %s)',
+                  baseline_days, start_date, first_tariff_date - 1))
+}
 message('')
 message(sprintf('  Aggregate PCE price effect:  %.3f pp', avg_aggregate * 100))
 message(sprintf('    Direct (imported goods):   %.3f pp', avg_direct * 100))
