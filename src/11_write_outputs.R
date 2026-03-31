@@ -2,6 +2,54 @@
 # 11_write_outputs.R - Write all model outputs to disk
 # =============================================================================
 
+#' Build BEA commodity price detail table for output
+#'
+#' Constructs a formatted tibble of per-BEA-commodity price effects with
+#' descriptions and PCE weights. Used for bea_commodity_prices.csv and
+#' summary messaging.
+#'
+#' @param bea_prices_vec Named numeric vector of per-commodity price effects
+#'   (fractional, from presub results)
+#' @param bea_pce_weights Named numeric vector of PCE weights by BEA code
+#' @param io_data_dir Path to BEA I-O data directory (for descriptions CSV)
+#'
+#' @return Tibble with bea_code, sr_price_effect (pp), pce_weight, description
+build_bea_commodity_table <- function(bea_prices_vec, bea_pce_weights, io_data_dir) {
+
+  desc_file <- file.path(io_data_dir, 'bea_commodity_descriptions.csv')
+  if (file.exists(desc_file)) {
+    bea_desc <- read_csv(desc_file, show_col_types = FALSE) %>%
+      rename(bea_code = `Commodity Code`, description = Description)
+  } else {
+    bea_desc <- tibble(bea_code = character(), description = character())
+  }
+
+  bea_commodities <- names(bea_prices_vec)
+  result <- tibble(
+    bea_code = bea_commodities,
+    sr_price_effect = as.numeric(bea_prices_vec) * 100,
+    pce_weight = as.numeric(bea_pce_weights[bea_commodities])
+  )
+
+  # Flag commodities with no PCE weight before filling (pure intermediates are
+  # expected; goods with consumer expenditure missing would be a data issue)
+  na_pce_codes <- result$bea_code[is.na(result$pce_weight)]
+  if (length(na_pce_codes) > 0) {
+    message(sprintf('  Note: %d BEA commodities have no PCE weight (intermediates, set to 0): %s',
+                    length(na_pce_codes),
+                    paste(head(na_pce_codes, 10), collapse = ', ')))
+  }
+
+  result <- result %>%
+    mutate(pce_weight = if_else(is.na(pce_weight), 0, pce_weight)) %>%
+    left_join(bea_desc, by = 'bea_code') %>%
+    mutate(description = coalesce(description, bea_code)) %>%
+    arrange(desc(sr_price_effect))
+
+  return(result)
+}
+
+
 #' Write all model results to output directory
 #'
 #' @param results List containing all model outputs from run_scenario()
@@ -19,7 +67,7 @@ write_outputs <- function(results, scenario) {
   message(sprintf('  Writing outputs to %s/', output_dir))
 
   required_sections <- c('etr', 'prices', 'revenue', 'dynamic', 'macro',
-                         'distribution', 'products', 'sectors', 'foreign_gdp')
+                         'distribution', 'sectors', 'foreign_gdp')
   for (section in required_sections) {
     if (is.null(results[[section]])) {
       stop('Missing required results section: ', section)
@@ -30,16 +78,16 @@ write_outputs <- function(results, scenario) {
   # Key Results Summary
   # ============================
 
-  # Per-HH costs come from distribution calculation (matches Excel: Key Results B13/B15
-  # pull from F6 Distribution via ricco_price_effects_and_etr!I24/I25)
   key_results <- tibble(
     metric = c(
       # ETR
-      'pre_sub_etr_increase', 'post_sub_etr_increase',
-      'baseline_etr', 'pre_sub_all_in_etr', 'post_sub_all_in_etr',
+      'pre_sub_etr_increase', 'pe_postsub_etr_increase',
+      'baseline_etr', 'pre_sub_all_in_etr', 'pe_postsub_all_in_etr',
       # Prices
-      'pre_sub_price_increase', 'post_sub_price_increase',
-      'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
+      'pre_sub_price_increase', 'pe_postsub_price_increase',
+      'ge_price_increase', 'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
+      # Price decomposition (Boston Fed)
+      'direct_aggregate', 'supply_chain_aggregate',
       # Revenue
       'gross_revenue_10yr', 'conventional_revenue_10yr',
       # Dynamic revenue
@@ -48,29 +96,35 @@ write_outputs <- function(results, scenario) {
       'gdp_2025_q4q4', 'gdp_2026_q4q4',
       'urate_2025_q4', 'urate_2026_q4',
       'payroll_2025_q4', 'payroll_2026_q4',
-      # Products
-      'food_price_sr', 'food_price_lr'
+      'pce_2025_q4', 'pce_2026_q4',
+      'fed_funds_2025_q4', 'fed_funds_2026_q4'
     ),
     value = c(
-      results$etr$pre_sub_increase, results$etr$post_sub_increase,
-      results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$post_sub_all_in,
-      results$prices$pre_sub_price_increase, results$prices$post_sub_price_increase,
-      abs(results$distribution$pre_sub_per_hh_cost), abs(results$distribution$post_sub_per_hh_cost),
+      results$etr$pre_sub_increase, results$etr$pe_postsub_increase,
+      results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$pe_postsub_all_in,
+      results$prices$pre_sub_price_increase, results$prices$pe_postsub_price_increase,
+      results$prices$ge_price_increase,
+      abs(results$distribution$pre_sub_per_hh_cost),
+      abs(results$distribution$post_sub_per_hh_cost),
+      results$prices$presub$direct_aggregate * 100,
+      results$prices$presub$supply_chain_aggregate * 100,
       results$revenue$gross_10yr, results$revenue$conventional_10yr,
       results$dynamic$dynamic_effect_10yr, results$dynamic$dynamic_10yr,
       results$macro$gdp_2025, results$macro$gdp_2026,
       results$macro$urate_2025, results$macro$urate_2026,
       results$macro$payroll_2025, results$macro$payroll_2026,
-      results$products$food_sr, results$products$food_lr
+      results$macro$pce_2025, results$macro$pce_2026,
+      results$macro$fed_funds_2025, results$macro$fed_funds_2026
     ),
     unit = c(
       'pct', 'pct',
       'pct', 'pct', 'pct',
-      'pct', 'pct', 'dollars', 'dollars',
+      'pct', 'pct', 'pct', 'dollars', 'dollars',
+      'pct', 'pct',
       'billions', 'billions',
       'billions', 'billions',
       'pct', 'pct', 'pp', 'pp', 'thousands', 'thousands',
-      'pct', 'pct'
+      'pct', 'pct', 'pp', 'pp'
     )
   )
 
@@ -162,15 +216,128 @@ write_outputs <- function(results, scenario) {
             file.path(output_dir, 'distribution.csv'))
   message('    distribution.csv (10 deciles)')
 
+  if (!is.null(results$distribution$by_decile_post_sub)) {
+    write_csv(results$distribution$by_decile_post_sub,
+              file.path(output_dir, 'distribution_postsub.csv'))
+    message('    distribution_postsub.csv (10 deciles)')
+  }
+
   # ============================
-  # Product Prices
+  # PCE Category Prices (I-O model)
   # ============================
 
-  if (is.null(results$products$products)) {
-    stop('products$products not found in results')
+  if (is.null(results$prices$presub$pce_category_prices) ||
+      is.null(results$prices$pe_postsub$pce_category_prices) ||
+      is.null(results$prices$ge$pce_category_prices)) {
+    stop('pce_category_prices not found for one or more price concepts in results$prices')
   }
-  write_csv(results$products$products, file.path(output_dir, 'product_prices.csv'))
-  message(sprintf('    product_prices.csv (%d products)', nrow(results$products$products)))
+
+  pce_category_prices <- results$prices$presub$pce_category_prices %>%
+    select(
+      nipa_line,
+      pce_category,
+      purchasers_value,
+      pce_share,
+      pre_sub = sr_price_effect
+    ) %>%
+    left_join(
+      results$prices$pe_postsub$pce_category_prices %>%
+        select(nipa_line, pe_postsub = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    left_join(
+      results$prices$ge$pce_category_prices %>%
+        select(nipa_line, ge = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    arrange(desc(pre_sub))
+
+  write_csv(pce_category_prices,
+            file.path(output_dir, 'pce_category_prices.csv'))
+  message(sprintf('    pce_category_prices.csv (%d consumer categories)',
+                  nrow(pce_category_prices)))
+
+  # ============================
+  # PCE Major Category Prices (BEA Table 2.4.5 hierarchy)
+  # ============================
+
+  major_cat_file <- if (results$inputs$bea_io_level == 'detail') {
+    'resources/mappings/nipa_pce_major_category_detail.csv'
+  } else {
+    'resources/mappings/nipa_pce_major_category.csv'
+  }
+  if (file.exists(major_cat_file)) {
+    major_cat_map <- read_csv(major_cat_file, show_col_types = FALSE)
+
+    pce_major_prices <- pce_category_prices %>%
+      inner_join(major_cat_map, by = 'nipa_line') %>%
+      group_by(top_level, major_category) %>%
+      summarise(
+        pre_sub = sum(pre_sub * purchasers_value) / sum(purchasers_value),
+        pe_postsub = sum(pe_postsub * purchasers_value) / sum(purchasers_value),
+        ge = sum(ge * purchasers_value) / sum(purchasers_value),
+        purchasers_value = sum(purchasers_value),
+        n_categories = n(),
+        .groups = 'drop'
+      ) %>%
+      mutate(pce_share = purchasers_value / sum(purchasers_value) * 100) %>%
+      arrange(desc(pre_sub))
+
+    write_csv(pce_major_prices,
+              file.path(output_dir, 'pce_major_category_prices.csv'))
+    message(sprintf('    pce_major_category_prices.csv (%d major categories)',
+                    nrow(pce_major_prices)))
+  }
+
+  # ============================
+  # BEA Commodity Prices (I-O model)
+  # ============================
+
+  if (!is.null(results$prices$presub$bea_commodity_prices)) {
+    bea_commodity_prices <- build_bea_commodity_table(
+      results$prices$presub$bea_commodity_prices,
+      results$inputs$bea_pce_weights,
+      results$inputs$io_data_dir
+    )
+    write_csv(bea_commodity_prices,
+              file.path(output_dir, 'bea_commodity_prices.csv'))
+    message(sprintf('    bea_commodity_prices.csv (%d BEA commodities)',
+                    nrow(bea_commodity_prices)))
+  }
+
+  # ============================
+  # GTAP GE Decomposition
+  # ============================
+
+  if (!is.null(results$ge_decomp)) {
+    if (!is.null(results$ge_decomp$summary)) {
+      write_csv(results$ge_decomp$summary,
+                file.path(output_dir, 'gtap_ge_decomp_summary.csv'))
+      message(sprintf('    gtap_ge_decomp_summary.csv (%d metrics)',
+                      nrow(results$ge_decomp$summary)))
+    }
+
+    if (!is.null(results$ge_decomp$gtap_commodity)) {
+      write_csv(results$ge_decomp$gtap_commodity,
+                file.path(output_dir, 'gtap_ge_decomp_by_commodity.csv'))
+      message(sprintf('    gtap_ge_decomp_by_commodity.csv (%d GTAP commodities)',
+                      nrow(results$ge_decomp$gtap_commodity)))
+    }
+
+    if (!is.null(results$ge_decomp$bea_commodity)) {
+      write_csv(results$ge_decomp$bea_commodity,
+                file.path(output_dir, 'gtap_ge_decomp_by_bea_commodity.csv'))
+      message(sprintf('    gtap_ge_decomp_by_bea_commodity.csv (%d BEA commodities)',
+                      nrow(results$ge_decomp$bea_commodity)))
+    }
+
+    if (!is.null(results$ge_decomp$pce_category)) {
+      write_csv(results$ge_decomp$pce_category,
+                file.path(output_dir, 'gtap_ge_decomp_by_pce_category.csv'))
+      message(sprintf('    gtap_ge_decomp_by_pce_category.csv (%d PCE categories)',
+                      nrow(results$ge_decomp$pce_category)))
+    }
+  }
 
   # ============================
   # Goods-Weighted ETRs by Country
@@ -183,7 +350,6 @@ write_outputs <- function(results, scenario) {
     stop('etr$presim_country not found in results')
   }
 
-  # Create output with pre-sub and post-sub ETRs by country
   country_codes <- c('chn', 'ca', 'mx', 'uk', 'jp', 'eu', 'row', 'fta')
   country_names <- c('China', 'Canada', 'Mexico', 'UK', 'Japan', 'EU', 'ROW', 'FTA')
 
@@ -198,8 +364,6 @@ write_outputs <- function(results, scenario) {
     stop('Missing required columns in etr$presim_country: ', paste(missing_pre, collapse = ', '))
   }
 
-  # Actually, create a simpler format - one row per country with columns for pre/post
-  # Include both delta ETRs and level ETRs (if available)
   has_levels <- !is.null(results$etr$baseline_country_levels) &&
                 !is.null(results$etr$presim_country_levels) &&
                 !is.null(results$etr$postsim_country_levels)
@@ -207,9 +371,9 @@ write_outputs <- function(results, scenario) {
   goods_etrs <- tibble(
     country = country_names,
     country_code = country_codes,
-    postsub_imports = sapply(country_codes, function(code)
+    pe_postsub_imports = sapply(country_codes, function(code)
       results$etr$postsim_country[[paste0('imports_', code)]]),
-    postsub_etr = sapply(country_codes, function(code)
+    pe_postsub_etr = sapply(country_codes, function(code)
       results$etr$postsim_country[[paste0('etr_', code)]]),
     presub_imports = sapply(country_codes, function(code)
       results$etr$presim_country[[paste0('imports_', code)]]),
@@ -224,17 +388,16 @@ write_outputs <- function(results, scenario) {
           results$etr$baseline_country_levels[[paste0('etr_', code)]]),
         presub_level = sapply(country_codes, function(code)
           results$etr$presim_country_levels[[paste0('etr_', code)]]),
-        postsub_level = sapply(country_codes, function(code)
+        pe_postsub_level = sapply(country_codes, function(code)
           results$etr$postsim_country_levels[[paste0('etr_', code)]])
       )
   }
 
-  # Add totals row
   total_row <- tibble(
     country = 'TOTAL',
     country_code = 'all',
-    postsub_imports = sum(goods_etrs$postsub_imports),
-    postsub_etr = results$etr$post_sub_increase,
+    pe_postsub_imports = sum(goods_etrs$pe_postsub_imports),
+    pe_postsub_etr = results$etr$pe_postsub_increase,
     presub_imports = sum(goods_etrs$presub_imports),
     presub_etr = results$etr$pre_sub_increase
   )
@@ -244,7 +407,7 @@ write_outputs <- function(results, scenario) {
       mutate(
         baseline_level = results$etr$baseline_etr,
         presub_level = results$etr$pre_sub_all_in,
-        postsub_level = results$etr$post_sub_all_in
+        pe_postsub_level = results$etr$pe_postsub_all_in
       )
   }
 

@@ -1,0 +1,77 @@
+nipa_line,pce_mp,bucket_name
+5,4,Motor vehicles and parts
+6,4,Motor vehicles and parts
+7,4,Motor vehicles and parts
+9,5,Furnishings and durable household equipment
+10,5,Furnishings and durable household equipment
+11,5,Furnishings and durable household equipment
+12,5,Furnishings and durable household equipment
+14,6,Recreational goods and vehicles
+15,6,Recreational goods and vehicles
+16,6,Recreational goods and vehicles
+17,6,Recreational goods and vehicles
+18,6,Recreational goods and vehicles
+20,7,Other durable goods
+21,7,Other durable goods
+22,7,Other durable goods
+23,7,Other durable goods
+24,7,Other durable goods
+27,9,Food and beverages purchased for off-premises consumption
+28,9,Food and beverages purchased for off-premises consumption
+29,9,Food and beverages purchased for off-premises consumption
+32,10,Clothing and footwear
+33,10,Clothing and footwear
+34,10,Clothing and footwear
+35,10,Clothing and footwear
+37,11,Gasoline and other energy goods
+38,11,Gasoline and other energy goods
+40,12,Other nondurable goods
+41,12,Other nondurable goods
+42,12,Other nondurable goods
+43,12,Other nondurable goods
+44,12,Other nondurable goods
+45,12,Other nondurable goods
+46,12,Other nondurable goods
+51,15,Housing and utilities
+52,15,Housing and utilities
+53,15,Housing and utilities
+54,15,Housing and utilities
+56,15,Housing and utilities
+58,15,Housing and utilities
+59,15,Housing and utilities
+62,16,Health care
+63,16,Health care
+64,16,Health care
+66,16,Health care
+67,16,Health care
+70,17,Transportation services
+71,17,Transportation services
+73,17,Transportation services
+74,17,Transportation services
+75,17,Transportation services
+77,18,Recreation services
+78,18,Recreation services
+79,18,Recreation services
+80,18,Recreation services
+83,19,Food services and accommodations
+84,19,Food services and accommodations
+85,19,Food services and accommodations
+88,20,Financial services and insurance
+89,20,Financial services and insurance
+91,20,Financial services and insurance
+92,20,Financial services and insurance
+93,20,Financial services and insurance
+94,20,Financial services and insurance
+97,21,Other services
+98,21,Other services
+99,21,Other services
+101,21,Other services
+102,21,Other services
+103,21,Other services
+104,21,Other services
+105,21,Other services
+106,21,Other services
+107,21,Other services
+109,21,Other services
+110,21,Other services
+111,22,Final consumption expenditures of NPISH

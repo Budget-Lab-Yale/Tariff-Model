@@ -127,27 +127,3 @@ calculate_foreign_gdp <- function(inputs) {
 
   return(results)
 }
-
-
-#' Print foreign GDP summary table
-#'
-#' @param foreign_gdp_results Results from calculate_foreign_gdp()
-print_foreign_gdp_summary <- function(foreign_gdp_results) {
-
-  cat('\n----------------------------------------------------------\n')
-  cat('FOREIGN GDP EFFECTS (Long-Run)\n')
-  cat('----------------------------------------------------------\n')
-  cat(sprintf('%-20s %10s\n', 'Region', 'Change (%)'))
-  cat('----------------------------------------------------------\n')
-
-  cat(sprintf('%-20s %+10.2f\n', 'USA', foreign_gdp_results$usa))
-  cat(sprintf('%-20s %+10.2f\n', 'China', foreign_gdp_results$china))
-  cat(sprintf('%-20s %+10.2f\n', 'Canada', foreign_gdp_results$canada))
-  cat(sprintf('%-20s %+10.2f\n', 'Mexico', foreign_gdp_results$mexico))
-  cat(sprintf('%-20s %+10.2f\n', 'EU', foreign_gdp_results$eu))
-  cat(sprintf('%-20s %+10.2f\n', 'UK', foreign_gdp_results$uk))
-  cat(sprintf('%-20s %+10.2f\n', 'Japan', foreign_gdp_results$japan))
-  cat(sprintf('%-20s %+10.2f\n', 'FTA Partners', foreign_gdp_results$fta))
-  cat(sprintf('%-20s %+10.2f\n', 'Rest of World', foreign_gdp_results$row))
-  cat('----------------------------------------------------------\n')
-}

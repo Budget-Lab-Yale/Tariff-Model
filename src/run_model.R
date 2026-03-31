@@ -21,125 +21,129 @@ source('src/00_run_tariff_etrs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
 source('src/02_calculate_etr.R')
-source('src/03_calculate_prices.R')
-source('src/04a_generate_maus_inputs.R')
 source('src/04_calculate_revenue.R')
-source('src/05a_predict_maus.R')
+source('src/05a_usmm_surrogate.R')
 source('src/05_calculate_macro.R')
 source('src/06_calculate_sectors.R')
 source('src/07_calculate_dynamic_revenue.R')
 source('src/08_calculate_foreign_gdp.R')
 source('src/09_calculate_distribution.R')
-source('src/10_calculate_products.R')
 source('src/11_write_outputs.R')
 source('src/12_export_excel.R')
-source('src/13_generate_report.R')
 
 
-#' Load MAUS output levels after user runs MAUS
-#' @param scenario_dir Path to scenario directory
-#' @param maus_baseline Baseline MAUS data (from inputs$baselines$maus)
-#' @return Tibble with MAUS quarterly data (baseline + tariff)
-load_maus_levels <- function(scenario_dir, maus_baseline) {
-  maus_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
-  if (!file.exists(maus_file)) {
-    stop('MAUS output file not found: ', maus_file)
+#' Average two sets of price results (element-wise)
+#'
+#' @param a Price results list from compute_io_prices() or compute_ge_prices()
+#' @param b Price results list from same function with different markup_assumption
+#' @return Averaged price results list
+average_price_results <- function(a, b) {
+  avg <- list(
+    aggregate = (a$aggregate + b$aggregate) / 2,
+    bea_commodity_prices = (a$bea_commodity_prices + b$bea_commodity_prices) / 2,
+    markup_assumption = 'average'
+  )
+
+  # Average per-PCE-category prices (join by nipa_line to be safe)
+  avg$pce_category_prices <- a$pce_category_prices %>%
+    inner_join(
+      b$pce_category_prices %>% select(nipa_line, sr_price_effect_b = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    mutate(
+      sr_price_effect = (sr_price_effect + sr_price_effect_b) / 2
+    ) %>%
+    select(-sr_price_effect_b)
+
+  # Average decomposition if present (presub Boston Fed only)
+  if (!is.null(a$direct_aggregate) && !is.null(b$direct_aggregate)) {
+    avg$direct_aggregate <- (a$direct_aggregate + b$direct_aggregate) / 2
+    avg$supply_chain_aggregate <- (a$supply_chain_aggregate + b$supply_chain_aggregate) / 2
   }
-  # Use shared loader that merges scenario data with baseline
-  maus <- load_maus_scenario(maus_file, maus_baseline)
-  message(sprintf('  Loaded MAUS output: %d quarters', nrow(maus)))
-  return(maus)
+
+  return(avg)
 }
 
 
-#' Pause and wait for user to run MAUS
-#' @param maus_inputs Results from generate_maus_inputs()
-#' @param scenario_dir Path to scenario directory
-wait_for_maus <- function(maus_inputs, scenario_dir) {
-  maus_output_file <- file.path(scenario_dir, 'maus_outputs', 'quarterly.csv')
+#' Average GE decomposition results across markup assumptions
+#'
+#' @param a GE decomposition result from decompose_ge_prices()
+#' @param b GE decomposition result from decompose_ge_prices()
+#' @return Averaged decomposition result
+average_ge_decomposition_results <- function(a, b) {
+  avg_numeric_join <- function(x, y, keys) {
+    numeric_cols <- setdiff(intersect(
+      names(x)[vapply(x, is.numeric, logical(1))],
+      names(y)[vapply(y, is.numeric, logical(1))]
+    ), keys)
+    keep_cols <- union(keys, setdiff(names(x), numeric_cols))
 
-  # If MAUS output already exists, continue without pausing
-  if (file.exists(maus_output_file)) {
-    message('  MAUS output file found, continuing...')
-    return()
+    joined <- x %>%
+      inner_join(
+        y %>% select(all_of(c(keys, numeric_cols))),
+        by = keys,
+        suffix = c('_a', '_b')
+      )
+
+    for (col in numeric_cols) {
+      joined[[col]] <- (joined[[paste0(col, '_a')]] + joined[[paste0(col, '_b')]]) / 2
+    }
+
+    joined %>%
+      select(all_of(keep_cols), all_of(numeric_cols))
   }
 
-  # Get date range from shock data
-  shocks <- maus_inputs$shocks
-  start_year <- min(shocks$year)
-  start_qtr <- shocks$quarter[shocks$year == start_year][1]
-  end_year <- max(shocks$year)
-  end_qtr <- shocks$quarter[shocks$year == end_year]
-  end_qtr <- end_qtr[length(end_qtr)]
+  summarize_pce_decomp <- function(pce_category) {
+    summary <- tibble(
+      metric = c(
+        'import_price_component',
+        'domestic_price_component',
+        'share_shift_component',
+        'residual_component',
+        'ge_price_increase'
+      ),
+      value = c(
+        sum(pce_category$import_price_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$share_shift_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$residual_component * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value),
+        sum(pce_category$ge * pce_category$purchasers_value) /
+          sum(pce_category$purchasers_value)
+      ),
+      unit = 'pct'
+    )
 
-  # Build example rows from first few quarters
-  example_rows <- shocks %>%
-    head(4) %>%
-    mutate(row = sprintf('  %d,%d,<GDP>,<LEB>,<LURC>', year, quarter)) %>%
-    pull(row) %>%
-    paste(collapse = '\n')
-
-  msg <- sprintf('
-===========================================================
-MAUS INPUT REQUIRED
-===========================================================
-
-The model has generated MAUS input shocks.
-
-INPUT FILE (shocks for MAUS):
-  %s
-
-NEXT STEPS:
-  1. Open MAUS and load the shock series from the file above
-  2. Run MAUS to generate quarterly GDP/employment projections
-  3. Save MAUS output to:
-     %s
-
-REQUIRED OUTPUT FORMAT (CSV with columns):
-  year, quarter, GDP, LEB, LURC
-
-  Column mapping:
-    GDP  = Real GDP (billions)
-    LEB  = Employment (millions)
-    LURC = Unemployment rate (%%)
-
-  Example (first rows should look like):
-  year,quarter,GDP,LEB,LURC
-%s
-  ...
-  (%d quarters total, through %d Q%d)
-
-  NOTE: Only include tariff scenario values.
-        Baseline values are loaded from resources/baselines/maus_baseline.csv
-
-===========================================================
-
-', maus_inputs$output_file, maus_output_file, example_rows,
-   maus_inputs$n_quarters, end_year, end_qtr)
-
-  cat(msg)
-
-  # Wait for user to run MAUS and save output
-  cat('Press [Enter] when MAUS output file is ready...')
-  readLines(con = 'stdin', n = 1)
-
-  # Verify the file now exists
-  if (!file.exists(maus_output_file)) {
-    stop('MAUS output file still not found: ', maus_output_file)
+    summary
   }
 
-  message('  MAUS output file found, continuing...')
+  pce_category <- avg_numeric_join(a$pce_category, b$pce_category, 'nipa_line')
+
+  list(
+    gtap_commodity = a$gtap_commodity,
+    bea_commodity = avg_numeric_join(a$bea_commodity, b$bea_commodity, 'bea_code'),
+    pce_category = pce_category,
+    summary = summarize_pce_decomp(pce_category),
+    markup_assumption = 'average'
+  )
 }
 
 
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
-#' @param use_maus_surrogate If TRUE (default), use pre-estimated MAUS surrogate.
-#'   If FALSE, use manual MAUS workflow (generate shocks, pause, load output).
+#' @param markup_assumption Markup response to cost changes:
+#'   'constant_dollar' (default, lower bound),
+#'   'constant_percentage' (upper bound), or 'average' (mean of both)
+#' @param bea_io_level BEA I-O table level: 'detail' (default, ~400 commodities,
+#'   2017) or 'summary' (73 commodities, 2024). NULL uses value from global_assumptions.yaml.
 #'
 #' @return List containing all model outputs
-run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
+run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
+                         bea_io_level = NULL) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -156,7 +160,23 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   #---------------------------
 
   message('Step 0: Running Tariff-ETRs...')
-  run_tariff_etrs(scenario)
+
+  # Read model params and global assumptions to get ETRs config
+  model_params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
+  assumptions <- yaml::read_yaml('config/global_assumptions.yaml')
+
+  etrs_scenario <- model_params$tariff_etrs$scenario
+  if (is.null(etrs_scenario)) {
+    stop('model_params.yaml must have tariff_etrs.scenario field')
+  }
+
+  tariff_etrs_path <- assumptions$tariff_etrs_path
+  if (is.null(tariff_etrs_path)) {
+    stop('global_assumptions.yaml must have tariff_etrs_path field')
+  }
+
+  run_tariff_etrs(scenario, etrs_scenario = etrs_scenario,
+                  tariff_etrs_path = tariff_etrs_path)
 
   #---------------------------
   # Step 0b: Run GTAP
@@ -170,19 +190,11 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   #---------------------------
 
   message('\nStep 1: Loading inputs...')
-  inputs <- load_inputs(scenario, skip_maus = TRUE)
+  inputs <- load_inputs(scenario, bea_io_level_override = bea_io_level,
+                        markup_assumption = markup_assumption)
 
-  # Guard: time-varying ETRs are not compatible with MAUS surrogate
   if (isTRUE(inputs$is_time_varying)) {
     message(sprintf('  Detected time-varying ETRs (%d dates)', length(inputs$etr_dates)))
-    if (use_maus_surrogate) {
-      stop(
-        'Time-varying ETR scenarios cannot use the MAUS surrogate model.\n',
-        'The surrogate interpolates on a single UTFIBC level, but time-varying\n',
-        'scenarios produce a varying UTFIBC path.\n\n',
-        'Use: run_scenario("', scenario, '", use_maus_surrogate = FALSE)'
-      )
-    }
   }
 
   #---------------------------
@@ -201,70 +213,126 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   }
 
   #---------------------------
-  # Step 3: Calculate price effects
+  # Step 3: Calculate consumer price effects (I-O model)
   #---------------------------
 
-  message('\nStep 3: Calculating price effects...')
-  price_results <- calculate_prices(etr_results, inputs)
+  message('\nStep 3: Calculating consumer price effects...')
+  message(sprintf('  Markup assumption: %s', markup_assumption))
 
-  #---------------------------
-  # Step 3b: Calculate product price effects (if GTAP data available)
-  #---------------------------
+  # Helper: compute all three price concepts for a given markup assumption
+  compute_all_prices <- function(ma, matrices) {
+    ppa_usa <- inputs$ppa[, 'usa']
 
-  if (is.null(inputs$etr_matrix) || is.null(inputs$ppa) || is.null(inputs$import_weights)) {
-    stop('Product price effects require etr_matrix, ppa, and import_weights inputs')
+    # Pre-substitution
+    presub <- compute_io_prices(
+      tau_M = inputs$tau_M,
+      B_MD = matrices$B_MD,
+      leontief_domestic = inputs$bea_leontief_domestic,
+      omega_M = matrices$omega_M,
+      omega_D = matrices$omega_D,
+      pce_bridge = inputs$pce_bridge,
+      usd_offset = inputs$assumptions$usd_offset,
+      domestic_pricing = inputs$assumptions$domestic_pricing,
+      markup_assumption = ma
+    )
+
+    # PE post-substitution
+    tau_M_post <- compute_postsub_tau_M(
+      inputs$tau_M, inputs$gtap_bea_crosswalk,
+      inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
+    )
+    omega_M_post <- compute_postsub_omega_M(
+      matrices$omega_M, inputs$gtap_bea_crosswalk,
+      inputs$nvpp_commodity_ratio, inputs$baselines$viws_baseline
+    )
+    zero_use <- matrices$omega_M == 0 & matrices$omega_D == 0
+    omega_D_post <- 1 - omega_M_post
+    omega_D_post[zero_use] <- 0
+
+    pe_postsub <- compute_io_prices(
+      tau_M = tau_M_post,
+      B_MD = matrices$B_MD,
+      leontief_domestic = inputs$bea_leontief_domestic,
+      omega_M = omega_M_post,
+      omega_D = omega_D_post,
+      pce_bridge = inputs$pce_bridge,
+      usd_offset = inputs$assumptions$usd_offset,
+      domestic_pricing = inputs$assumptions$domestic_pricing,
+      markup_assumption = ma
+    )
+
+    # GE prices
+    ge <- compute_ge_prices(
+      ppa_usa = ppa_usa,
+      gtap_bea_crosswalk = inputs$gtap_bea_crosswalk,
+      viws_baseline = inputs$baselines$viws_baseline,
+      pce_bridge = inputs$pce_bridge,
+      markup_assumption = ma
+    )
+
+    ge_decomp <- decompose_ge_prices(
+      ppa_usa = ppa_usa,
+      ppm_usa = inputs$ppm[, 'usa'],
+      ppd_usa = inputs$ppd[, 'usa'],
+      gtap_bea_crosswalk = inputs$gtap_bea_crosswalk,
+      viws_baseline = inputs$baselines$viws_baseline,
+      pce_bridge = inputs$pce_bridge,
+      nvpp_adjustment = inputs$nvpp_adjustment,
+      markup_assumption = ma,
+      presub_pce_category_prices = presub$pce_category_prices
+    )
+
+    return(list(presub = presub, pe_postsub = pe_postsub, ge = ge, ge_decomp = ge_decomp))
   }
 
-  message('\nStep 3b: Calculating product price effects from GTAP...')
+  if (markup_assumption == 'average') {
+    message('  Running constant_percentage (upper bound):')
+    cp_prices <- compute_all_prices('constant_percentage', inputs$io_matrices_cp)
+    message('  Running constant_dollar (lower bound):')
+    cd_prices <- compute_all_prices('constant_dollar', inputs$io_matrices_cd)
 
-  # SR = import_share * weighted_ETR, normalized by consumption weights
-  # LR = ppa (purchaser's price), normalized by consumption weights
-  inputs$product_prices <- get_price_effects(
-    gtap_data = list(ppa = inputs$ppa),
-    etr_matrix = inputs$etr_matrix,
-    product_params = inputs$product_params,
-    import_shares = inputs$import_shares,
-    import_weights = inputs$import_weights,
-    overall_sr_effect = price_results$pre_sub_price_increase,
-    overall_lr_effect = price_results$post_sub_price_increase,
-    target_region = 'usa'
+    message('  Averaging upper and lower bounds...')
+    presub_results <- average_price_results(cp_prices$presub, cd_prices$presub)
+    pe_postsub_results <- average_price_results(cp_prices$pe_postsub, cd_prices$pe_postsub)
+    ge_results <- average_price_results(cp_prices$ge, cd_prices$ge)
+    ge_decomp_results <- average_ge_decomposition_results(cp_prices$ge_decomp, cd_prices$ge_decomp)
+  } else {
+    prices <- compute_all_prices(markup_assumption, inputs$io_matrices)
+    presub_results <- prices$presub
+    pe_postsub_results <- prices$pe_postsub
+    ge_results <- prices$ge
+    ge_decomp_results <- prices$ge_decomp
+  }
+
+  # GTAP ppriv: aggregate private consumption price (CDE utility-weighted)
+  if (!is.null(inputs$ppriv)) {
+    gtap_ppriv <- inputs$ppriv['usa']
+    message(sprintf('  GTAP ppriv (aggregate consumption price):  %.4f%%', gtap_ppriv))
+    message(sprintf('  GE via BEA/PCE bridge:                     %.4f%%',
+                    ge_results$aggregate * 100))
+  }
+
+  price_results <- list(
+    pre_sub_price_increase = presub_results$aggregate * 100,
+    pe_postsub_price_increase = pe_postsub_results$aggregate * 100,
+    ge_price_increase = ge_results$aggregate * 100,
+    presub = presub_results,
+    pe_postsub = pe_postsub_results,
+    ge = ge_results
   )
 
-  message(sprintf('  Calculated price effects for %d products', nrow(inputs$product_prices)))
+  message(sprintf('  Pre-sub aggregate:     %.3f%%', price_results$pre_sub_price_increase))
+  message(sprintf('  PE post-sub aggregate: %.3f%%', price_results$pe_postsub_price_increase))
+  message(sprintf('  GE aggregate:          %.3f%%', price_results$ge_price_increase))
 
   #---------------------------
-  # Step 4a: Get MAUS outputs (surrogate or manual)
+  # Step 3a: Run USMM surrogate
   #---------------------------
 
-  # Always generate MAUS input shocks (needed for both surrogate and manual)
-  message('\nStep 4a: Generating MAUS input shocks...')
-  maus_inputs <- generate_maus_inputs(etr_results, inputs, scenario)
-
-  if (use_maus_surrogate) {
-    # Use pre-estimated surrogate model (indexed by UTFIBC)
-    message('  Using MAUS surrogate model...')
-
-    if (!maus_surrogate_available()) {
-      stop('MAUS surrogate not found. Either:\n',
-           '  1. Run estimate_maus_surrogate() first, or\n',
-           '  2. Use run_scenario(..., use_maus_surrogate = FALSE) for manual MAUS')
-    }
-
-    # Predict MAUS using interpolation on UTFIBC
-    inputs$maus <- predict_maus(
-      maus_inputs = maus_inputs$shocks,
-      baseline_maus = inputs$baselines$maus
-    )
-  } else {
-    # Manual MAUS workflow: print shocks, pause, load output
-    print_shock_summary(maus_inputs)
-
-    wait_for_maus(maus_inputs, scenario_dir)
-
-    # Load MAUS output levels
-    message('\nLoading MAUS output levels...')
-    inputs$maus <- load_maus_levels(scenario_dir, inputs$baselines$maus)
-  }
+  message('\nStep 3a: Running USMM surrogate...')
+  usmm_results <- run_usmm_surrogate(etr_results, inputs)
+  inputs$macro_quarterly <- usmm_results$macro_quarterly
+  inputs$macro_quarterly_allperm <- usmm_results$macro_quarterly_allperm
 
   #---------------------------
   # Step 4: Calculate revenue
@@ -278,8 +346,8 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   #---------------------------
 
   message('\nStep 5: Calculating macro effects...')
-  if (is.null(inputs$maus)) {
-    stop('MAUS data is required for macro calculations')
+  if (is.null(inputs$macro_quarterly)) {
+    stop('USMM macro data is required for macro calculations')
   }
   macro_results <- calculate_macro(inputs)
 
@@ -324,16 +392,6 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   distribution_results <- calculate_distribution(price_results, inputs)
 
   #---------------------------
-  # Step 10: Calculate product price effects
-  #---------------------------
-
-  message('\nStep 10: Calculating product price effects...')
-  if (is.null(inputs$product_prices)) {
-    stop('product_prices data is required for product calculations')
-  }
-  product_results <- calculate_products(inputs)
-
-  #---------------------------
   # Compile results
   #---------------------------
 
@@ -344,20 +402,20 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     inputs = inputs,
     etr = etr_results,
     prices = price_results,
+    ge_decomp = ge_decomp_results,
     revenue = revenue_results,
     macro = macro_results,
     sectors = sector_results,
     dynamic = dynamic_results,
     foreign_gdp = foreign_gdp_results,
-    distribution = distribution_results,
-    products = product_results
+    distribution = distribution_results
   )
 
   #---------------------------
-  # Step 11: Write outputs to disk
+  # Step 10: Write outputs to disk
   #---------------------------
 
-  message('\nStep 11: Writing outputs to disk...')
+  message('\nStep 10: Writing outputs to disk...')
   write_outputs(results, scenario)
 
   # Print key results summary
@@ -367,10 +425,11 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
   message(sprintf('Baseline ETR (from levels):     %.3f%%', etr_results$baseline_etr))
   message(sprintf('Pre-substitution ETR increase:  %.2f%%', etr_results$pre_sub_increase))
   message(sprintf('Pre-sub all-in ETR:             %.3f%%', etr_results$pre_sub_all_in))
-  message(sprintf('Post-substitution ETR increase: %.2f%%', etr_results$post_sub_increase))
-  message(sprintf('Post-sub all-in ETR:            %.3f%%', etr_results$post_sub_all_in))
+  message(sprintf('PE post-sub ETR increase:       %.2f%%', etr_results$pe_postsub_increase))
+  message(sprintf('PE post-sub all-in ETR:         %.3f%%', etr_results$pe_postsub_all_in))
   message(sprintf('Pre-sub price increase:         %.3f%%', price_results$pre_sub_price_increase))
-  message(sprintf('Post-sub price increase:        %.3f%%', price_results$post_sub_price_increase))
+  message(sprintf('PE post-sub price increase:     %.3f%%', price_results$pe_postsub_price_increase))
+  message(sprintf('GE price increase:              %.3f%%', price_results$ge_price_increase))
 
   # Per-HH costs come from distribution calculation (matches Excel methodology)
   if (!is.null(distribution_results)) {
@@ -393,6 +452,10 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     message(sprintf('U-rate 2026 Q4:                 %+.2f pp', macro_results$urate_2026))
     message(sprintf('Payroll 2025 Q4:                %.0f thousand', macro_results$payroll_2025))
     message(sprintf('Payroll 2026 Q4:                %.0f thousand', macro_results$payroll_2026))
+    message(sprintf('PCE 2025 Q4:                    %+.2f%%', macro_results$pce_2025))
+    message(sprintf('PCE 2026 Q4:                    %+.2f%%', macro_results$pce_2026))
+    message(sprintf('Fed funds 2025 Q4:              %+.2f pp', macro_results$fed_funds_2025))
+    message(sprintf('Fed funds 2026 Q4:              %+.2f pp', macro_results$fed_funds_2026))
     # Export change from GTAP
     if (!is.null(inputs$qxwreg)) {
       message(sprintf('Export change (GTAP):           %.2f%%', inputs$qxwreg))
@@ -414,12 +477,65 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     message(sprintf('Services:                       %.2f%%', sector_results$services))
   }
 
+  message('----------------------------------------------------------')
+  message('BEA COMMODITY PRICE EFFECTS (I-O model)')
+  message('----------------------------------------------------------')
+  message(sprintf('Aggregate SR (PCE-weighted):     %.4f%%', presub_results$aggregate * 100))
+  message(sprintf('  Direct import channel:         %.4f%%', presub_results$direct_aggregate * 100))
+  message(sprintf('  Supply chain channel:          %.4f%%', presub_results$supply_chain_aggregate * 100))
+
+  bea_detail <- build_bea_commodity_table(
+    presub_results$bea_commodity_prices, inputs$bea_pce_weights, inputs$io_data_dir
+  )
+  top_bea <- bea_detail %>% filter(sr_price_effect > 0.01) %>% head(15)
+  message(sprintf('\nTop BEA commodities by SR price effect (%d with nonzero):',
+                  sum(bea_detail$sr_price_effect > 0.001)))
+  message(sprintf('  %-8s %-42s %8s %10s', 'Code', 'Description', 'SR (%)', 'PCE ($M)'))
+  for (i in 1:nrow(top_bea)) {
+    message(sprintf('  %-8s %-42s %8.3f %10s',
+                    top_bea$bea_code[i],
+                    substr(top_bea$description[i], 1, 42),
+                    top_bea$sr_price_effect[i],
+                    format(round(top_bea$pce_weight[i]), big.mark = ',')))
+  }
+
+  if (!is.null(price_results$presub$pce_category_prices)) {
+    pce_cats <- price_results$presub$pce_category_prices
+    pce_agg <- presub_results$aggregate * 100
+
+    message('')
+    message('----------------------------------------------------------')
+    message('CONSUMER PRICE EFFECTS BY PCE CATEGORY (I-O model)')
+    message('----------------------------------------------------------')
+    message(sprintf('Aggregate (PCE-weighted):        %.4f%%', pce_agg))
+    message('')
+    message(sprintf('  %-4s %-44s %7s %12s %6s',
+                    'Line', 'PCE Category', 'SR (%)', 'Value ($M)', '% PCE'))
+    message(paste(rep('-', 80), collapse = ''))
+
+    for (i in 1:nrow(pce_cats)) {
+      cat_name <- pce_cats$pce_category[i]
+      if (nchar(cat_name) > 43) cat_name <- substr(cat_name, 1, 43)
+      message(sprintf('  %4d %-44s %7.3f %12s %5.1f%%',
+                      pce_cats$nipa_line[i],
+                      cat_name,
+                      pce_cats$sr_price_effect[i],
+                      format(round(pce_cats$purchasers_value[i]), big.mark = ','),
+                      pce_cats$pce_share[i]))
+    }
+    message(paste(rep('-', 80), collapse = ''))
+    message(sprintf('  %4s %-44s %7.3f %12s %5.1f%%',
+                    '', 'TOTAL (PCE-weighted average)',
+                    pce_agg,
+                    format(round(sum(pce_cats$purchasers_value)), big.mark = ','),
+                    100.0))
+  }
+
   if (!is.null(foreign_gdp_results)) {
     message('----------------------------------------------------------')
     message('FOREIGN GDP EFFECTS (Long-Run)')
     message('----------------------------------------------------------')
     message(sprintf('USA:                            %+.2f%%', foreign_gdp_results$usa))
-    # Long-run GDP dollar loss (2025 concept dollars, estimated 2025 GDP = $30,441B)
     lr_gdp_dollar_loss <- foreign_gdp_results$usa / 100 * 30441
     message(sprintf('USA (2025$):                    $%.0fB', lr_gdp_dollar_loss))
     message(sprintf('China:                          %+.2f%%', foreign_gdp_results$china))
@@ -429,16 +545,6 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
     message(sprintf('UK:                             %+.2f%%', foreign_gdp_results$uk))
     message(sprintf('Japan:                          %+.2f%%', foreign_gdp_results$japan))
     message(sprintf('ROW:                            %+.2f%%', foreign_gdp_results$row))
-  }
-
-  if (!is.null(product_results)) {
-    message('----------------------------------------------------------')
-    message('PRODUCT PRICE EFFECTS')
-    message('----------------------------------------------------------')
-    message(sprintf('Food (Short-Run):               %.4f%%', product_results$food_sr))
-    message(sprintf('Food (Long-Run):                %.4f%%', product_results$food_lr))
-    message(sprintf('Total products:                 %d', product_results$n_products))
-    message(sprintf('Food products:                  %d', product_results$n_food))
   }
 
   if (!is.null(distribution_results)) {
@@ -453,7 +559,7 @@ run_scenario <- function(scenario, use_maus_surrogate = TRUE) {
                       format(round(abs(dist$cost_per_hh[i])), big.mark = ',', scientific = FALSE),
                       abs(dist$pct_of_income[i])))
     }
-    avg_cost <- distribution_results$avg_per_hh_cost
+    avg_cost <- distribution_results$pre_sub_per_hh_cost
     message(sprintf('Average per-HH cost:            $%s',
                     format(round(abs(avg_cost)), big.mark = ',', scientific = FALSE)))
   }

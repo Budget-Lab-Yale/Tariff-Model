@@ -186,26 +186,3 @@ calculate_macro <- function(inputs) {
 
   return(results)
 }
-
-
-#' Print macro summary table
-#'
-#' @param macro_results Results from calculate_macro()
-print_macro_summary <- function(macro_results) {
-
-  cat('\n----------------------------------------------------------\n')
-  cat('MACROECONOMIC EFFECTS\n')
-  cat('----------------------------------------------------------\n')
-
-  cat(sprintf('%-25s %15s %15s\n', 'Metric', '2025', '2026'))
-  cat('----------------------------------------------------------\n')
-
-  cat(sprintf('%-25s %14.2f%% %14.2f%%\n', 'GDP (Q4-Q4)',
-              macro_results$gdp_2025, macro_results$gdp_2026))
-  cat(sprintf('%-25s %+14.2f pp %+13.2f pp\n', 'Unemployment Rate (Q4)',
-              macro_results$urate_2025, macro_results$urate_2026))
-  cat(sprintf('%-25s %14.0f %15.0f\n', 'Payroll (thousands)',
-              macro_results$payroll_2025, macro_results$payroll_2026))
-
-  cat('----------------------------------------------------------\n')
-}

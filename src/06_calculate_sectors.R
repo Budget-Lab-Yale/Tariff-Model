@@ -151,29 +151,3 @@ calculate_sectors <- function(inputs) {
 
   return(results)
 }
-
-
-#' Print sector summary table
-#'
-#' @param sector_results Results from calculate_sectors()
-print_sector_summary <- function(sector_results) {
-
-  cat('\n----------------------------------------------------------\n')
-  cat('SECTOR OUTPUT EFFECTS\n')
-  cat('----------------------------------------------------------\n')
-  cat(sprintf('%-25s %10s\n', 'Sector', 'Change (%)'))
-  cat('----------------------------------------------------------\n')
-
-  cat(sprintf('%-25s %10.2f\n', 'Agriculture', sector_results$agriculture))
-  cat(sprintf('%-25s %10.2f\n', 'Mining & Extraction', sector_results$mining))
-  cat(sprintf('%-25s %10.2f\n', 'Total Manufacturing', sector_results$manufacturing))
-  cat(sprintf('%-25s %10.2f\n', '  Durable Manufacturing', sector_results$durable))
-  cat(sprintf('%-25s %10.2f\n', '  Advanced Manufacturing', sector_results$advanced))
-  cat(sprintf('%-25s %10.2f\n', '  Nondurable Manufacturing', sector_results$nondurable))
-  cat(sprintf('%-25s %10.2f\n', 'Utilities', sector_results$utilities))
-  cat(sprintf('%-25s %10.2f\n', 'Construction', sector_results$construction))
-  cat(sprintf('%-25s %10.2f\n', 'Services', sector_results$services))
-  cat('----------------------------------------------------------\n')
-  cat(sprintf('%-25s %10.2f\n', 'Overall Real GDP', sector_results$overall_gdp))
-  cat('----------------------------------------------------------\n')
-}

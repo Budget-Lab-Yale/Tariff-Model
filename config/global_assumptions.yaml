@@ -16,22 +16,25 @@
 inflation_2024_to_2025: 0.027
 
 # -----------------------------------------------------------------------------
-# Price Effect Parameters
+# BEA I-O Table Level
 # -----------------------------------------------------------------------------
 
-# Domestic price passthrough rate
-# How much of tariff cost is passed through to domestic prices
-price_passthrough: 0.50
+# Which BEA input-output tables to use for the I-O price model:
+#   'summary'  = 73 commodities, 2024 annual data (default)
+#   'detail'   = ~400 commodities, 2017 benchmark data
+bea_io_level: 'detail'
 
-# Goods share of Personal Consumption Expenditures (BEA)
-goods_share_pce: 0.31471
-
-# Import share of goods consumption (BEA)
-import_share: 0.20570
+# -----------------------------------------------------------------------------
+# Price Effect Parameters
+# -----------------------------------------------------------------------------
 
 # USD offset for exchange rate response
 # Calculated as: exchange_rate_response (0.3) * import_content (0.58)
 usd_offset: 0.174
+
+# Domestic pricing effect: fraction of tariff-induced cost increases
+# passed through to prices of domestically produced competing goods
+domestic_pricing: 0.5
 
 # -----------------------------------------------------------------------------
 # Revenue Parameters
@@ -63,3 +66,10 @@ phase_in:
   2033: 1.00
   2034: 1.00
   2035: 1.00
+
+# -----------------------------------------------------------------------------
+# External Repo Paths
+# -----------------------------------------------------------------------------
+
+# Path to the Tariff-ETRs repository (relative to project root)
+tariff_etrs_path: '../Tariff-ETRs'

@@ -187,7 +187,7 @@ load_model_outputs <- function(scenario) {
     'sector_effects.csv',
     'foreign_gdp.csv',
     'distribution.csv',
-    'product_prices.csv'
+    'pce_category_prices.csv'
   )
 
   for (f in required_files) {
@@ -197,6 +197,21 @@ load_model_outputs <- function(scenario) {
     }
     name <- tools::file_path_sans_ext(f)
     outputs[[name]] <- read_csv(path, show_col_types = FALSE)
+  }
+
+  optional_files <- c(
+    'pce_major_category_prices.csv',
+    'gtap_ge_decomp_summary.csv',
+    'gtap_ge_decomp_by_commodity.csv',
+    'gtap_ge_decomp_by_bea_commodity.csv',
+    'gtap_ge_decomp_by_pce_category.csv'
+  )
+  for (f in optional_files) {
+    path <- file.path(results_dir, f)
+    if (file.exists(path)) {
+      name <- tools::file_path_sans_ext(f)
+      outputs[[name]] <- read_csv(path, show_col_types = FALSE)
+    }
   }
 
   return(outputs)
@@ -233,8 +248,8 @@ build_data_toc <- function(report_date) {
       'Figure 3. Change in Long-Run Real US GDP by Sector from 2025 Tariffs',
       'Figure 4. Long-Run Change in Real GDP Level from 2025 Tariffs to Date',
       'Table 3. Estimated Revenue Effects of All 2025 Tariffs',
-      'Figure 5. Short-Run Distributional Effects of 2025 Tariffs',
-      sprintf('Figure 6. Commodity Price Effects from 2025 Tariffs through %s', date_md)
+      'Figure 5. Pre-Substitution Distributional Effects of 2025 Tariffs',
+      sprintf('Figure 6. Consumer Category Price Effects from 2025 Tariffs through %s', date_md)
     )
   )
 }
@@ -257,19 +272,19 @@ build_t1 <- function(outputs) {
 
   # ETR LEVELS from key_results (computed from levels matrices in 02_calculate_etr.R)
   pre_sub_etr_level <- key['pre_sub_all_in_etr'] / 100
-  post_sub_etr_level <- key['post_sub_all_in_etr'] / 100
+  pe_postsub_etr_level <- key['pe_postsub_all_in_etr'] / 100
 
   tibble(
     value = c(
       NA,  # Section header
       pre_sub_etr_level,  # LEVEL (baseline + increase)
-      post_sub_etr_level,  # LEVEL (baseline + increase)
+      pe_postsub_etr_level,  # LEVEL (baseline + increase)
       NA,  # Section header
       key['conventional_revenue_10yr'] / 1000,  # Billions to trillions
       key['dynamic_revenue_10yr'] / 1000,
       NA,  # Section header
       key['pre_sub_price_increase'] / 100,
-      key['post_sub_price_increase'] / 100,
+      key['pe_postsub_price_increase'] / 100,
       key['pre_sub_per_hh_cost'],
       key['post_sub_per_hh_cost'],
       NA,  # Section header
@@ -292,7 +307,7 @@ build_t2 <- function(outputs) {
   # Get total imports for share calculation
   total_row <- etrs %>% filter(country_code == 'all')
   total_presub_imports <- total_row$presub_imports
-  total_postsub_imports <- total_row$postsub_imports
+  total_pe_postsub_imports <- total_row$pe_postsub_imports
 
   # Aggregate UK, Japan, EU, FTA, ROW into "Rest of World"
   row_countries <- c('uk', 'jp', 'eu', 'row', 'fta')
@@ -312,10 +327,10 @@ build_t2 <- function(outputs) {
       country = 'Rest of World',
       country_code = 'row_agg',
       # Calculate ETRs first using original column values
-      postsub_etr = sum(postsub_etr * postsub_imports) / sum(postsub_imports),
+      pe_postsub_etr = sum(pe_postsub_etr * pe_postsub_imports) / sum(pe_postsub_imports),
       presub_etr = sum(presub_etr * presub_imports) / sum(presub_imports),
       # Then sum imports (order matters in dplyr 1.0+!)
-      postsub_imports = sum(postsub_imports),
+      pe_postsub_imports = sum(pe_postsub_imports),
       presub_imports = sum(presub_imports)
     )
 
@@ -336,18 +351,18 @@ build_t2 <- function(outputs) {
   result <- combined %>%
     mutate(
       share_presub = presub_imports / total_presub_imports,
-      share_postsub = postsub_imports / total_postsub_imports,
+      share_pe_postsub = pe_postsub_imports / total_pe_postsub_imports,
       contrib_presub = presub_etr * share_presub,
-      contrib_postsub = postsub_etr * share_postsub
+      contrib_pe_postsub = pe_postsub_etr * share_pe_postsub
     ) %>%
     select(
       Region = country,
       `Avg ETR Pre-Sub` = presub_etr,
-      `Avg ETR Post-Sub` = postsub_etr,
+      `Avg ETR PE Post-Sub` = pe_postsub_etr,
       `Share Pre-Sub` = share_presub,
-      `Share Post-Sub` = share_postsub,
+      `Share PE Post-Sub` = share_pe_postsub,
       `Contrib Pre-Sub` = contrib_presub,
-      `Contrib Post-Sub` = contrib_postsub
+      `Contrib PE Post-Sub` = contrib_pe_postsub
     )
 
   return(result)
@@ -414,7 +429,7 @@ build_f1 <- function(outputs) {
 
   # ETR LEVELS from key_results (already in %, computed in 02_calculate_etr.R)
   pre_sub_etr_level <- key['pre_sub_all_in_etr']
-  post_sub_etr_level <- key['post_sub_all_in_etr']
+  pe_postsub_etr_level <- key['pe_postsub_all_in_etr']
 
   last_year <- max(HISTORICAL_ETR$year)
   last_etr <- HISTORICAL_ETR %>%
@@ -425,14 +440,14 @@ build_f1 <- function(outputs) {
   result <- HISTORICAL_ETR %>%
     rename(`Effective Tariff Rate` = etr) %>%
     mutate(
-      `Projected Post-Substitution Rate` = NA_real_,
-      `Current Post-Substitution Rate` = post_sub_etr_level,
+      `Projected PE Post-Substitution Rate` = NA_real_,
+      `Current PE Post-Substitution Rate` = pe_postsub_etr_level,
       `Projected Pre-Substitution Rate` = NA_real_,
       `Current Pre-Substituton Rate` = pre_sub_etr_level
     ) %>%
     mutate(
-      `Projected Post-Substitution Rate` = if_else(
-        year == last_year, last_etr, `Projected Post-Substitution Rate`
+      `Projected PE Post-Substitution Rate` = if_else(
+        year == last_year, last_etr, `Projected PE Post-Substitution Rate`
       ),
       `Projected Pre-Substitution Rate` = if_else(
         year == last_year, last_etr, `Projected Pre-Substitution Rate`
@@ -443,8 +458,8 @@ build_f1 <- function(outputs) {
   row_2025 <- tibble(
     year = last_year + 1,
     `Effective Tariff Rate` = NA_real_,
-    `Projected Post-Substitution Rate` = post_sub_etr_level,
-    `Current Post-Substitution Rate` = post_sub_etr_level,
+    `Projected PE Post-Substitution Rate` = pe_postsub_etr_level,
+    `Current PE Post-Substitution Rate` = pe_postsub_etr_level,
     `Projected Pre-Substitution Rate` = pre_sub_etr_level,
     `Current Pre-Substituton Rate` = pre_sub_etr_level
   )
@@ -456,7 +471,7 @@ build_f1 <- function(outputs) {
 
 
 # =============================================================================
-# F2: GDP Level Effects (Blended MAUS-GTAP approach)
+# F2: GDP Level Effects (Blended USMM-GTAP approach)
 # =============================================================================
 
 build_f2 <- function(outputs) {
@@ -467,18 +482,17 @@ build_f2 <- function(outputs) {
     filter(region == 'usa') %>%
     pull(gdp_change_pct)
 
-  # Calculate GDP deviation as percentage with GTAP floor for 2026+
-  # This matches the "blended" approach: MIN(maus_deviation, gtap_long_run) for 2026 Q1+
+  # Calculate GDP deviation with USMM-GTAP linear blend over 16 quarters
   result <- macro %>%
     filter(year >= 2025) %>%
     mutate(
       Date = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),  # Mid-quarter date
       raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
-      # Apply GTAP floor for 2026+: use MIN (more negative = worse)
-      `All 2025 Tariffs to Date` = case_when(
-        year < 2026 ~ raw_deviation,
-        TRUE ~ pmin(raw_deviation, gtap_lr_gdp)
-      )
+      # Linear blend: 2025Q1 (w=1 USMM) → 2029Q1 (w=0, pure GTAP LR)
+      q_index = (year - 2025) * 4 + (quarter - 1),
+      blend_weight = pmax(0, 1 - q_index / 16),
+      `All 2025 Tariffs to Date` = blend_weight * raw_deviation +
+        (1 - blend_weight) * gtap_lr_gdp
     ) %>%
     select(
       Date,
@@ -573,23 +587,23 @@ build_f5 <- function(outputs) {
 
 
 # =============================================================================
-# F6: Commodity Price Effects
+# F6: Consumer Category Price Effects (I-O model)
 # =============================================================================
 
 build_f6 <- function(outputs) {
-  prices <- outputs$product_prices
+  prices <- outputs$pce_major_category_prices
+
+  if (is.null(prices)) {
+    stop('pce_major_category_prices not found in outputs')
+  }
 
   result <- prices %>%
-    left_join(GTAP_SECTOR_NAMES, by = 'gtap_sector') %>%
-    mutate(
-      Name = coalesce(display_name, gtap_sector)
-    ) %>%
     select(
-      Name,
-      `Short-Run` = sr_price_effect,
-      `Long-Run` = lr_price_effect
+      Name = major_category,
+      `Pre-Substitution` = pre_sub,
+      `Post-Substitution` = pe_postsub
     ) %>%
-    arrange(desc(`Short-Run`))  # Sort by short-run effect descending
+    arrange(desc(`Pre-Substitution`))
 
   return(result)
 }
@@ -628,19 +642,6 @@ export_excel_tables <- function(scenario, report_date) {
     stop('Template not found: ', template_path)
   }
 
-  suppress_openxlsx_external_link_warning <- function(expr) {
-    withCallingHandlers(
-      expr,
-      warning = function(w) {
-        msg <- conditionMessage(w)
-        if (grepl('externalLink', msg, fixed = TRUE) ||
-            grepl('one argument not used by format', msg, fixed = TRUE)) {
-          invokeRestart('muffleWarning')
-        }
-      }
-    )
-  }
-
   apply_white_background <- function(sheet, max_rows = 500, max_cols = 50) {
     white_style <- createStyle(fgFill = 'white')
     addStyle(
@@ -655,33 +656,7 @@ export_excel_tables <- function(scenario, report_date) {
   }
 
   # Load template workbook to preserve formatting
-  wb <- suppress_openxlsx_external_link_warning(loadWorkbook(template_path))
-
-  write_block <- function(sheet, data, start_row, start_col) {
-    if (is.null(dim(data))) {
-      data <- as.data.frame(data)
-    }
-    if (nrow(data) == 0 || ncol(data) == 0) {
-      return(invisible(NULL))
-    }
-
-    deleteData(
-      wb,
-      sheet = sheet,
-      cols = start_col:(start_col + ncol(data) - 1),
-      rows = start_row:(start_row + nrow(data) - 1),
-      gridExpand = TRUE
-    )
-
-    writeData(
-      wb,
-      sheet = sheet,
-      x = data,
-      startCol = start_col,
-      startRow = start_row,
-      colNames = FALSE
-    )
-  }
+  wb <- suppress_openxlsx_warnings(loadWorkbook(template_path))
 
   # ==========================================================================
   # Sheet order matches template: Data TOC, T1, T2, F1, F2, F3, F4, T3, F5, F6
@@ -708,7 +683,7 @@ export_excel_tables <- function(scenario, report_date) {
     list(row = 14, sheet = 'F6', label = toc$content[14])
   )
 
-  suppress_openxlsx_external_link_warning({
+  suppress_openxlsx_warnings({
     for (link in toc_links) {
       writeFormula(
         wb, 'Data TOC',
@@ -737,7 +712,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 4,
     colNames = FALSE
   )
-  write_block('T1', t1, start_row = 6, start_col = 2)
+  write_block(wb, 'T1', t1, start_row = 6, start_col = 2)
   deleteData(
     wb,
     sheet = 'T1',
@@ -771,12 +746,12 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 1,
     colNames = FALSE
   )
-  write_block('T2', t2, start_row = 8, start_col = 1)
+  write_block(wb, 'T2', t2, start_row = 8, start_col = 1)
 
   # F1: Historical ETR
   message('  Building F1 (Historical ETR)...')
   f1 <- build_f1(outputs)
-  write_block('F1', f1, start_row = 6, start_col = 1)
+  write_block(wb, 'F1', f1, start_row = 6, start_col = 1)
 
   # F2: GDP Level Effects
   message('  Building F2 (GDP Effects)...')
@@ -792,7 +767,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('F2', f2, start_row = 6, start_col = 1)
+  write_block(wb, 'F2', f2, start_row = 6, start_col = 1)
 
   # F3: Sector Output Changes
   message('  Building F3 (Sectors)...')
@@ -808,7 +783,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('F3', f3, start_row = 7, start_col = 1)
+  write_block(wb, 'F3', f3, start_row = 7, start_col = 1)
 
   # F4: International GDP Effects
   message('  Building F4 (International GDP)...')
@@ -824,7 +799,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('F4', f4, start_row = 7, start_col = 1)
+  write_block(wb, 'F4', f4, start_row = 7, start_col = 1)
 
   # T3: Revenue Table
   message('  Building T3 (Revenue)...')
@@ -837,7 +812,7 @@ export_excel_tables <- function(scenario, report_date) {
     startRow = 2,
     colNames = FALSE
   )
-  write_block('T3', t3, start_row = 6, start_col = 1)
+  write_block(wb, 'T3', t3, start_row = 6, start_col = 1)
 
   # F5: Distribution by Decile
   message('  Building F5 (Distribution)...')
@@ -855,21 +830,21 @@ export_excel_tables <- function(scenario, report_date) {
   )
   pct_row <- as.data.frame(as.list(f5$pct))
   cost_row <- as.data.frame(as.list(f5$cost))
-  write_block('F5', pct_row, start_row = 8, start_col = 2)
-  write_block('F5', cost_row, start_row = 12, start_col = 2)
+  write_block(wb, 'F5', pct_row, start_row = 8, start_col = 2)
+  write_block(wb, 'F5', cost_row, start_row = 12, start_col = 2)
 
-  # F6: Commodity Price Effects
-  message('  Building F6 (Commodities)...')
+  # F6: Consumer Category Price Effects
+  message('  Building F6 (Consumer Categories)...')
   f6 <- build_f6(outputs)
   writeData(
     wb,
     'F6',
-    sprintf('Figure 6. Commodity Price Effects from 2025 Tariffs through %s', date_md),
+    sprintf('Figure 6. Consumer Category Price Effects from 2025 Tariffs through %s', date_md),
     startCol = 1,
     startRow = 1,
     colNames = FALSE
   )
-  write_block('F6', f6, start_row = 7, start_col = 1)
+  write_block(wb, 'F6', f6, start_row = 7, start_col = 1)
 
   # Save workbook
   output_dir <- file.path('output', scenario, 'report')
@@ -882,7 +857,7 @@ export_excel_tables <- function(scenario, report_date) {
     apply_white_background(sheet_name)
   }
 
-  suppress_openxlsx_external_link_warning(saveWorkbook(wb, output_path, overwrite = TRUE))
+  suppress_openxlsx_warnings(saveWorkbook(wb, output_path, overwrite = TRUE))
 
   message(sprintf('  Exported to: %s', output_path))
 

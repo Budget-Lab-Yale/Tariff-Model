@@ -1,0 +1,5 @@
+gtap_executable: 'C:/runGTAP375/gtapv7.exe'
+gtap_work_dir: 'C:/runGTAP375/work'
+gtap_data_dir: 'C:/runGTAP375/tbltarv7'
+gtap_aux_dir: 'C:/runGTAP375'
+sltoht_executable: 'C:/GP/sltoht.exe'
