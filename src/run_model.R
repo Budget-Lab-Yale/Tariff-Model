@@ -132,96 +132,14 @@ average_ge_decomposition_results <- function(a, b) {
 }
 
 
-#' Reaggregate GE decomposition PCE outputs from detail to summary categories
-#'
-#' @param decomp GE decomposition result from decompose_ge_prices()
-#' @param use_import Detail import use matrix
-#' @param use_domestic Detail domestic use matrix
-#' @param summary_to_detail Detail-to-summary commodity mapping
-#' @param summary_bridge Summary-level PCE bridge
-#' @param markup_assumption Either constant_percentage or constant_dollar
-#' @param presub_pce_category_prices Summary-level presub category prices
-#' @return Decomposition result with summary-level PCE categories and summary metrics
-reaggregate_ge_decomp_to_summary <- function(decomp, use_import, use_domestic,
-                                             summary_to_detail, summary_bridge,
-                                             markup_assumption,
-                                             presub_pce_category_prices = NULL) {
-  reagg_term <- function(column_name) {
-    prices <- setNames(decomp$bea_commodity[[column_name]] / 100, decomp$bea_commodity$bea_code)
-    reaggregate_to_summary_pce(
-      prices,
-      use_import = use_import,
-      use_domestic = use_domestic,
-      summary_to_detail = summary_to_detail,
-      summary_bridge = summary_bridge,
-      markup_assumption = markup_assumption
-    ) %>%
-      select(nipa_line, pce_category, purchasers_value, pce_share, value = sr_price_effect)
-  }
-
-  pce_import <- reagg_term('import_price_component') %>%
-    rename(import_price_component = value)
-  pce_domestic <- reagg_term('domestic_price_component') %>%
-    select(nipa_line, domestic_price_component = value)
-  pce_share_shift <- reagg_term('share_shift_component') %>%
-    select(nipa_line, share_shift_component = value)
-  pce_residual <- reagg_term('residual_component') %>%
-    select(nipa_line, residual_component = value)
-  pce_ge <- reagg_term('ppa') %>%
-    select(nipa_line, ge = value)
-
-  pce_category <- pce_import %>%
-    left_join(pce_domestic, by = 'nipa_line') %>%
-    left_join(pce_share_shift, by = 'nipa_line') %>%
-    left_join(pce_residual, by = 'nipa_line') %>%
-    left_join(pce_ge, by = 'nipa_line')
-
-  if (!is.null(presub_pce_category_prices)) {
-    pce_category <- pce_category %>%
-      left_join(
-        presub_pce_category_prices %>% select(nipa_line, pre_sub = sr_price_effect),
-        by = 'nipa_line'
-      ) %>%
-      mutate(ge_minus_pre_sub = ge - pre_sub)
-  }
-
-  summary <- tibble(
-    metric = c(
-      'import_price_component',
-      'domestic_price_component',
-      'share_shift_component',
-      'residual_component',
-      'ge_price_increase'
-    ),
-    value = c(
-      sum(pce_category$import_price_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$share_shift_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$residual_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$ge * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value)
-    ),
-    unit = 'pct'
-  )
-
-  decomp$pce_category <- pce_category
-  decomp$summary <- summary
-  decomp
-}
-
-
 #' Run the complete tariff model for a scenario
 #'
 #' @param scenario Name of the scenario (must exist in config/scenarios/)
 #' @param markup_assumption Markup response to cost changes:
-#'   'average' (default, mean of upper and lower bounds),
-#'   'constant_percentage' (upper bound), or 'constant_dollar' (lower bound)
-#' @param bea_io_level BEA I-O table level: 'summary' (73 commodities, 2024) or
-#'   'detail' (~400 commodities, 2017). NULL uses value from global_assumptions.yaml.
+#'   'constant_dollar' (default, lower bound),
+#'   'constant_percentage' (upper bound), or 'average' (mean of both)
+#' @param bea_io_level BEA I-O table level: 'detail' (default, ~400 commodities,
+#'   2017) or 'summary' (73 commodities, 2024). NULL uses value from global_assumptions.yaml.
 #'
 #' @return List containing all model outputs
 run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
@@ -364,35 +282,6 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
       presub_pce_category_prices = presub$pce_category_prices
     )
 
-    # Detail-level reaggregation if needed
-    if (inputs$bea_io_level == 'detail') {
-      summary_bridge <- load_pce_bridge('resources/io')
-      presub$pce_category_prices <- reaggregate_to_summary_pce(
-        presub$bea_commodity_prices,
-        inputs$bea_use_import, inputs$bea_use_domestic,
-        inputs$summary_to_detail, summary_bridge, ma
-      )
-      pe_postsub$pce_category_prices <- reaggregate_to_summary_pce(
-        pe_postsub$bea_commodity_prices,
-        inputs$bea_use_import, inputs$bea_use_domestic,
-        inputs$summary_to_detail, summary_bridge, ma
-      )
-      ge$pce_category_prices <- reaggregate_to_summary_pce(
-        ge$bea_commodity_prices,
-        inputs$bea_use_import, inputs$bea_use_domestic,
-        inputs$summary_to_detail, summary_bridge, ma
-      )
-      ge_decomp <- reaggregate_ge_decomp_to_summary(
-        ge_decomp,
-        use_import = inputs$bea_use_import,
-        use_domestic = inputs$bea_use_domestic,
-        summary_to_detail = inputs$summary_to_detail,
-        summary_bridge = summary_bridge,
-        markup_assumption = ma,
-        presub_pce_category_prices = presub$pce_category_prices
-      )
-    }
-
     return(list(presub = presub, pe_postsub = pe_postsub, ge = ge, ge_decomp = ge_decomp))
   }
 
@@ -431,42 +320,6 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
     pe_postsub = pe_postsub_results,
     ge = ge_results
   )
-
-  # Store PCE category prices and BEA commodity prices for outputs
-  inputs$pce_category_prices <- price_results$presub$pce_category_prices
-
-  # Build BEA commodity detail table
-  bea_prices_vec <- presub_results$bea_commodity_prices
-  desc_file <- file.path(inputs$io_data_dir, 'bea_commodity_descriptions.csv')
-  if (file.exists(desc_file)) {
-    bea_desc <- read_csv(desc_file, show_col_types = FALSE) %>%
-      rename(bea_code = `Commodity Code`, description = Description)
-  } else {
-    bea_desc <- tibble(bea_code = character(), description = character())
-  }
-
-  pce <- inputs$bea_pce_weights
-  bea_commodities <- names(bea_prices_vec)
-  inputs$bea_commodity_prices <- tibble(
-    bea_code = bea_commodities,
-    sr_price_effect = as.numeric(bea_prices_vec) * 100,
-    pce_weight = as.numeric(pce[bea_commodities])
-  )
-
-  # Flag commodities with no PCE weight before filling (pure intermediates are
-  # expected; goods with consumer expenditure missing would be a data issue)
-  na_pce_codes <- inputs$bea_commodity_prices$bea_code[is.na(inputs$bea_commodity_prices$pce_weight)]
-  if (length(na_pce_codes) > 0) {
-    message(sprintf('  Note: %d BEA commodities have no PCE weight (intermediates, set to 0): %s',
-                    length(na_pce_codes),
-                    paste(head(na_pce_codes, 10), collapse = ', ')))
-  }
-
-  inputs$bea_commodity_prices <- inputs$bea_commodity_prices %>%
-    mutate(pce_weight = if_else(is.na(pce_weight), 0, pce_weight)) %>%
-    left_join(bea_desc, by = 'bea_code') %>%
-    mutate(description = coalesce(description, bea_code)) %>%
-    arrange(desc(sr_price_effect))
 
   message(sprintf('  Pre-sub aggregate:     %.3f%%', price_results$pre_sub_price_increase))
   message(sprintf('  PE post-sub aggregate: %.3f%%', price_results$pe_postsub_price_increase))
@@ -631,7 +484,9 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   message(sprintf('  Direct import channel:         %.4f%%', presub_results$direct_aggregate * 100))
   message(sprintf('  Supply chain channel:          %.4f%%', presub_results$supply_chain_aggregate * 100))
 
-  bea_detail <- inputs$bea_commodity_prices
+  bea_detail <- build_bea_commodity_table(
+    presub_results$bea_commodity_prices, inputs$bea_pce_weights, inputs$io_data_dir
+  )
   top_bea <- bea_detail %>% filter(sr_price_effect > 0.01) %>% head(15)
   message(sprintf('\nTop BEA commodities by SR price effect (%d with nonzero):',
                   sum(bea_detail$sr_price_effect > 0.001)))
@@ -644,8 +499,8 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
                     format(round(top_bea$pce_weight[i]), big.mark = ',')))
   }
 
-  if (!is.null(inputs$pce_category_prices)) {
-    pce_cats <- inputs$pce_category_prices
+  if (!is.null(price_results$presub$pce_category_prices)) {
+    pce_cats <- price_results$presub$pce_category_prices
     pce_agg <- presub_results$aggregate * 100
 
     message('')

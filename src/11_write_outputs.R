@@ -2,6 +2,54 @@
 # 11_write_outputs.R - Write all model outputs to disk
 # =============================================================================
 
+#' Build BEA commodity price detail table for output
+#'
+#' Constructs a formatted tibble of per-BEA-commodity price effects with
+#' descriptions and PCE weights. Used for bea_commodity_prices.csv and
+#' summary messaging.
+#'
+#' @param bea_prices_vec Named numeric vector of per-commodity price effects
+#'   (fractional, from presub results)
+#' @param bea_pce_weights Named numeric vector of PCE weights by BEA code
+#' @param io_data_dir Path to BEA I-O data directory (for descriptions CSV)
+#'
+#' @return Tibble with bea_code, sr_price_effect (pp), pce_weight, description
+build_bea_commodity_table <- function(bea_prices_vec, bea_pce_weights, io_data_dir) {
+
+  desc_file <- file.path(io_data_dir, 'bea_commodity_descriptions.csv')
+  if (file.exists(desc_file)) {
+    bea_desc <- read_csv(desc_file, show_col_types = FALSE) %>%
+      rename(bea_code = `Commodity Code`, description = Description)
+  } else {
+    bea_desc <- tibble(bea_code = character(), description = character())
+  }
+
+  bea_commodities <- names(bea_prices_vec)
+  result <- tibble(
+    bea_code = bea_commodities,
+    sr_price_effect = as.numeric(bea_prices_vec) * 100,
+    pce_weight = as.numeric(bea_pce_weights[bea_commodities])
+  )
+
+  # Flag commodities with no PCE weight before filling (pure intermediates are
+  # expected; goods with consumer expenditure missing would be a data issue)
+  na_pce_codes <- result$bea_code[is.na(result$pce_weight)]
+  if (length(na_pce_codes) > 0) {
+    message(sprintf('  Note: %d BEA commodities have no PCE weight (intermediates, set to 0): %s',
+                    length(na_pce_codes),
+                    paste(head(na_pce_codes, 10), collapse = ', ')))
+  }
+
+  result <- result %>%
+    mutate(pce_weight = if_else(is.na(pce_weight), 0, pce_weight)) %>%
+    left_join(bea_desc, by = 'bea_code') %>%
+    mutate(description = coalesce(description, bea_code)) %>%
+    arrange(desc(sr_price_effect))
+
+  return(result)
+}
+
+
 #' Write all model results to output directory
 #'
 #' @param results List containing all model outputs from run_scenario()
@@ -213,7 +261,11 @@ write_outputs <- function(results, scenario) {
   # PCE Major Category Prices (BEA Table 2.4.5 hierarchy)
   # ============================
 
-  major_cat_file <- 'resources/mappings/nipa_pce_major_category.csv'
+  major_cat_file <- if (results$inputs$bea_io_level == 'detail') {
+    'resources/mappings/nipa_pce_major_category_detail.csv'
+  } else {
+    'resources/mappings/nipa_pce_major_category.csv'
+  }
   if (file.exists(major_cat_file)) {
     major_cat_map <- read_csv(major_cat_file, show_col_types = FALSE)
 
@@ -241,11 +293,16 @@ write_outputs <- function(results, scenario) {
   # BEA Commodity Prices (I-O model)
   # ============================
 
-  if (!is.null(results$inputs$bea_commodity_prices)) {
-    write_csv(results$inputs$bea_commodity_prices,
+  if (!is.null(results$prices$presub$bea_commodity_prices)) {
+    bea_commodity_prices <- build_bea_commodity_table(
+      results$prices$presub$bea_commodity_prices,
+      results$inputs$bea_pce_weights,
+      results$inputs$io_data_dir
+    )
+    write_csv(bea_commodity_prices,
               file.path(output_dir, 'bea_commodity_prices.csv'))
     message(sprintf('    bea_commodity_prices.csv (%d BEA commodities)',
-                    nrow(results$inputs$bea_commodity_prices)))
+                    nrow(bea_commodity_prices)))
   }
 
   # ============================

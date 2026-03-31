@@ -89,116 +89,6 @@ disaggregate_tau_M <- function(tau_M, data_dir) {
 }
 
 
-#' Reaggregate detail commodity prices to summary-level NIPA categories
-#'
-#' When using detail-level BEA tables, the price model produces ~400 commodity
-#' prices and maps them through the 2017 detail PCE bridge (212 NIPA categories).
-#' The distribution pipeline requires 2024 summary NIPA line numbers (76 categories)
-#' to join with the BLS distributional spending data.
-#'
-#' This function:
-#'   1. Aggregates detail commodity prices to summary BEA codes, weighted by
-#'      total commodity use (import + domestic intermediate use)
-#'   2. Applies the summary PCE bridge to get 76 categories with correct line numbers
-#'
-#' @param bea_commodity_prices Named vector of per-commodity price effects (fractional)
-#' @param use_import Detail-level CxI import use matrix
-#' @param use_domestic Detail-level CxI domestic use matrix
-#' @param summary_to_detail Tibble with summary_code, detail_code columns
-#' @param summary_bridge Summary-level PCE bridge tibble
-#' @param markup_assumption Either 'constant_percentage' or 'constant_dollar'
-#'
-#' @return Tibble matching pce_category_prices format (nipa_line, pce_category,
-#'   sr_price_effect, purchasers_value, pce_share)
-reaggregate_to_summary_pce <- function(bea_commodity_prices,
-                                       use_import, use_domestic,
-                                       summary_to_detail,
-                                       summary_bridge,
-                                       markup_assumption = 'constant_percentage') {
-
-  # ---- Total commodity use as weights ----
-  total_use <- rowSums(use_import) + rowSums(use_domestic)
-
-  # ---- Build detail prices tibble ----
-  detail_prices <- tibble(
-    detail_code = names(bea_commodity_prices),
-    price = as.numeric(bea_commodity_prices),
-    use_weight = as.numeric(total_use[names(bea_commodity_prices)])
-  )
-
-  # Flag detail codes with no Use table entry (NA weight) before filling
-  na_weight_codes <- detail_prices$detail_code[is.na(detail_prices$use_weight)]
-  if (length(na_weight_codes) > 0) {
-    warning(sprintf('  %d detail codes have no Use table entry (use_weight set to 0): %s',
-                    length(na_weight_codes),
-                    paste(head(na_weight_codes, 10), collapse = ', ')))
-  }
-  detail_prices <- detail_prices %>%
-    mutate(use_weight = if_else(is.na(use_weight), 0, use_weight))
-
-  # ---- Aggregate to summary codes ----
-  summary_prices <- detail_prices %>%
-    inner_join(summary_to_detail, by = 'detail_code') %>%
-    group_by(summary_code) %>%
-    summarise(
-      price = if (sum(use_weight) > 0) {
-        sum(price * use_weight) / sum(use_weight)
-      } else {
-        mean(price)
-      },
-      total_use = sum(use_weight),
-      n_detail = n(),
-      .groups = 'drop'
-    ) %>%
-    rename(bea_code = summary_code)
-
-  nonzero <- sum(summary_prices$price > 0)
-  message(sprintf('  Reaggregated %d detail -> %d summary commodity prices (%d nonzero)',
-                  nrow(detail_prices), nrow(summary_prices), nonzero))
-
-  # ---- Apply summary PCE bridge (C matrix) ----
-  if (markup_assumption == 'constant_dollar') {
-    numerator_col <- 'producers_value'
-  } else {
-    numerator_col <- 'purchasers_value'
-  }
-
-  # Flag bridge BEA codes with no summary price data before filling
-  bridge_joined <- summary_bridge %>%
-    left_join(summary_prices %>% select(bea_code, price), by = 'bea_code')
-  na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
-  if (length(na_bridge_codes) > 0) {
-    warning(sprintf('  %d summary bridge BEA codes have no detail-level price (set to 0): %s',
-                    length(na_bridge_codes),
-                    paste(head(na_bridge_codes, 10), collapse = ', ')))
-  }
-
-  pce_category_prices <- bridge_joined %>%
-    mutate(price = if_else(is.na(price), 0, price)) %>%
-    group_by(nipa_line, pce_category) %>%
-    summarise(
-      sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
-        sum(price * .data[[numerator_col]]) / sum(purchasers_value)
-      } else {
-        0
-      },
-      purchasers_value = sum(purchasers_value),
-      n_commodities = n(),
-      .groups = 'drop'
-    ) %>%
-    mutate(
-      sr_price_effect = sr_price_effect * 100,
-      pce_share = purchasers_value / sum(purchasers_value) * 100
-    ) %>%
-    arrange(nipa_line)
-
-  message(sprintf('  Summary PCE categories for distribution: %d categories',
-                  nrow(pce_category_prices)))
-
-  return(pce_category_prices)
-}
-
-
 #' Load BEA requirements matrix (Leontief inverse)
 #'
 #' @param type Either 'domestic' or 'total'
@@ -389,6 +279,175 @@ load_pce_bridge <- function(data_dir = 'resources/io') {
   message(sprintf('  Loaded PCE bridge: %d mappings across %d consumer categories',
                   nrow(bridge), length(unique(bridge$pce_category))))
   return(bridge)
+}
+
+
+# ==== Mapping helpers (GTAP -> BEA, BEA -> PCE) ==============================
+
+#' Resolve PCE bridge numerator column from markup assumption
+#'
+#' Under constant-percentage markup, distribution margins scale with cost,
+#' so weight by purchasers_value. Under constant-dollar markup, margins are
+#' fixed, so weight by producers_value (the cost base).
+#'
+#' @param markup_assumption Either 'constant_percentage' or 'constant_dollar'
+#' @return Column name string: 'purchasers_value' or 'producers_value'
+resolve_markup_numerator_col <- function(markup_assumption) {
+  if (markup_assumption == 'constant_dollar') 'producers_value' else 'purchasers_value'
+}
+
+
+#' Aggregate GTAP-level data to BEA commodity codes via import-weighted average
+#'
+#' Given a tibble of per-GTAP-commodity values and baseline import totals,
+#' computes import-weighted averages within each BEA commodity group defined
+#' by the crosswalk. When a BEA group has zero total baseline imports, falls
+#' back to an unweighted mean.
+#'
+#' @param gtap_data Tibble with a 'gtap_code' column (uppercase) and one or
+#'   more numeric value columns. If it already contains 'baseline_imports',
+#'   that column is used for weighting; otherwise weights are derived from
+#'   viws_baseline via rowSums.
+#' @param gtap_bea_crosswalk Tibble with gtap_code, bea_code columns.
+#' @param viws_baseline Matrix [commodity x source_region] of baseline imports.
+#'   Used only when gtap_data lacks a 'baseline_imports' column.
+#' @param value_cols Character vector of column names to aggregate as
+#'   import-weighted averages. If NULL, all numeric columns except
+#'   'baseline_imports' are used.
+#' @param sum_cols Character vector of column names to aggregate as simple
+#'   sums (e.g., 'baseline_imports'). Default NULL.
+#' @param include_n_gtap If TRUE, include an n_gtap column counting the
+#'   number of GTAP sectors per BEA code. Default FALSE.
+#'
+#' @return Tibble with bea_code plus one column per value_col (weighted avg),
+#'   one per sum_col (sum), and optionally n_gtap.
+aggregate_gtap_to_bea <- function(gtap_data, gtap_bea_crosswalk, viws_baseline,
+                                  value_cols = NULL, sum_cols = NULL,
+                                  include_n_gtap = FALSE) {
+
+  crosswalk <- gtap_bea_crosswalk %>%
+    mutate(gtap_code = toupper(gtap_code))
+
+  # Add baseline_imports from viws if not already present
+  if (!'baseline_imports' %in% names(gtap_data)) {
+    baseline_totals <- rowSums(viws_baseline)
+    names(baseline_totals) <- toupper(names(baseline_totals))
+    gtap_data <- gtap_data %>%
+      mutate(baseline_imports = coalesce(
+        as.numeric(baseline_totals[gtap_code]), 0
+      ))
+  }
+
+  # Auto-detect value columns if not specified
+  if (is.null(value_cols)) {
+    numeric_cols <- names(gtap_data)[sapply(gtap_data, is.numeric)]
+    value_cols <- setdiff(numeric_cols, c('baseline_imports', sum_cols))
+  }
+
+  joined <- crosswalk %>%
+    inner_join(gtap_data, by = 'gtap_code')
+
+  # Weighted-average function: import-weighted when possible, else mean
+  wavg <- function(col, bi) {
+    if (sum(bi) > 0) sum(col * bi) / sum(bi) else mean(col)
+  }
+
+  result <- joined %>%
+    group_by(bea_code) %>%
+    summarise(
+      across(all_of(value_cols), ~ wavg(.x, baseline_imports)),
+      across(any_of(sum_cols), sum),
+      .groups = 'drop'
+    )
+
+  if (include_n_gtap) {
+    n_counts <- joined %>%
+      group_by(bea_code) %>%
+      summarise(n_gtap = n(), .groups = 'drop')
+    result <- result %>%
+      left_join(n_counts, by = 'bea_code')
+  }
+
+  return(result)
+}
+
+
+#' Map BEA commodity prices to PCE categories via the PCE bridge table
+#'
+#' Joins a BEA-level price/value tibble to the PCE bridge, then computes
+#' a weighted average within each NIPA PCE category. The weight numerator
+#' is controlled by numerator_col (from the markup assumption), and the
+#' denominator is always purchasers_value.
+#'
+#' @param bea_price_df Tibble with 'bea_code' and one or more numeric
+#'   value columns to aggregate.
+#' @param pce_bridge PCE bridge tibble from load_pce_bridge()
+#' @param numerator_col Column name in pce_bridge for weighting numerator:
+#'   'purchasers_value' (constant-percentage) or 'producers_value'
+#'   (constant-dollar).
+#' @param value_cols Character vector of column names in bea_price_df to
+#'   aggregate. Each produces a corresponding column in the output.
+#' @param na_handling How to treat BEA codes in the bridge missing from
+#'   bea_price_df: 'error' stops, 'zero' replaces NA with 0 and messages.
+#' @param pp_scale If TRUE, multiply aggregated values by 100 to convert
+#'   fractional to percentage points. Default FALSE.
+#' @param include_pce_share If TRUE, add a pce_share column (% of total
+#'   purchasers_value). Default FALSE.
+#'
+#' @return Tibble with nipa_line, pce_category, purchasers_value,
+#'   one column per value_col, and optionally pce_share.
+aggregate_bea_to_pce <- function(bea_price_df, pce_bridge, numerator_col,
+                                 value_cols, na_handling = 'error',
+                                 pp_scale = FALSE, include_pce_share = FALSE) {
+
+  bridge_joined <- pce_bridge %>%
+    left_join(bea_price_df, by = 'bea_code')
+
+  # Check for NA values in any value column
+  na_mask <- rowSums(is.na(bridge_joined[value_cols])) > 0
+  na_codes <- unique(bridge_joined$bea_code[na_mask])
+
+  if (length(na_codes) > 0) {
+    if (na_handling == 'error') {
+      stop(sprintf('%d PCE bridge BEA codes not found in price data: %s',
+                   length(na_codes), paste(na_codes, collapse = ', ')))
+    } else {
+      message(sprintf('    %d PCE bridge BEA codes not in price data (set to 0): %s',
+                      length(na_codes),
+                      paste(head(na_codes, 10), collapse = ', ')))
+      bridge_joined <- bridge_joined %>%
+        mutate(across(all_of(value_cols), ~ if_else(is.na(.x), 0, .x)))
+    }
+  }
+
+  # Weighted aggregation: sum(val * numerator) / sum(purchasers_value)
+  agg_fn <- function(col, num, pv) {
+    if (sum(abs(num)) > 0) sum(col * num) / sum(pv) else 0
+  }
+
+  result <- bridge_joined %>%
+    group_by(nipa_line, pce_category) %>%
+    summarise(
+      across(all_of(value_cols),
+             ~ agg_fn(.x, .data[[numerator_col]], purchasers_value)),
+      purchasers_value = sum(purchasers_value),
+      n_commodities = n(),
+      .groups = 'drop'
+    )
+
+  if (pp_scale) {
+    result <- result %>%
+      mutate(across(all_of(value_cols), ~ .x * 100))
+  }
+
+  if (include_pce_share) {
+    result <- result %>%
+      mutate(pce_share = purchasers_value / sum(purchasers_value) * 100)
+  }
+
+  result <- result %>% arrange(nipa_line)
+
+  return(result)
 }
 
 
@@ -708,14 +767,7 @@ compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
   supply_chain_scaled <- supply_chain * scaling
 
   # ---- Markup assumption: choose numerator weight ----
-  # Constant-percentage: weight by purchasers_value (margins scale with cost)
-  # Constant-dollar: weight by producers_value (margins stay fixed in $)
-  # Denominator is always purchasers_value (what consumers actually pay)
-  if (markup_assumption == 'constant_dollar') {
-    numerator_col <- 'producers_value'
-  } else {
-    numerator_col <- 'purchasers_value'
-  }
+  numerator_col <- resolve_markup_numerator_col(markup_assumption)
 
   # ---- Derive per-commodity weights from bridge ----
   commodity_weights <- pce_bridge %>%
@@ -752,35 +804,12 @@ compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
     price = as.numeric(total)
   )
 
-  # Flag bridge BEA codes not in the Use tables (all Use table commodities,
-  # including services, already have price=0 from tau initialization — an NA
-  # here means the bridge references a code absent from the I-O tables entirely)
-  bridge_joined <- pce_bridge %>%
-    left_join(price_df, by = 'bea_code')
-  na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
-  if (length(na_bridge_codes) > 0) {
-    stop(sprintf('%d PCE bridge BEA codes not found in Use table commodities: %s',
-                 length(na_bridge_codes),
-                 paste(na_bridge_codes, collapse = ', ')))
-  }
-
-  pce_category_prices <- bridge_joined %>%
-    group_by(nipa_line, pce_category) %>%
-    summarise(
-      sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
-        sum(price * .data[[numerator_col]]) / sum(purchasers_value)
-      } else {
-        0
-      },
-      purchasers_value = sum(purchasers_value),
-      n_commodities = n(),
-      .groups = 'drop'
-    ) %>%
-    mutate(
-      sr_price_effect = sr_price_effect * 100,  # Convert to pp
-      pce_share = purchasers_value / sum(purchasers_value) * 100
-    ) %>%
-    arrange(nipa_line)
+  pce_category_prices <- aggregate_bea_to_pce(
+    price_df, pce_bridge, numerator_col,
+    value_cols = 'price', na_handling = 'error',
+    pp_scale = TRUE, include_pce_share = TRUE
+  ) %>%
+    rename(sr_price_effect = price)
 
   # ---- Derive aggregate from category table (single source of truth) ----
   aggregate <- sum(pce_category_prices$sr_price_effect / 100 *
@@ -893,20 +922,12 @@ compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
   )
 
   # Map to BEA: weighted average of GTAP ratios within each BEA group
-  bea_ratios <- gtap_bea_crosswalk %>%
-    mutate(gtap_code = toupper(gtap_code)) %>%
-    inner_join(gtap_ratios, by = 'gtap_code') %>%
-    group_by(bea_code) %>%
-    summarise(
-      ratio = if (sum(baseline_imports) > 0) {
-        sum(tariff_ratio * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(tariff_ratio)
-      },
-      .groups = 'drop'
-    )
+  bea_ratios <- aggregate_gtap_to_bea(
+    gtap_ratios, gtap_bea_crosswalk, viws_baseline,
+    value_cols = 'tariff_ratio'
+  )
 
-  ratio_lookup <- setNames(bea_ratios$ratio, bea_ratios$bea_code)
+  ratio_lookup <- setNames(bea_ratios$tariff_ratio, bea_ratios$bea_code)
 
   # Apply ratios to tau_M
   tau_M_postsub <- tau_M_presub
@@ -948,33 +969,25 @@ compute_postsub_tau_M <- function(tau_M_presub, gtap_bea_crosswalk,
 compute_postsub_omega_M <- function(omega_M, gtap_bea_crosswalk,
                                     nvpp_commodity_ratio, viws_baseline) {
 
-  crosswalk <- gtap_bea_crosswalk %>%
-    mutate(gtap_code = toupper(gtap_code))
-
   # Uppercase NVPP names to match crosswalk
   names(nvpp_commodity_ratio) <- toupper(names(nvpp_commodity_ratio))
 
-  # Get per-GTAP-sector baseline import totals for weighting
+  # Build GTAP-level data, filtering out sectors with no NVPP ratio
   baseline_totals <- rowSums(viws_baseline)
   names(baseline_totals) <- toupper(names(baseline_totals))
+  gtap_codes <- unique(toupper(gtap_bea_crosswalk$gtap_code))
+  gtap_data <- tibble(
+    gtap_code = gtap_codes,
+    ratio = as.numeric(nvpp_commodity_ratio[gtap_codes]),
+    baseline_imports = coalesce(as.numeric(baseline_totals[gtap_codes]), 0)
+  ) %>%
+    filter(!is.na(ratio))
 
-  # Build BEA-level ratios from GTAP commodity ratios (import-weighted)
-  bea_ratios <- crosswalk %>%
-    mutate(
-      ratio = nvpp_commodity_ratio[gtap_code],
-      baseline_imports = baseline_totals[gtap_code]
-    ) %>%
-    filter(!is.na(ratio)) %>%
-    mutate(baseline_imports = coalesce(baseline_imports, 0)) %>%
-    group_by(bea_code) %>%
-    summarise(
-      ratio = if (sum(baseline_imports) > 0) {
-        sum(ratio * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(ratio)
-      },
-      .groups = 'drop'
-    )
+  # Map to BEA: weighted average of GTAP ratios within each BEA group
+  bea_ratios <- aggregate_gtap_to_bea(
+    gtap_data, gtap_bea_crosswalk, viws_baseline,
+    value_cols = 'ratio'
+  )
 
   ratio_lookup <- setNames(bea_ratios$ratio, bea_ratios$bea_code)
 
@@ -1035,80 +1048,37 @@ compute_ge_prices <- function(ppa_usa, gtap_bea_crosswalk, viws_baseline,
   # ---- Map GTAP ppa to BEA codes via crosswalk (import-weighted) ----
 
   gtap_codes <- toupper(names(ppa_usa))
-  ppa_values <- as.numeric(ppa_usa)
-
-  # Baseline import totals per GTAP sector for weighting
-  baseline_totals <- rowSums(viws_baseline)
-  names(baseline_totals) <- toupper(names(baseline_totals))
-
   gtap_ppa <- tibble(
     gtap_code = gtap_codes,
-    ppa = ppa_values,
-    baseline_imports = as.numeric(baseline_totals[gtap_codes])
-  ) %>%
-    mutate(baseline_imports = coalesce(baseline_imports, 0))
+    ppa = as.numeric(ppa_usa)
+  )
 
-  bea_ppa <- gtap_bea_crosswalk %>%
-    mutate(gtap_code = toupper(gtap_code)) %>%
-    inner_join(gtap_ppa, by = 'gtap_code') %>%
-    group_by(bea_code) %>%
-    summarise(
-      ppa_pct = if (sum(baseline_imports) > 0) {
-        sum(ppa * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(ppa)
-      },
-      n_gtap = n(),
-      .groups = 'drop'
-    )
+  bea_ppa <- aggregate_gtap_to_bea(
+    gtap_ppa, gtap_bea_crosswalk, viws_baseline,
+    value_cols = 'ppa', include_n_gtap = TRUE
+  )
 
   # Convert % change to fractional price effect
-  bea_prices <- setNames(bea_ppa$ppa_pct / 100, bea_ppa$bea_code)
+  bea_prices <- setNames(bea_ppa$ppa / 100, bea_ppa$bea_code)
 
   message(sprintf('  GE prices: %d GTAP -> %d BEA commodities, mean ppa = %.4f%%',
-                  length(gtap_codes), nrow(bea_ppa), mean(bea_ppa$ppa_pct)))
+                  length(gtap_codes), nrow(bea_ppa), mean(bea_ppa$ppa)))
 
   # ---- Apply PCE bridge (C matrix) ----
 
-  if (markup_assumption == 'constant_dollar') {
-    numerator_col <- 'producers_value'
-  } else {
-    numerator_col <- 'purchasers_value'
-  }
+  numerator_col <- resolve_markup_numerator_col(markup_assumption)
 
   price_df <- tibble(
     bea_code = names(bea_prices),
     price = as.numeric(bea_prices)
   )
 
-  bridge_joined <- pce_bridge %>%
-    left_join(price_df, by = 'bea_code')
-
-  na_bridge_codes <- unique(bridge_joined$bea_code[is.na(bridge_joined$price)])
-  if (length(na_bridge_codes) > 0) {
-    message(sprintf('    %d PCE bridge BEA codes not in GTAP crosswalk (set to 0): %s',
-                    length(na_bridge_codes),
-                    paste(head(na_bridge_codes, 10), collapse = ', ')))
-  }
-
-  pce_category_prices <- bridge_joined %>%
-    mutate(price = if_else(is.na(price), 0, price)) %>%
-    group_by(nipa_line, pce_category) %>%
-    summarise(
-      sr_price_effect = if (sum(abs(.data[[numerator_col]])) > 0) {
-        sum(price * .data[[numerator_col]]) / sum(purchasers_value)
-      } else {
-        0
-      },
-      purchasers_value = sum(purchasers_value),
-      n_commodities = n(),
-      .groups = 'drop'
-    ) %>%
-    mutate(
-      sr_price_effect = sr_price_effect * 100,  # Convert to pp
-      pce_share = purchasers_value / sum(purchasers_value) * 100
-    ) %>%
-    arrange(nipa_line)
+  pce_category_prices <- aggregate_bea_to_pce(
+    price_df, pce_bridge, numerator_col,
+    value_cols = 'price', na_handling = 'zero',
+    pp_scale = TRUE, include_pce_share = TRUE
+  ) %>%
+    rename(sr_price_effect = price)
 
   # ---- Aggregate from category table (single source of truth) ----
   aggregate <- sum(pce_category_prices$sr_price_effect / 100 *
@@ -1205,114 +1175,29 @@ decompose_ge_prices <- function(ppa_usa, ppm_usa, ppd_usa,
       residual_component = ppa - reconstructed_price
     )
 
-  baseline_totals <- rowSums(viws_baseline)
-  names(baseline_totals) <- toupper(names(baseline_totals))
+  bea_commodity <- aggregate_gtap_to_bea(
+    gtap_commodity, gtap_bea_crosswalk, viws_baseline,
+    value_cols = c('ppa', 'ppm', 'ppd',
+                   'import_price_component', 'domestic_price_component',
+                   'share_shift_component', 'residual_component',
+                   'baseline_import_share', 'postsim_import_share'),
+    sum_cols = 'baseline_imports',
+    include_n_gtap = TRUE
+  )
 
-  gtap_with_weights <- gtap_commodity %>%
-    mutate(baseline_imports = as.numeric(baseline_totals[gtap_code])) %>%
-    mutate(baseline_imports = coalesce(baseline_imports, 0))
+  numerator_col <- resolve_markup_numerator_col(markup_assumption)
 
-  bea_commodity <- gtap_bea_crosswalk %>%
-    mutate(gtap_code = toupper(gtap_code)) %>%
-    inner_join(gtap_with_weights, by = 'gtap_code') %>%
-    group_by(bea_code) %>%
-    summarise(
-      ppa = if (sum(baseline_imports) > 0) {
-        sum(ppa * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(ppa)
-      },
-      ppm = if (sum(baseline_imports) > 0) {
-        sum(ppm * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(ppm)
-      },
-      ppd = if (sum(baseline_imports) > 0) {
-        sum(ppd * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(ppd)
-      },
-      import_price_component = if (sum(baseline_imports) > 0) {
-        sum(import_price_component * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(import_price_component)
-      },
-      domestic_price_component = if (sum(baseline_imports) > 0) {
-        sum(domestic_price_component * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(domestic_price_component)
-      },
-      share_shift_component = if (sum(baseline_imports) > 0) {
-        sum(share_shift_component * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(share_shift_component)
-      },
-      residual_component = if (sum(baseline_imports) > 0) {
-        sum(residual_component * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(residual_component)
-      },
-      baseline_import_share = if (sum(baseline_imports) > 0) {
-        sum(baseline_import_share * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(baseline_import_share)
-      },
-      postsim_import_share = if (sum(baseline_imports) > 0) {
-        sum(postsim_import_share * baseline_imports) / sum(baseline_imports)
-      } else {
-        mean(postsim_import_share)
-      },
-      baseline_imports = sum(baseline_imports),
-      n_gtap = n(),
-      .groups = 'drop'
-    )
+  decomp_cols <- c('import_price_component', 'domestic_price_component',
+                   'share_shift_component', 'residual_component', 'ppa')
+  bea_price_df <- bea_commodity %>%
+    select(bea_code, all_of(decomp_cols))
 
-  if (markup_assumption == 'constant_dollar') {
-    numerator_col <- 'producers_value'
-  } else {
-    numerator_col <- 'purchasers_value'
-  }
-
-  map_bea_to_pce <- function(bea_tbl, value_col) {
-    price_df <- bea_tbl %>%
-      transmute(bea_code, price = .data[[value_col]])
-
-    pce_bridge %>%
-      left_join(price_df, by = 'bea_code') %>%
-      mutate(price = if_else(is.na(price), 0, price)) %>%
-      group_by(nipa_line, pce_category) %>%
-      summarise(
-        value = if (sum(abs(.data[[numerator_col]])) > 0) {
-          sum(price * .data[[numerator_col]]) / sum(purchasers_value)
-        } else {
-          0
-        },
-        purchasers_value = sum(purchasers_value),
-        .groups = 'drop'
-      ) %>%
-      mutate(value = value)
-  }
-
-  pce_import <- map_bea_to_pce(bea_commodity, 'import_price_component') %>%
-    rename(import_price_component = value)
-  pce_domestic <- map_bea_to_pce(bea_commodity, 'domestic_price_component') %>%
-    select(nipa_line, domestic_price_component = value)
-  pce_share_shift <- map_bea_to_pce(bea_commodity, 'share_shift_component') %>%
-    select(nipa_line, share_shift_component = value)
-  pce_residual <- map_bea_to_pce(bea_commodity, 'residual_component') %>%
-    select(nipa_line, residual_component = value)
-  pce_ge <- map_bea_to_pce(bea_commodity, 'ppa') %>%
-    select(nipa_line, ge = value)
-
-  pce_category <- pce_import %>%
-    left_join(pce_domestic, by = 'nipa_line') %>%
-    left_join(pce_share_shift, by = 'nipa_line') %>%
-    left_join(pce_residual, by = 'nipa_line') %>%
-    left_join(pce_ge, by = 'nipa_line') %>%
-    mutate(
-      pce_share = purchasers_value / sum(purchasers_value) * 100
-    ) %>%
-    arrange(nipa_line)
+  pce_category <- aggregate_bea_to_pce(
+    bea_price_df, pce_bridge, numerator_col,
+    value_cols = decomp_cols, na_handling = 'zero',
+    include_pce_share = TRUE
+  ) %>%
+    rename(ge = ppa)
 
   if (!is.null(presub_pce_category_prices)) {
     pce_category <- pce_category %>%
