@@ -8,8 +8,8 @@
 #   --markup <type>            Markup assumption: 'constant_dollar' (default,
 #                              lower bound), 'constant_percentage' (upper bound),
 #                              or 'average' (mean of upper and lower bounds)
-#   --bea-io-level <level>     BEA I-O table level: 'summary' (default, 73
-#                              commodities) or 'detail' (~400 commodities)
+#   --bea-io-level <level>     BEA I-O table level: 'detail' (default, ~400
+#                              commodities) or 'summary' (73 commodities)
 #
 # Example:
 #   Rscript run.R 2-21_perm
@@ -23,7 +23,7 @@ if (length(args) < 1) {
   cat('Usage: Rscript run.R <scenario_name> [options]\n')
   cat('\nOptions:\n')
   cat('  --markup <type>            Markup assumption: constant_dollar (default), constant_percentage, or average\n')
-  cat('  --bea-io-level <level>     BEA I-O table level: summary (default) or detail\n')
+  cat('  --bea-io-level <level>     BEA I-O table level: detail (default) or summary\n')
   cat('\nAvailable scenarios:\n')
   scenarios <- list.dirs('config/scenarios', full.names = FALSE, recursive = FALSE)
   for (s in scenarios) {

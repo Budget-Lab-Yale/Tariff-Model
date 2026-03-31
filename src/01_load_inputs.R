@@ -109,7 +109,7 @@ load_baselines <- function() {
 #'
 #' @return List containing all input data
 load_inputs <- function(scenario, bea_io_level_override = NULL,
-                        markup_assumption = 'average') {
+                        markup_assumption = 'constant_dollar') {
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
 
@@ -329,11 +329,6 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # Disaggregate tau_M to detail BEA codes if using detail-level tables
   if (bea_io_level == 'detail') {
     inputs$tau_M <- disaggregate_tau_M(inputs$tau_M, io_data_dir)
-    # Cache the mapping for reaggregation in run_model.R
-    inputs$summary_to_detail <- read_csv(
-      file.path(io_data_dir, 'bea_summary_to_detail.csv'),
-      show_col_types = FALSE
-    )
   }
 
   # ============================
@@ -449,7 +444,12 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   # NIPA-to-distributional-bucket mapping (optional, required if distributional_pce loaded)
-  bucket_file <- 'resources/distribution/nipa_pce_to_distributional_bucket.csv'
+  # Use detail-level mapping when running detail I-O tables
+  bucket_file <- if (bea_io_level == 'detail') {
+    'resources/distribution/nipa_pce_to_distributional_bucket_detail.csv'
+  } else {
+    'resources/distribution/nipa_pce_to_distributional_bucket.csv'
+  }
   if (file.exists(bucket_file)) {
     inputs$nipa_to_bucket <- read_csv(bucket_file, show_col_types = FALSE)
     assert_has_columns(inputs$nipa_to_bucket, c('nipa_line', 'pce_mp'), 'NIPA-to-bucket mapping')

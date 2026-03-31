@@ -25,7 +25,7 @@ run_tariff_etrs <- function(scenario, etrs_scenario, tariff_etrs_path) {
   }
 
   # Verify ETRs scenario config exists
-  etrs_config_dir <- file.path(tariff_etrs_path, 'config', etrs_scenario)
+  etrs_config_dir <- file.path(tariff_etrs_path, 'config', 'scenarios', etrs_scenario)
   if (!dir.exists(etrs_config_dir)) {
     stop(sprintf('Tariff-ETRs scenario config not found: %s', etrs_config_dir))
   }

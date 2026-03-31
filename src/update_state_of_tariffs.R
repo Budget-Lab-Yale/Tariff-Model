@@ -77,8 +77,8 @@ wb <- suppress_openxlsx_warnings(loadWorkbook(TEMPLATE_PATH))
 message('Loading model outputs...')
 out_219 <- load_model_outputs('2-19')
 out_220 <- load_model_outputs('2-20')
-out_temp <- load_model_outputs('2-21_temp')
-out_perm <- load_model_outputs('2-21_perm')
+out_temp <- load_model_outputs('2026-04-02')
+out_perm <- load_model_outputs('2026-04-02_s122perm')
 
 
 # =============================================================================

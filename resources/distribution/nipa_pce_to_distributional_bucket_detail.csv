@@ -1,0 +1,213 @@
+nipa_line,pce_mp,bucket_name
+7,4,Motor vehicles and parts
+8,4,Motor vehicles and parts
+9,4,Motor vehicles and parts
+13,4,Motor vehicles and parts
+17,4,Motor vehicles and parts
+21,4,Motor vehicles and parts
+22,4,Motor vehicles and parts
+25,5,Furnishings and durable household equipment
+26,5,Furnishings and durable household equipment
+27,5,Furnishings and durable household equipment
+28,5,Furnishings and durable household equipment
+30,5,Furnishings and durable household equipment
+31,5,Furnishings and durable household equipment
+33,5,Furnishings and durable household equipment
+34,5,Furnishings and durable household equipment
+36,5,Furnishings and durable household equipment
+37,5,Furnishings and durable household equipment
+41,6,Recreational goods and vehicles
+42,6,Recreational goods and vehicles
+43,6,Recreational goods and vehicles
+45,6,Recreational goods and vehicles
+46,6,Recreational goods and vehicles
+47,6,Recreational goods and vehicles
+49,6,Recreational goods and vehicles
+50,6,Recreational goods and vehicles
+51,6,Recreational goods and vehicles
+52,6,Recreational goods and vehicles
+54,6,Recreational goods and vehicles
+55,6,Recreational goods and vehicles
+57,6,Recreational goods and vehicles
+58,6,Recreational goods and vehicles
+59,6,Recreational goods and vehicles
+60,6,Recreational goods and vehicles
+61,6,Recreational goods and vehicles
+64,7,Other durable goods
+65,7,Other durable goods
+67,7,Other durable goods
+68,7,Other durable goods
+69,7,Other durable goods
+70,7,Other durable goods
+71,7,Other durable goods
+77,9,Food and beverages purchased for off-premises consumption
+78,9,Food and beverages purchased for off-premises consumption
+80,9,Food and beverages purchased for off-premises consumption
+81,9,Food and beverages purchased for off-premises consumption
+82,9,Food and beverages purchased for off-premises consumption
+83,9,Food and beverages purchased for off-premises consumption
+84,9,Food and beverages purchased for off-premises consumption
+86,9,Food and beverages purchased for off-premises consumption
+87,9,Food and beverages purchased for off-premises consumption
+88,9,Food and beverages purchased for off-premises consumption
+89,9,Food and beverages purchased for off-premises consumption
+91,9,Food and beverages purchased for off-premises consumption
+92,9,Food and beverages purchased for off-premises consumption
+93,9,Food and beverages purchased for off-premises consumption
+94,9,Food and beverages purchased for off-premises consumption
+95,9,Food and beverages purchased for off-premises consumption
+97,9,Food and beverages purchased for off-premises consumption
+98,9,Food and beverages purchased for off-premises consumption
+100,9,Food and beverages purchased for off-premises consumption
+101,9,Food and beverages purchased for off-premises consumption
+102,9,Food and beverages purchased for off-premises consumption
+103,9,Food and beverages purchased for off-premises consumption
+106,10,Clothing and footwear
+107,10,Clothing and footwear
+108,10,Clothing and footwear
+110,10,Clothing and footwear
+111,10,Clothing and footwear
+112,10,Clothing and footwear
+115,11,Gasoline and other energy goods
+116,11,Gasoline and other energy goods
+118,11,Gasoline and other energy goods
+119,11,Gasoline and other energy goods
+122,12,Other nondurable goods
+125,12,Other nondurable goods
+127,12,Other nondurable goods
+128,12,Other nondurable goods
+129,12,Other nondurable goods
+130,12,Other nondurable goods
+132,12,Other nondurable goods
+133,12,Other nondurable goods
+134,12,Other nondurable goods
+135,12,Other nondurable goods
+136,12,Other nondurable goods
+138,12,Other nondurable goods
+139,12,Other nondurable goods
+140,12,Other nondurable goods
+141,12,Other nondurable goods
+143,12,Other nondurable goods
+144,12,Other nondurable goods
+147,12,Other nondurable goods
+148,12,Other nondurable goods
+149,12,Other nondurable goods
+155,15,Housing and utilities
+156,15,Housing and utilities
+161,15,Housing and utilities
+162,15,Housing and utilities
+163,15,Housing and utilities
+164,15,Housing and utilities
+167,15,Housing and utilities
+168,15,Housing and utilities
+170,15,Housing and utilities
+171,15,Housing and utilities
+174,16,Health care
+175,16,Health care
+177,16,Health care
+178,16,Health care
+180,16,Health care
+181,16,Health care
+184,16,Health care
+185,16,Health care
+186,16,Health care
+188,16,Health care
+189,16,Health care
+192,17,Transportation services
+195,17,Transportation services
+196,17,Transportation services
+197,17,Transportation services
+198,17,Transportation services
+201,17,Transportation services
+203,17,Transportation services
+204,17,Transportation services
+205,17,Transportation services
+206,17,Transportation services
+207,17,Transportation services
+208,17,Transportation services
+211,18,Recreation services
+212,18,Recreation services
+214,18,Recreation services
+215,18,Recreation services
+216,18,Recreation services
+217,18,Recreation services
+219,18,Recreation services
+220,18,Recreation services
+221,18,Recreation services
+222,18,Recreation services
+223,18,Recreation services
+227,18,Recreation services
+228,18,Recreation services
+229,18,Recreation services
+231,18,Recreation services
+232,18,Recreation services
+233,18,Recreation services
+239,19,Food services and accommodations
+240,19,Food services and accommodations
+242,19,Food services and accommodations
+243,19,Food services and accommodations
+244,19,Food services and accommodations
+245,19,Food services and accommodations
+246,19,Food services and accommodations
+250,19,Food services and accommodations
+251,19,Food services and accommodations
+255,20,Financial services and insurance
+256,20,Financial services and insurance
+257,20,Financial services and insurance
+259,20,Financial services and insurance
+262,20,Financial services and insurance
+263,20,Financial services and insurance
+265,20,Financial services and insurance
+266,20,Financial services and insurance
+267,20,Financial services and insurance
+268,20,Financial services and insurance
+269,20,Financial services and insurance
+271,20,Financial services and insurance
+272,20,Financial services and insurance
+276,20,Financial services and insurance
+277,20,Financial services and insurance
+278,20,Financial services and insurance
+279,20,Financial services and insurance
+283,21,Other services
+284,21,Other services
+285,21,Other services
+287,21,Other services
+288,21,Other services
+289,21,Other services
+292,21,Other services
+293,21,Other services
+295,21,Other services
+296,21,Other services
+297,21,Other services
+299,21,Other services
+301,21,Other services
+302,21,Other services
+303,21,Other services
+304,21,Other services
+305,21,Other services
+306,21,Other services
+309,21,Other services
+310,21,Other services
+312,21,Other services
+313,21,Other services
+314,21,Other services
+316,21,Other services
+318,21,Other services
+319,21,Other services
+320,21,Other services
+321,21,Other services
+322,21,Other services
+323,21,Other services
+324,21,Other services
+325,21,Other services
+326,21,Other services
+328,21,Other services
+329,21,Other services
+330,21,Other services
+331,21,Other services
+332,21,Other services
+335,21,Other services
+336,21,Other services
+337,21,Other services
+338,21,Other services
+342,22,Final consumption expenditures of NPISH

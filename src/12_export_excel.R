@@ -489,10 +489,12 @@ build_f2 <- function(outputs) {
       Date = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),  # Mid-quarter date
       raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
       # Linear blend: 2025Q1 (w=1 USMM) → 2029Q1 (w=0, pure GTAP LR)
-      q_index = (year - 2025) * 4 + (quarter - 1),
-      blend_weight = pmax(0, 1 - q_index / 16),
-      `All 2025 Tariffs to Date` = blend_weight * raw_deviation +
-        (1 - blend_weight) * gtap_lr_gdp
+      `All 2025 Tariffs to Date` = blend_usmm_gdp_deviation(
+        year = year,
+        quarter = quarter,
+        raw_deviation = raw_deviation,
+        gtap_long_run_gdp = gtap_lr_gdp
+      )
     ) %>%
     select(
       Date,

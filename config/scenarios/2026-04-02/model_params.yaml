@@ -1,14 +1,15 @@
 # =============================================================================
-# Model Parameters: 2-21_perm
+# Model Parameters: 2026-04-02
 # =============================================================================
+# Section 122 temporary (expires 150 days after enactment, 2026-07-20)
 
 # -----------------------------------------------------------------------------
 # Tariff-ETRs Configuration
 # -----------------------------------------------------------------------------
 
-# Scenario name in Tariff-ETRs/config/ (ETRs owns all tariff policy configs)
+# Scenario name in Tariff-ETRs/config/scenarios/ (ETRs owns all tariff policy configs)
 tariff_etrs:
-  scenario: '2-21_perm'
+  scenario: '2026-04-02'
   baseline: 'baseline'
 
 # -----------------------------------------------------------------------------
@@ -23,7 +24,25 @@ gtap:
 # -----------------------------------------------------------------------------
 
 # Reference date for GTAP single-run (uses this date's shocks)
-gtap_reference_date: '2026-02-24'
+# After S122 expiry, rates revert to pre-S122 levels
+gtap_reference_date: '2026-07-20'
+
+# -----------------------------------------------------------------------------
+# USMM Configuration
+# -----------------------------------------------------------------------------
+
+# Subset of ETR dates to use for USMM decomposition. Keeps the number of
+# macro shock components small rather than using all ~39 ETR dates.
+usmm_dates:
+  - '2026-01-01'
+  - '2026-02-20'
+  - '2026-07-20'
+
+# Onset and offset dates for the temporary component (uses temp IRF instead of
+# shifted-perm). Exactly two dates: [onset, offset]. Only one pair is supported.
+temp_component_dates:
+  - '2026-02-20'
+  - '2026-07-20'
 
 # -----------------------------------------------------------------------------
 # Refund Parameters

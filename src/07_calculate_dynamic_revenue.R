@@ -52,11 +52,11 @@ calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL) {
   if (!is.null(gtap_long_run_gdp)) {
     macro_fy <- macro_fy %>%
       mutate(
-        q_index = (year - 2025) * 4 + (quarter - 1),  # 2025Q1 = 0
-        blend_weight = pmax(0, 1 - q_index / 16),
-        level_deviation = case_when(
-          q_index < 0 ~ raw_level_deviation,  # Before 2025Q1: no blend
-          TRUE ~ blend_weight * raw_level_deviation + (1 - blend_weight) * gtap_long_run_gdp
+        level_deviation = blend_usmm_gdp_deviation(
+          year = year,
+          quarter = quarter,
+          raw_deviation = raw_level_deviation,
+          gtap_long_run_gdp = gtap_long_run_gdp
         )
       )
     message(sprintf('  Applying USMM-GTAP linear blend over 16 quarters (GTAP LR: %.2f%%)',

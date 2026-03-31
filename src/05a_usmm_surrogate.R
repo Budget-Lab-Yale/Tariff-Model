@@ -440,6 +440,10 @@ convert_usmm_to_levels <- function(usmm_diffs, baseline) {
 #' Decomposes shocks, constructs response (base + all-perm variants),
 #' and converts to levels.
 #'
+#' When model_params$usmm_dates is specified, the full ETR schedule is filtered
+#' to just those dates before decomposition. This keeps the number of USMM
+#' components small (2-3) even when ETRs produces dozens of intermediate dates.
+#'
 #' @param etr_results ETR calculation results
 #' @param inputs Model inputs (with model_params, irfs, etc.)
 #' @return List with macro_quarterly and macro_quarterly_allperm tibbles
@@ -451,6 +455,25 @@ run_usmm_surrogate <- function(etr_results, inputs) {
   # Get pre-sub ETR data for decomposition (raw from Tariff-ETRs, no GTAP scaling)
   etr_increase_by_date <- etr_results$presub_etr_increase_by_date
   etr_increase <- etr_results$presub_etr_increase
+
+  # Filter to usmm_dates if specified (keeps decomposition to a few components)
+  usmm_dates <- inputs$model_params$usmm_dates
+  if (!is.null(usmm_dates) && !is.null(etr_increase_by_date)) {
+    usmm_dates_parsed <- as.Date(usmm_dates)
+    available <- etr_increase_by_date$date
+    missing <- setdiff(as.character(usmm_dates_parsed), as.character(available))
+    if (length(missing) > 0) {
+      stop('usmm_dates not found in ETR schedule: ',
+           paste(missing, collapse = ', '),
+           '\n  Available dates: ',
+           paste(head(sort(available), 10), collapse = ', '),
+           if (length(available) > 10) ', ...' else '')
+    }
+    message(sprintf('  Filtering ETR schedule to %d usmm_dates (from %d total)',
+                    length(usmm_dates_parsed), nrow(etr_increase_by_date)))
+    etr_increase_by_date <- etr_increase_by_date %>%
+      filter(date %in% usmm_dates_parsed)
+  }
 
   # Get parameters
   refund_2026 <- inputs$model_params$refund_2026 %||% 0

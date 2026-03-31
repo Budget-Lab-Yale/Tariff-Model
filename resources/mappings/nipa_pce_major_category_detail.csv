@@ -1,0 +1,213 @@
+nipa_line,major_category,top_level
+7,Motor vehicles and parts,Durable goods
+8,Motor vehicles and parts,Durable goods
+9,Motor vehicles and parts,Durable goods
+13,Motor vehicles and parts,Durable goods
+17,Motor vehicles and parts,Durable goods
+21,Motor vehicles and parts,Durable goods
+22,Motor vehicles and parts,Durable goods
+25,Furnishings and durable household equipment,Durable goods
+26,Furnishings and durable household equipment,Durable goods
+27,Furnishings and durable household equipment,Durable goods
+28,Furnishings and durable household equipment,Durable goods
+30,Furnishings and durable household equipment,Durable goods
+31,Furnishings and durable household equipment,Durable goods
+33,Furnishings and durable household equipment,Durable goods
+34,Furnishings and durable household equipment,Durable goods
+36,Furnishings and durable household equipment,Durable goods
+37,Furnishings and durable household equipment,Durable goods
+41,Recreational goods and vehicles,Durable goods
+42,Recreational goods and vehicles,Durable goods
+43,Recreational goods and vehicles,Durable goods
+45,Recreational goods and vehicles,Durable goods
+46,Recreational goods and vehicles,Durable goods
+47,Recreational goods and vehicles,Durable goods
+49,Recreational goods and vehicles,Durable goods
+50,Recreational goods and vehicles,Durable goods
+51,Recreational goods and vehicles,Durable goods
+52,Recreational goods and vehicles,Durable goods
+54,Recreational goods and vehicles,Durable goods
+55,Recreational goods and vehicles,Durable goods
+57,Recreational goods and vehicles,Durable goods
+58,Recreational goods and vehicles,Durable goods
+59,Recreational goods and vehicles,Durable goods
+60,Recreational goods and vehicles,Durable goods
+61,Recreational goods and vehicles,Durable goods
+64,Other durable goods,Durable goods
+65,Other durable goods,Durable goods
+67,Other durable goods,Durable goods
+68,Other durable goods,Durable goods
+69,Other durable goods,Durable goods
+70,Other durable goods,Durable goods
+71,Other durable goods,Durable goods
+77,Food and beverages purchased for off-premises consumption,Nondurable goods
+78,Food and beverages purchased for off-premises consumption,Nondurable goods
+80,Food and beverages purchased for off-premises consumption,Nondurable goods
+81,Food and beverages purchased for off-premises consumption,Nondurable goods
+82,Food and beverages purchased for off-premises consumption,Nondurable goods
+83,Food and beverages purchased for off-premises consumption,Nondurable goods
+84,Food and beverages purchased for off-premises consumption,Nondurable goods
+86,Food and beverages purchased for off-premises consumption,Nondurable goods
+87,Food and beverages purchased for off-premises consumption,Nondurable goods
+88,Food and beverages purchased for off-premises consumption,Nondurable goods
+89,Food and beverages purchased for off-premises consumption,Nondurable goods
+91,Food and beverages purchased for off-premises consumption,Nondurable goods
+92,Food and beverages purchased for off-premises consumption,Nondurable goods
+93,Food and beverages purchased for off-premises consumption,Nondurable goods
+94,Food and beverages purchased for off-premises consumption,Nondurable goods
+95,Food and beverages purchased for off-premises consumption,Nondurable goods
+97,Food and beverages purchased for off-premises consumption,Nondurable goods
+98,Food and beverages purchased for off-premises consumption,Nondurable goods
+100,Food and beverages purchased for off-premises consumption,Nondurable goods
+101,Food and beverages purchased for off-premises consumption,Nondurable goods
+102,Food and beverages purchased for off-premises consumption,Nondurable goods
+103,Food and beverages purchased for off-premises consumption,Nondurable goods
+106,Clothing and footwear,Nondurable goods
+107,Clothing and footwear,Nondurable goods
+108,Clothing and footwear,Nondurable goods
+110,Clothing and footwear,Nondurable goods
+111,Clothing and footwear,Nondurable goods
+112,Clothing and footwear,Nondurable goods
+115,Gasoline and other energy goods,Nondurable goods
+116,Gasoline and other energy goods,Nondurable goods
+118,Gasoline and other energy goods,Nondurable goods
+119,Gasoline and other energy goods,Nondurable goods
+122,Other nondurable goods,Nondurable goods
+125,Other nondurable goods,Nondurable goods
+127,Other nondurable goods,Nondurable goods
+128,Other nondurable goods,Nondurable goods
+129,Other nondurable goods,Nondurable goods
+130,Other nondurable goods,Nondurable goods
+132,Other nondurable goods,Nondurable goods
+133,Other nondurable goods,Nondurable goods
+134,Other nondurable goods,Nondurable goods
+135,Other nondurable goods,Nondurable goods
+136,Other nondurable goods,Nondurable goods
+138,Other nondurable goods,Nondurable goods
+139,Other nondurable goods,Nondurable goods
+140,Other nondurable goods,Nondurable goods
+141,Other nondurable goods,Nondurable goods
+143,Other nondurable goods,Nondurable goods
+144,Other nondurable goods,Nondurable goods
+147,Other nondurable goods,Nondurable goods
+148,Other nondurable goods,Nondurable goods
+149,Other nondurable goods,Nondurable goods
+155,Housing,Services
+156,Housing,Services
+161,Housing,Services
+162,Housing,Services
+163,Housing,Services
+164,Housing,Services
+167,Household utilities,Services
+168,Household utilities,Services
+170,Household utilities,Services
+171,Household utilities,Services
+174,Health care,Services
+175,Health care,Services
+177,Health care,Services
+178,Health care,Services
+180,Health care,Services
+181,Health care,Services
+184,Health care,Services
+185,Health care,Services
+186,Health care,Services
+188,Health care,Services
+189,Health care,Services
+192,Transportation services,Services
+195,Transportation services,Services
+196,Transportation services,Services
+197,Transportation services,Services
+198,Transportation services,Services
+201,Transportation services,Services
+203,Transportation services,Services
+204,Transportation services,Services
+205,Transportation services,Services
+206,Transportation services,Services
+207,Transportation services,Services
+208,Transportation services,Services
+211,Recreation services,Services
+212,Recreation services,Services
+214,Recreation services,Services
+215,Recreation services,Services
+216,Recreation services,Services
+217,Recreation services,Services
+219,Recreation services,Services
+220,Recreation services,Services
+221,Recreation services,Services
+222,Recreation services,Services
+223,Recreation services,Services
+227,Recreation services,Services
+228,Recreation services,Services
+229,Recreation services,Services
+231,Recreation services,Services
+232,Recreation services,Services
+233,Recreation services,Services
+239,Food services and accommodations,Services
+240,Food services and accommodations,Services
+242,Food services and accommodations,Services
+243,Food services and accommodations,Services
+244,Food services and accommodations,Services
+245,Food services and accommodations,Services
+246,Food services and accommodations,Services
+250,Food services and accommodations,Services
+251,Food services and accommodations,Services
+255,Financial services and insurance,Services
+256,Financial services and insurance,Services
+257,Financial services and insurance,Services
+259,Financial services and insurance,Services
+262,Financial services and insurance,Services
+263,Financial services and insurance,Services
+265,Financial services and insurance,Services
+266,Financial services and insurance,Services
+267,Financial services and insurance,Services
+268,Financial services and insurance,Services
+269,Financial services and insurance,Services
+271,Financial services and insurance,Services
+272,Financial services and insurance,Services
+276,Financial services and insurance,Services
+277,Financial services and insurance,Services
+278,Financial services and insurance,Services
+279,Financial services and insurance,Services
+283,Communication,Services
+284,Communication,Services
+285,Communication,Services
+287,Communication,Services
+288,Communication,Services
+289,Communication,Services
+292,Education,Services
+293,Education,Services
+295,Education,Services
+296,Education,Services
+297,Education,Services
+299,Other services,Services
+301,Other services,Services
+302,Other services,Services
+303,Other services,Services
+304,Other services,Services
+305,Other services,Services
+306,Other services,Services
+309,Other services,Services
+310,Other services,Services
+312,Other services,Services
+313,Other services,Services
+314,Other services,Services
+316,Other services,Services
+318,Other services,Services
+319,Other services,Services
+320,Other services,Services
+321,Other services,Services
+322,Other services,Services
+323,Other services,Services
+324,Other services,Services
+325,Other services,Services
+326,Other services,Services
+328,Other services,Services
+329,Other services,Services
+330,Other services,Services
+331,Other services,Services
+332,Other services,Services
+335,Net foreign travel,Services
+336,Net foreign travel,Services
+337,Net foreign travel,Services
+338,Net foreign travel,Services
+342,Final consumption expenditures of NPISH,Services

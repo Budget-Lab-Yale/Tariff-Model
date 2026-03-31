@@ -73,16 +73,12 @@ calculate_macro <- function(inputs) {
     filter(year >= 2024) %>%
     mutate(
       raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
-      q_index = (year - 2025) * 4 + (quarter - 1),
-      blend_weight = pmax(0, 1 - q_index / 16),
-      blended_deviation = if (!is.null(gtap_lr_gdp)) {
-        case_when(
-          q_index < 0 ~ raw_deviation,  # Before 2025Q1: no blend
-          TRUE ~ blend_weight * raw_deviation + (1 - blend_weight) * gtap_lr_gdp
-        )
-      } else {
-        raw_deviation
-      },
+      blended_deviation = blend_usmm_gdp_deviation(
+        year = year,
+        quarter = quarter,
+        raw_deviation = raw_deviation,
+        gtap_long_run_gdp = gtap_lr_gdp
+      ),
       gdp_blended = gdp_baseline * (1 + blended_deviation / 100)
     )
 
