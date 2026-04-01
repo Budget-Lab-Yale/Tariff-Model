@@ -454,9 +454,19 @@ build_f1 <- function(outputs) {
       )
     )
 
-  # Add 2025 row with scenario LEVEL values
+  # Add 2025 row with observed ETR level (not model pre/post-sub)
   row_2025 <- tibble(
     year = last_year + 1,
+    `Effective Tariff Rate` = NA_real_,
+    `Projected PE Post-Substitution Rate` = 7.7303,
+    `Current PE Post-Substitution Rate` = pe_postsub_etr_level,
+    `Projected Pre-Substitution Rate` = 7.7303,
+    `Current Pre-Substituton Rate` = pre_sub_etr_level
+  )
+
+  # Add 2026 row with scenario pre/post-sub LEVEL values
+  row_2026 <- tibble(
+    year = last_year + 2,
     `Effective Tariff Rate` = NA_real_,
     `Projected PE Post-Substitution Rate` = pe_postsub_etr_level,
     `Current PE Post-Substitution Rate` = pe_postsub_etr_level,
@@ -464,7 +474,7 @@ build_f1 <- function(outputs) {
     `Current Pre-Substituton Rate` = pre_sub_etr_level
   )
 
-  result <- bind_rows(result, row_2025)
+  result <- bind_rows(result, row_2025, row_2026)
 
   return(result)
 }
@@ -582,6 +592,7 @@ build_f5 <- function(outputs) {
     pull(pct_of_income)
 
   cost <- dist %>%
+    mutate(cost_per_hh = -abs(cost_per_hh)) %>%
     pull(cost_per_hh)
 
   return(list(pct = pct, cost = cost))
