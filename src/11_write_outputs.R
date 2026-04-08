@@ -442,6 +442,34 @@ write_outputs <- function(results, scenario) {
   }
 
   # ============================
+  # Daily Aggregate ETR Levels (for F2 Tariff Impact Tracker)
+  # ============================
+
+  if (!is.null(results$etr$per_date_levels)) {
+    pdl <- results$etr$per_date_levels %>%
+      rename(etr_level = weighted_etr)
+
+    # Add baseline ETR as a pre-tariff anchor (day before first policy date)
+    first_date <- min(pdl$date)
+    baseline_row <- tibble(
+      date = first_date - 1,
+      etr_level = results$etr$baseline_etr
+    )
+    pdl <- bind_rows(baseline_row, pdl)
+
+    # Expand to daily frequency (fill-forward) through end of last valid_until
+    last_date <- as.Date('2026-12-31')
+    daily_dates <- tibble(date = seq.Date(min(pdl$date), last_date, by = 'day'))
+    daily_etr <- daily_dates %>%
+      left_join(pdl, by = 'date') %>%
+      tidyr::fill(etr_level, .direction = 'down')
+
+    write_csv(daily_etr, file.path(output_dir, 'daily_etr_levels.csv'))
+    message(sprintf('    daily_etr_levels.csv (%d days, %d policy dates)',
+                    nrow(daily_etr), nrow(pdl)))
+  }
+
+  # ============================
   # Sector-Country Matrices (raw Tariff-ETRs output)
   # ============================
 

@@ -1,0 +1,46 @@
+# =============================================================================
+# Model Parameters: 2026-04-06_s122perm
+# =============================================================================
+# Section 122 permanent (Congress extends)
+# Metal 232 overhaul (2026-04-06), Pharma 232 (2026-09-29)
+
+# -----------------------------------------------------------------------------
+# Tariff-ETRs Configuration
+# -----------------------------------------------------------------------------
+
+# Scenario name in Tariff-ETRs/config/scenarios/ (ETRs owns all tariff policy configs)
+tariff_etrs:
+  scenario: '2026-04-06_s122perm'
+  baseline: 'baseline'
+
+# -----------------------------------------------------------------------------
+# GTAP Configuration
+# -----------------------------------------------------------------------------
+
+gtap:
+  include_retaliation: true
+
+# -----------------------------------------------------------------------------
+# Time-Varying ETR Configuration
+# -----------------------------------------------------------------------------
+
+# Reference date for GTAP single-run (uses this date's shocks)
+# Post-pharma 232 with S122 permanent = final steady state
+gtap_reference_date: '2026-09-29'
+
+# -----------------------------------------------------------------------------
+# USMM Configuration
+# -----------------------------------------------------------------------------
+
+# Subset of ETR dates to use for USMM decomposition. Keeps the number of
+# macro shock components small rather than using all ETR dates.
+usmm_dates:
+  - '2026-02-24'
+  - '2026-04-06'
+  - '2026-09-29'
+
+# -----------------------------------------------------------------------------
+# Refund Parameters
+# -----------------------------------------------------------------------------
+
+refund_2026: 166.0

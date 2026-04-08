@@ -1,0 +1,60 @@
+# Retaliation shocks - tariffs imposed by trading partners on US exports
+# These are scenario-contingent and can be included/excluded per scenario
+
+# Canada retaliation on US steel/aluminum
+Shock tms("nfm","USA","Canada") = 25;
+Shock tms("i_s","USA","Canada") = 25;
+
+# China retaliation on US goods
+Shock tms("pdr","USA","China") = 10;
+Shock tms("wht","USA","China") = 25;
+Shock tms("gro","USA","China") = 10;
+Shock tms("v_f","USA","China") = 20;
+Shock tms("osd","USA","China") = 10;
+Shock tms("c_b","USA","China") = 10;
+Shock tms("pfb","USA","China") = 10;
+Shock tms("ocr","USA","China") = 10;
+Shock tms("ctl","USA","China") = 10;
+Shock tms("oap","USA","China") = 10;
+Shock tms("rmk","USA","China") = 20;
+Shock tms("wol","USA","China") = 25;
+Shock tms("frs","USA","China") = 10;
+Shock tms("fsh","USA","China") = 20;
+Shock tms("coa","USA","China") = 25;
+Shock tms("oil","USA","China") = 20;
+Shock tms("gas","USA","China") = 25;
+Shock tms("oxt","USA","China") = 10;
+Shock tms("cmt","USA","China") = 20;
+Shock tms("omt","USA","China") = 25;
+Shock tms("vol","USA","China") = 10;
+Shock tms("mil","USA","China") = 20;
+Shock tms("pcr","USA","China") = 10;
+Shock tms("sgr","USA","China") = 10;
+Shock tms("ofd","USA","China") = 10;
+Shock tms("b_t","USA","China") = 10;
+Shock tms("tex","USA","China") = 10;
+Shock tms("wap","USA","China") = 10;
+Shock tms("lea","USA","China") = 10;
+Shock tms("lum","USA","China") = 10;
+Shock tms("ppp","USA","China") = 10;
+Shock tms("p_c","USA","China") = 10;
+Shock tms("chm","USA","China") = 10;
+Shock tms("bph","USA","China") = 10;
+Shock tms("rpp","USA","China") = 10;
+Shock tms("nmm","USA","China") = 10;
+Shock tms("i_s","USA","China") = 10;
+Shock tms("nfm","USA","China") = 10;
+Shock tms("fmp","USA","China") = 10;
+Shock tms("ele","USA","China") = 10;
+Shock tms("eeq","USA","China") = 10;
+Shock tms("ome","USA","China") = 20;
+Shock tms("mvh","USA","China") = 20;
+Shock tms("otn","USA","China") = 10;
+Shock tms("omf","USA","China") = 10;
+Shock tms("ely","USA","China") = 10;
+Shock tms("gdt","USA","China") = 10;
+Shock tms("wtr","USA","China") = 10;
+Shock tms("cns","USA","China") = 10;
+
+# UK adjustment (trade agreement related?)
+Shock tms("chm","USA","UK") = -0.904777445;
