@@ -164,8 +164,14 @@ calculate_macro <- function(inputs) {
     fed_funds_2025 = fed_funds_2025,
     fed_funds_2026 = fed_funds_2026,
 
-    # Raw quarterly data for reference
-    quarterly = macro
+    # Quarterly data with GDP blended toward GTAP long-run
+    quarterly = macro %>%
+      left_join(
+        blended_macro %>% select(year, quarter, gdp_blended),
+        by = c('year', 'quarter')
+      ) %>%
+      mutate(gdp_tariff = if_else(!is.na(gdp_blended), gdp_blended, gdp_tariff)) %>%
+      select(-gdp_blended)
   )
 
   # Log results
