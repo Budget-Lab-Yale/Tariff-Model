@@ -35,7 +35,7 @@ companion interface map of the *current* dependency lives at
 | D6 | **Drop census-country/HTS2 outputs.** `deltas/levels_by_census_country(.csv)` and `*_hts2` are pure passthrough today (read in `01_load_inputs.R`, re-written verbatim in `11_write_outputs.R:423-441`, never computed on). Removed from the model's contract. |
 | D7 | **Baseline is a single pinned static date — a slice of `actual/`, not a separate artifact.** The tracker does not publish a standalone static baseline panel; it publishes the current-law `actual/` time series. `00a` slices `actual/` at the fixed reference date to form the delta base (matches today's invariant in `01_load_inputs.R:263-266`). Deltas are scenario-path minus that fixed snapshot. |
 | D8 | **Canonical internal unit = fraction.** All rates are carried internally as fractions (e.g. `0.25`), with conversion to percent only at display/output. This resolves today's mismatch — raw matrices arrive as percentage points and get `/100` (`02_calculate_etr.R:392`), while `tau_M` is already fractional (`io_price_model.R:654`). The prepare step normalizes to fraction on read. |
-| D9 | **Hard cutover.** When the tracker lands, `src/00_run_tariff_etrs.R` and the `tariff_etrs_path` config are deleted outright — no compatibility flag. The golden comparison (see Verification) is run in the same PR *before* deletion, against captured pre-refactor fixtures. |
+| D9 | **Hard cutover (at the end).** The new path is selected by the presence of a `rate_panel` block in `model_params.yaml`; the legacy Tariff-ETRs path stays runnable for `tariff_etrs`-configured scenarios *during the build*. At cutover, `src/00_run_tariff_etrs.R` and the `tariff_etrs_path` config are deleted outright. There is no parity gate — the pre-refactor pipeline is broken, so validation is vibes-based (see Validation). |
 
 ## The new upstream surface (what the model reads)
 
@@ -146,6 +146,25 @@ model-generated `shocks.txt`).
   reads `output/{scenario}/.../shocks.txt`; only the producer changes).
 - **Update** `CLAUDE.md` (external-dependency section).
 
+### Implementation status
+
+Built ahead of the tracker (the aggregation logic is a *port* of self-contained tariff-etrs
+functions, so it stands alone):
+
+- **Done** — `src/read_rate_panel.R` (reader/adapter: resolves the bundle path, reads
+  rds/parquet, normalizes to the canonical panel, converts the interval convention, validates);
+  `src/00a_prepare_rate_inputs.R` (delta + GTAP rollup + BEA rollup + `shocks.txt`, ported from
+  `aggregate_countries_to_partners`/`write_bea_commodity_deltas`/`write_shock_commands`/`calc_delta`);
+  vintaged resources under `resources/rate_aggregation/2024/`; `run_model.R` Step 0a wiring
+  (selected by a `rate_panel` block) and `01_load_inputs.R` repointed to `rate_inputs/`.
+- **Deferred to cutover** — deleting `00_run_tariff_etrs.R` + `tariff_etrs_path`; dropping the
+  census/HTS2 loads/writes (they self-disable now, since `00a` doesn't emit those files);
+  `CLAUDE.md` update.
+- **Blocked on upstream** — pointing at a real published bundle: today's tracker emits
+  per-revision `snapshot_*.rds` (intervals only in the not-yet-built combined timeseries) under
+  the old layout; the reader handles rds + single-snapshot `effective_date` fallback, but the
+  `actual/` + `scenarios/<name>/` layout, parquet, and manifest await migration step 5.
+
 ## Open items for the upstream (tracker) build
 
 The things this refactor *requires* the tracker to provide — the "what to build upstream" list.
@@ -179,31 +198,40 @@ Each is cross-checked against the tracker's AuthoritySpec design doc
    `policy × assumptions × baseline_mode × base` cross-product is enumerated/named as a deferred
    item — settle it before the model points at it.
 
-## Verification (cutover gate)
+## Validation (vibes-based, not parity)
 
-Because the cutover is a hard cut (D9 — no live old path to diff against post-deletion), the
-golden comparison runs **in the same PR, before deletion**, against **captured pre-refactor
-fixtures**: snapshot the current run of scenario `2026-04-06` (`gtap_*_by_sector_country.csv`,
-`bea_deltas_by_commodity.csv`, and `shocks.txt`), then run the new path and diff against those
-saved fixtures.
+The pre-refactor pipeline is broken, so there is **no trustworthy golden output to diff
+against** — parity is off the table. Validation is sanity/invariant-based: confirm the new
+path runs end-to-end and produces *plausible* numbers, not that it reproduces a (broken) prior
+run. Checks, cheapest first:
 
-Bundle/contract tests (on the tracker output, before aggregation):
-- **Manifest** — schema version recognized, `rate_unit = fraction`, checksums match files.
-- **Interval invariants** — per `hts10×country`: half-open `[valid_from, valid_until)`, no gaps,
-  no overlaps, coverage through the model's last policy-change date.
-- **Coverage** — every country/HTS in the panel resolves in the import-weight and crosswalk
-  resources (no silent drops in the rollup).
+Contract/invariant checks (in the reader + `00a`, **hard-fail — no silent drops**, per the
+repo error philosophy: no `na.rm`, no `inner_join`, no preemptive `replace_na`):
+- **Reader normalization** — `rate_total` present, fractions not pp (`validate_panel` errors if
+  `max > 20`), no NA in `hts10`/`cty_code`/`rate_total`, intervals normalized to half-open.
+- **Interval cover** — `slice_panel_at` errors on any `(hts10, cty_code)` covered by >1
+  interval (overlap); `gtap_reference_date` must be an interval start, else hard error.
+- **Weights integrity** — `load_aggregation_resources` errors on NA `gtap_code`/`imports`/keys;
+  zero-weight pairs are dropped *explicitly with a logged count* (not masked by a divide guard).
+- **Full rollup coverage** — the rollup is driven off the weight universe and
+  `assert_full_coverage` **stops** if any weighted `(hts10, cty_code)` lacks a scenario or
+  baseline rate (catches an hts10/cty_code format or vintage mismatch that would otherwise
+  silently understate the result — the failure mode an `inner_join` would have hidden).
+- **BEA coverage** — `rollup_bea` **stops** if any unmapped HS10 carries a *nonzero* tariff
+  change (a real change lost from the price model); benign zero-delta unmapped pairs (~3% of
+  import value) are dropped with a logged value. The one deliberate default that remains is
+  unmapped countries → ROW, which is by design (the partner mapping is a named-partner list).
 
-Aggregation/golden diffs (new path vs captured fixtures):
-- `inputs$etr_matrix`, `inputs$levels_matrix`, `inputs$baseline_levels_matrix`
-  (GTAP-sector × partner) — must match the saved `gtap_*_by_sector_country.csv`.
-- `inputs$tau_M` (BEA) — must match the saved `bea_deltas_by_commodity.csv`-derived vector.
-- Generated `shocks.txt` — line-for-line equal to the saved `shocks.txt`.
-- Then full `Rscript run.R 2026-04-06`: KEY RESULTS block (ETRs, price increases, revenue,
-  macro) within rounding of the pre-refactor run.
+Sanity checks on the outputs (the "vibes"):
+- `shocks.txt` shock magnitudes and the GTAP/BEA matrices are in sane ranges (e.g. China
+  partner shocks > 0, headline ETRs in the expected ballpark for the scenario).
+- KEY RESULTS block (ETRs, price increases, revenue, macro) from a full
+  `Rscript run.R 2026-04-06` is directionally sensible and roughly matches published figures.
+- Spot-check a few `(hts10, cty_code)` deltas by hand against the scenario's known policy
+  changes.
 
-Tolerances: exact for shocks/crosswalk rollups (deterministic); rounding-level for final
-headline numbers.
+When the tracker later publishes a *correct* series, this can be upgraded to a real
+golden/parity gate — but that depends on a working upstream, not on the old etrs path.
 
 ## Alignment with the tracker's AuthoritySpec build
 
@@ -218,6 +246,16 @@ params (`adjustment_params`: USMCA utilization, metal-content method, exemption 
 publishes **effective** rates; this model owns the GTAP/BEA rollups, deltas, `shocks.txt`,
 revenue, and macro. Granularity (`hts10×country`), unit (fraction), country vocabulary (Census
 `cty_code`), and per-authority decomposition columns are all native to the tracker output.
+
+> **One object, not two engines.** `tariff-etrs` is *misnamed* — it is really *statutory
+> rates* and adds no effective-rate calculation of its own. It and the tracker produce the
+> **same conceptual object**: the effective tariff rate at HS10×country, with all USMCA /
+> metal-content / exemption adjustments already reflected in the tracker's `total_rate`
+> (verified: `total_rate = base_rate + total_additional`, where the per-authority `rate_*`
+> already carry their adjustments). So there is **no separate "tracker emits effective rates"
+> milestone** — the cutover gates only on the tracker's output *layout/format* (migration
+> step 5) and the output-contract decision (impl req 2). Either repo's HS10×country output is
+> a valid input for the model-side aggregation.
 
 **What it refined in this doc.**
 - *Baseline is a slice, not an artifact* (D3, D7): the tracker publishes `actual/` (current-law

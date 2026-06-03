@@ -192,7 +192,14 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # Tariff-ETRs outputs
   # ============================
 
-  tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
+  # Rate-derived inputs: the tracker-panel path (00a) writes to rate_inputs/;
+  # the legacy Tariff-ETRs path writes to tariff_etrs/. Prefer the former when present.
+  rate_inputs_dir <- file.path('output', scenario, 'rate_inputs')
+  tariff_etrs_dir <- if (dir.exists(rate_inputs_dir)) {
+    rate_inputs_dir
+  } else {
+    file.path('output', scenario, 'tariff_etrs')
+  }
 
   # ---- Deltas (tariff increases from baseline) ----
   etr_file <- file.path(tariff_etrs_dir, 'gtap_deltas_by_sector_country.csv')
