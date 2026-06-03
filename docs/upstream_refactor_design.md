@@ -29,47 +29,59 @@ companion interface map of the *current* dependency lives at
 |---|---|
 | D1 | **No invocation.** This model no longer calls the tracker. The tracker is run independently and publishes a pinned, versioned output bundle per scenario; the model just reads it. `src/00_run_tariff_etrs.R` is retired. |
 | D2 | **Full HS10×country panel handoff.** The tracker hands over the raw, interval-encoded **level** panel at HS10×country×date. All GTAP-sector and BEA-commodity aggregation, crosswalks, import weights, and `shocks.txt` generation move **into this model**. |
-| D3 | **Levels only; model computes deltas.** Tracker emits absolute level panels for baseline + each scenario. Model differences them (`scenario − baseline`) at HS10×country, then aggregates. |
+| D3 | **Levels only; model computes deltas.** Tracker emits absolute level (effective-rate) time series for current-law (`actual/`) + each scenario. Model differences them (`scenario − baseline`) at HS10×country, then aggregates. The "baseline" is a slice of the `actual/` series at the reference date — see D7. |
 | D4 | **Tracker owns scenarios.** A scenario (a hypothetical policy path) is defined and run in the tracker (absorbing tariff-etrs's baseline-date + counterfactual-dates + reform-overlay model). The model's scenario config points at the resulting tracker output. |
-| D5 | **Panel column schema is an upstream decision.** The model's *hard requirement* is the **total effective rate** (`rate_total`) at HS10×country×date. Per-authority decomposition (232/301/IEEPA/122/…) is optional-but-recommended: if the tracker exposes it, do so as a consistent set of typed `rate_<authority>` fraction columns that sum to `rate_total` — useful later for S122/temp validation and state-of-tariffs charts. Not a forced/reserved schema slot. |
+| D5 | **Panel column schema is an upstream decision.** The model's *hard requirement* is the **post-stacking total effective rate** (`rate_total`) at HS10×country×date — the combined ETR after the tracker's stacking step, not the pre-stacking per-authority components. Per-authority decomposition (232/301/IEEPA/122/…) is optional-but-recommended; the tracker's RATE_SCHEMA panel *already carries* typed per-authority `rate_*` columns natively (AuthoritySpec), so the breakdown is available — consume it as fractions that combine (post-stacking) to `rate_total`. Useful later for S122/temp validation and state-of-tariffs charts. |
 | D6 | **Drop census-country/HTS2 outputs.** `deltas/levels_by_census_country(.csv)` and `*_hts2` are pure passthrough today (read in `01_load_inputs.R`, re-written verbatim in `11_write_outputs.R:423-441`, never computed on). Removed from the model's contract. |
-| D7 | **Baseline is a single pinned static date.** Deltas are scenario-path minus a fixed reference snapshot (matches today's invariant in `01_load_inputs.R:263-266`). |
+| D7 | **Baseline is a single pinned static date — a slice of `actual/`, not a separate artifact.** The tracker does not publish a standalone static baseline panel; it publishes the current-law `actual/` time series. `00a` slices `actual/` at the fixed reference date to form the delta base (matches today's invariant in `01_load_inputs.R:263-266`). Deltas are scenario-path minus that fixed snapshot. |
 | D8 | **Canonical internal unit = fraction.** All rates are carried internally as fractions (e.g. `0.25`), with conversion to percent only at display/output. This resolves today's mismatch — raw matrices arrive as percentage points and get `/100` (`02_calculate_etr.R:392`), while `tau_M` is already fractional (`io_price_model.R:654`). The prepare step normalizes to fraction on read. |
 | D9 | **Hard cutover.** When the tracker lands, `src/00_run_tariff_etrs.R` and the `tariff_etrs_path` config are deleted outright — no compatibility flag. The golden comparison (see Verification) is run in the same PR *before* deletion, against captured pre-refactor fixtures. |
 
 ## The new upstream surface (what the model reads)
 
-The tracker publishes, per scenario, a versioned bundle the model reads directly (no
-invocation). The bundle is **three artifacts**: a manifest plus two level panels. All rate
-columns are **fractions** (D8).
+The tracker publishes, per vintage, the bundle the model reads directly (no invocation). It maps
+onto the tracker's AuthoritySpec "Output layout":
+`<root>/Tariff-Rate-Tracker/<vintage>/{actual, scenarios/<name>}/`. All rate columns are
+**fractions** (D8); the tracker's native unit, so no conversion on read. Artifacts:
 
-- **`manifest.yml`** — what makes "pinned vintage" real. Required fields:
-  `schema_version`, `tracker_sha` (git SHA / release ID), `source_data_vintage`,
-  `hts_vintage`, `country_code_vocabulary`, `rate_unit` (must be `fraction`),
-  `missing_value_policy`, and per-file `checksums`.
-- **Baseline level panel** — static, single reference date.
-  `hts10, country(cty_code), rate_total[, base_rate, authority cols…]`
-- **Scenario level panel** — interval-encoded over counterfactual dates.
-  `hts10, country, valid_from, valid_until, rate_total[, …]`
+- **`manifest`** (per vintage + per scenario) — what makes "pinned vintage" real. The tracker
+  already plans a `manifest.json` recording the scenario *recipe* (`base`, `baseline_mode`,
+  operations, `adjustment_params`, parent vintage). Reconcile that with the *consumption-contract*
+  fields the model needs in the **same** manifest: `schema_version`, `tracker_sha`,
+  `source_data_vintage`, `hts_vintage`, `country_code_vocabulary` (= Census codes / `cty_code`),
+  `rate_unit` (`fraction`), `missing_value_policy`, per-file `checksums`. (One `manifest.json`, not a
+  separate `.yml`.)
+- **`actual/` series** — current-law effective-rate time series (`actual/timeseries/rate_timeseries.parquet`
+  + `daily/`). `00a` slices it at the baseline reference date to form the delta base (D7).
+  `hts10, country(cty_code), valid_from, valid_until, rate_total[, rate_<authority>…]`
+- **`scenarios/<name>/` series** — the counterfactual, same schema, interval-encoded over the
+  scenario's effective dates.
 
-**Interval semantics (first-class).** The scenario panel encodes each rate over a half-open
-interval `[valid_from, valid_until)`. The tracker must guarantee, per `hts10×country`:
-**no gaps, no overlaps**, and **coverage through the full model horizon**. This is a hard
-requirement — duration/coverage (not just point-in-time slices) drives revenue
-(`04_calculate_revenue.R:34`), the USMM decomposition (`05a_usmm_surrogate.R:459`), daily ETR
-output (`11_write_outputs.R:448`), and the 2025 weighted-price script
-(`weighted_avg_2025_prices.R:74`).
+Format is **parquet** (`timeseries/rate_timeseries.parquet`) + **csv** (`daily/daily_*.csv`); `00a`
+reads parquet via the R `arrow` package.
+
+**Interval semantics (first-class).** Each rate is encoded over a half-open interval
+`[valid_from, valid_until)`, per `hts10×country`: **no gaps, no overlaps**, and **coverage through
+the last policy-change date the model needs** (the model extrapolates the final ETR forward itself —
+`compute_fy_weighted_etr_increase`, `04_calculate_revenue.R:22-28` — so it does *not* require panel
+coverage all the way to FY2035). This drives duration-dependent steps: revenue
+(`04_calculate_revenue.R:34`), the USMM decomposition (`05a_usmm_surrogate.R:459`), daily ETR output
+(`11_write_outputs.R:448`), the 2025 weighted-price script (`weighted_avg_2025_prices.R:74`).
+**Coordination:** AuthoritySpec admits the tracker has not yet converged its end-date convention
+(IEEPA invalidation is exclusive-end; the expiry splitter is inclusive-end — its line 244); the
+published series must settle on the half-open convention above.
 
 Model-side pointer (replaces today's `tariff_etrs:` block in `model_params.yaml`):
 
 ```yaml
 rate_panel:
-  source: tracker-release        # decoupled read, not invocation
-  vintage: '2026-04-06'          # pinned tracker release
-  policy_scenario: '2026-04-06'  # which tracker policy panel in that release
-                                 # (named distinctly from this model's scenario identity,
-                                 #  which also carries gtap_reference_date/usmm/refund/retaliation)
-  baseline: '2025-01-01'         # static baseline reference (D7)
+  root: '<shared root>/Tariff-Rate-Tracker'  # filesystem read, not invocation
+  vintage: '2026-04-06'           # pinned tracker vintage dir (or 'latest')
+  tracker_scenario: '<name>'      # the published scenarios/<name>/ folder ('actual' = current-law).
+                                  # The name encodes the tracker's full {policy × assumptions ×
+                                  # baseline_mode × base} combination — distinct from this model's
+                                  # scenario identity (gtap_reference_date/usmm/refund/retaliation).
+  baseline_date: '2025-01-01'     # slice point in actual/ for the delta base (D7)
 gtap_reference_date: '2026-09-29'   # unchanged; model-side slice for the single GTAP/I-O run
 # usmm_dates, temp_component_dates, refund_2026, retaliation: unchanged (model knobs)
 ```
@@ -136,22 +148,36 @@ model-generated `shocks.txt`).
 
 ## Open items for the upstream (tracker) build
 
-The things this refactor *requires* the tracker to provide — the "what to build upstream" list:
+The things this refactor *requires* the tracker to provide — the "what to build upstream" list.
+Each is cross-checked against the tracker's AuthoritySpec design doc
+(`../tariff-rate-tracker/docs/authority_spec.md`); see the next section for the full alignment.
 
-1. **Scenario/reform mechanism** rich enough to express tariff-etrs's counterfactuals
-   (baseline date + counterfactual dates + per-date policy-reform overlays), not just the
-   current "disable an authority" model in `config/scenarios.yaml`.
-2. **Per-scenario published bundle**: `manifest.yml` + baseline static level panel + scenario
-   interval-encoded level panel, under a pinned vintage the model can point at. The manifest
-   carries `schema_version`, `tracker_sha`, `source_data_vintage`, `hts_vintage`,
-   `country_code_vocabulary`, `rate_unit` (`fraction`), `missing_value_policy`, and per-file
-   `checksums` — this is what makes the pinned vintage verifiable rather than nominal.
-3. **Panel granularity = HS10×country×date**, level (not delta), with at minimum
-   `rate_total` as a fraction (authority decomposition optional-but-recommended per D5).
-   Scenario panel must satisfy the interval invariants (half-open `[valid_from, valid_until)`,
-   no gaps/overlaps, coverage through horizon).
-4. **Import-weights publication decision** — recommend weights live with the aggregation
-   (in this model); confirm whether the tracker also publishes weights as a shared resource.
+1. **Scenario/reform mechanism** rich enough to express tariff-etrs's counterfactuals — ✅
+   **addressed by AuthoritySpec.** Its operation engine (`add_program`, `set_rate`,
+   `set_country_scope`, `base` pins, `baseline_mode`) meets and exceeds the old baseline-date +
+   counterfactual-dates + reform-overlay model (it also adds new coverage and re-scoping, which
+   tariff-etrs could not do).
+2. **Per-vintage published bundle**: a `manifest.json` + `actual/` current-law series + each
+   `scenarios/<name>/` series, under a pinned vintage the model can point at. **Reconcile** the
+   tracker's planned recipe-manifest with the consumption-contract fields the model needs
+   (`schema_version`, `tracker_sha`, vintages, `country_code_vocabulary`, `rate_unit`,
+   `missing_value_policy`, per-file `checksums`) in one manifest — this is what makes the pinned
+   vintage verifiable rather than nominal.
+3. **A post-stacking total effective rate** (`rate_total`, fraction) per
+   `hts10×country×interval` — **hard requirement.** This feeds directly into the tracker's
+   *unresolved* output-contract decision (AuthoritySpec impl req 2, "Define the output contract":
+   whether the resolved-program table is internal-only, persisted as snapshot extras, or replaces
+   the downstream decomposition). The model needs the combined post-stacking rate published as a
+   consumable column; per-authority `rate_*` decomposition alongside it is recommended (D5).
+   Scenario series must satisfy the interval invariants (half-open `[valid_from, valid_until)`,
+   no gaps/overlaps, coverage through the model's last policy-change date).
+4. **Import-weights publication decision** — recommend weights live with the aggregation (in this
+   model); confirm whether the tracker publishes its 2024 Census import-weight file (used for ETR
+   weighting at `hts10×country`, AuthoritySpec `08:389`) as a shared resource we can reuse.
+5. **Stable scenario naming.** The model pins `tracker_scenario` to a published `scenarios/<name>/`
+   folder, so the names must be deterministic and stable. AuthoritySpec leaves how the
+   `policy × assumptions × baseline_mode × base` cross-product is enumerated/named as a deferred
+   item — settle it before the model points at it.
 
 ## Verification (cutover gate)
 
@@ -163,7 +189,8 @@ saved fixtures.
 
 Bundle/contract tests (on the tracker output, before aggregation):
 - **Manifest** — schema version recognized, `rate_unit = fraction`, checksums match files.
-- **Interval invariants** — per `hts10×country`: no gaps, no overlaps, coverage through horizon.
+- **Interval invariants** — per `hts10×country`: half-open `[valid_from, valid_until)`, no gaps,
+  no overlaps, coverage through the model's last policy-change date.
 - **Coverage** — every country/HTS in the panel resolves in the import-weight and crosswalk
   resources (no silent drops in the rollup).
 
@@ -177,3 +204,42 @@ Aggregation/golden diffs (new path vs captured fixtures):
 
 Tolerances: exact for shocks/crosswalk rollups (deterministic); rounding-level for final
 headline numbers.
+
+## Alignment with the tracker's AuthoritySpec build
+
+The upstream redesign is specified in `../tariff-rate-tracker/docs/authority_spec.md`
+(AuthoritySpec). It was designed against the same A/B boundary from the upstream side and
+**validates this plan** — the two docs independently arrived at the same vintaged-bundle +
+manifest + scenario-as-delta shape, and AuthoritySpec explicitly defers the
+"revenue/ETR-delta decomposition" to its consumer (us). Key points of intersection:
+
+**What it confirms.** The split holds: the tracker owns statutory structure + ETR adjustment
+params (`adjustment_params`: USMCA utilization, metal-content method, exemption shares) and
+publishes **effective** rates; this model owns the GTAP/BEA rollups, deltas, `shocks.txt`,
+revenue, and macro. Granularity (`hts10×country`), unit (fraction), country vocabulary (Census
+`cty_code`), and per-authority decomposition columns are all native to the tracker output.
+
+**What it refined in this doc.**
+- *Baseline is a slice, not an artifact* (D3, D7): the tracker publishes `actual/` (current-law
+  time series); the static baseline is a slice `00a` takes, not a separate panel.
+- *We read the post-stacking total* (D5, open item 3): `rate_total` is the combined ETR after
+  the tracker's stacking step.
+- *Layout/format/manifest/config pointer* updated to the AuthoritySpec output layout
+  (`<root>/Tariff-Rate-Tracker/<vintage>/{actual,scenarios/<name>}`, parquet + csv, one
+  `manifest.json`, `tracker_scenario` pointer).
+
+**Open coordination items (upstream decisions that gate this model's cutover):**
+1. **Output contract (AuthoritySpec impl req 2).** *The* critical one: the tracker must decide
+   which published artifact carries the post-stacking `rate_total` (and optional `rate_*`
+   decomposition). This determines exactly what `00a` reads. Our hard requirement (open item 3)
+   is the input to that decision.
+2. **Interval end-date convention** (AuthoritySpec line 244) — currently unconverged (exclusive
+   vs inclusive). The published series must use the half-open convention this model assumes.
+3. **Milestone dependency.** This model's refactor depends specifically on AuthoritySpec
+   **migration step 5** (restructure published output so scenarios are first-class on disk) plus
+   the impl-req-2 output-contract decision. Earlier AuthoritySpec steps (the internal
+   spec/stacking refactor) are parity-gated upstream and do not block us; the *published surface*
+   does.
+4. **Stable scenario naming** (open item 5) and **horizon/weights for 2027+ scenarios**
+   (AuthoritySpec open questions: `series_horizon` is `2026-12-31`, import weights fixed at 2024
+   Census) — both must be settled before scenarios beyond the current horizon are pinned.
