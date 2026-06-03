@@ -258,7 +258,7 @@ decompose_shocks <- function(etr_increase_by_date = NULL,
       # Check if this component matches temp_component_dates
       use_temp <- FALSE
       if (!is.null(temp_pairs)) {
-        use_temp <- any(temp_pairs$onset == onset & temp_pairs$offset == offset)
+        use_temp <- any(onset >= temp_pairs$onset & offset <= temp_pairs$offset)
       }
 
       components <- bind_rows(components, tibble(
