@@ -149,26 +149,34 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
   template_file <- 'resources/gtap/cmf_template.cmf'
   retaliation_file <- file.path(scenario_dir, 'retaliation', 'shocks.txt')
 
-  # Select shocks file: flat file for static, date subdirectory for time-varying
-  flat_shocks <- file.path('output', scenario, 'tariff_etrs', 'shocks.txt')
+  # Select the shocks source dir from config (not directory presence): the new
+  # tracker path (00a) writes a flat shocks.txt to rate_inputs/; the legacy
+  # Tariff-ETRs path writes to tariff_etrs/ (flat for static, date subdirs for
+  # time-varying).
+  params_check <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
+  rates_dir <- if (!is.null(params_check$rate_panel)) {
+    file.path('output', scenario, 'rate_inputs')
+  } else {
+    file.path('output', scenario, 'tariff_etrs')
+  }
+
+  flat_shocks <- file.path(rates_dir, 'shocks.txt')
   if (file.exists(flat_shocks)) {
     shocks_file <- flat_shocks
   } else {
-    # Time-varying: look for date subdirectories
-    tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
-    date_dirs <- sort(list.dirs(tariff_etrs_dir, recursive = FALSE, full.names = FALSE))
+    # Time-varying (legacy): look for date subdirectories
+    date_dirs <- sort(list.dirs(rates_dir, recursive = FALSE, full.names = FALSE))
     if (length(date_dirs) == 0) {
-      stop('No shocks.txt found (flat or date-subdirectory) in: ', tariff_etrs_dir)
+      stop('No shocks.txt found (flat or date-subdirectory) in: ', rates_dir)
     }
     # Use gtap_reference_date from model_params (default: first date)
-    params_check <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
     ref_date <- params_check$gtap_reference_date %||% date_dirs[1]
     ref_date <- as.character(ref_date)
     if (!ref_date %in% date_dirs) {
       stop('gtap_reference_date "', ref_date, '" not found in: ',
            paste(date_dirs, collapse = ', '))
     }
-    shocks_file <- file.path(tariff_etrs_dir, ref_date, 'shocks.txt')
+    shocks_file <- file.path(rates_dir, ref_date, 'shocks.txt')
     if (!file.exists(shocks_file)) {
       stop('Shocks file not found for reference date: ', shocks_file)
     }

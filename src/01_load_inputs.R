@@ -192,11 +192,11 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # Tariff-ETRs outputs
   # ============================
 
-  # Rate-derived inputs: the tracker-panel path (00a) writes to rate_inputs/;
-  # the legacy Tariff-ETRs path writes to tariff_etrs/. Prefer the former when present.
-  rate_inputs_dir <- file.path('output', scenario, 'rate_inputs')
-  tariff_etrs_dir <- if (dir.exists(rate_inputs_dir)) {
-    rate_inputs_dir
+  # Rate-derived inputs: select from config, NOT directory presence — a stale
+  # rate_inputs/ left over from an earlier run must not hijack a legacy scenario.
+  # The tracker-panel path (00a) writes rate_inputs/; the legacy path tariff_etrs/.
+  tariff_etrs_dir <- if (!is.null(inputs$model_params$rate_panel)) {
+    file.path('output', scenario, 'rate_inputs')
   } else {
     file.path('output', scenario, 'tariff_etrs')
   }

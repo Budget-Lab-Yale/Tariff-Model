@@ -156,7 +156,16 @@ functions, so it stands alone):
   `src/00a_prepare_rate_inputs.R` (delta + GTAP rollup + BEA rollup + `shocks.txt`, ported from
   `aggregate_countries_to_partners`/`write_bea_commodity_deltas`/`write_shock_commands`/`calc_delta`);
   vintaged resources under `resources/rate_aggregation/2024/`; `run_model.R` Step 0a wiring
-  (selected by a `rate_panel` block) and `01_load_inputs.R` repointed to `rate_inputs/`.
+  (selected by a `rate_panel` block); `00b_run_gtap.R` and `01_load_inputs.R` pick `rate_inputs/`
+  vs `tariff_etrs/` **from the `rate_panel` config**, not directory presence (so a stale
+  `rate_inputs/` can't hijack a legacy scenario).
+- **BEA mapping (layered).** The direct HS10→BEA crosswalk is keyed to an older HTS
+  statistical-suffix vintage than the 2024 weights, so ~3.4% of import value (pharma,
+  electronics, apparel…) has no exact 10-digit match — same 8-digit heading, different last-2
+  suffix. `rollup_bea` resolves via a precedence ladder: precise **HS10 (96.6%)** → **HS8 heading
+  (+2.8%, suffix-robust)** → **GTAP sector (+0.6%, coarse catch-all)** → 0% unmapped. Tier shares
+  are logged; a tariff change that resolves to *no* tier is a hard error (never fires on current
+  data). This replaces the earlier blanket hard-fail that made broad scenarios unrunnable.
 - **Deferred to cutover** — deleting `00_run_tariff_etrs.R` + `tariff_etrs_path`; dropping the
   census/HTS2 loads/writes (they self-disable now, since `00a` doesn't emit those files);
   `CLAUDE.md` update.
@@ -217,10 +226,10 @@ repo error philosophy: no `na.rm`, no `inner_join`, no preemptive `replace_na`):
   `assert_full_coverage` **stops** if any weighted `(hts10, cty_code)` lacks a scenario or
   baseline rate (catches an hts10/cty_code format or vintage mismatch that would otherwise
   silently understate the result — the failure mode an `inner_join` would have hidden).
-- **BEA coverage** — `rollup_bea` **stops** if any unmapped HS10 carries a *nonzero* tariff
-  change (a real change lost from the price model); benign zero-delta unmapped pairs (~3% of
-  import value) are dropped with a logged value. The one deliberate default that remains is
-  unmapped countries → ROW, which is by design (the partner mapping is a named-partner list).
+- **BEA coverage** — `rollup_bea` resolves every HS10 to a commodity via the HS10→HS8→GTAP
+  precedence ladder (above), logs the import value resolved per tier, and **stops** only if a
+  tariff change resolves to *no* tier (never fires on current data). The one deliberate default
+  that remains is unmapped countries → ROW, by design (the partner mapping is a named-partner list).
 
 Sanity checks on the outputs (the "vibes"):
 - `shocks.txt` shock magnitudes and the GTAP/BEA matrices are in sane ranges (e.g. China

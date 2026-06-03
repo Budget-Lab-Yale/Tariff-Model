@@ -92,7 +92,12 @@ load_aggregation_resources <- function() {
     select(cty_code, partner) %>%
     distinct()
 
-  # ---- HS10 -> BEA commodity crosswalk ----
+  # ---- BEA commodity maps: a precedence ladder (HS10 -> HS8 -> GTAP) ----
+  # The direct HS10->BEA crosswalk is keyed to an older HTS statistical-suffix vintage
+  # than the 2024 weights, so ~3.4% of import value (mostly pharma/electronics/apparel)
+  # has no exact 10-digit match — same 8-digit heading, different last-2-digit suffix.
+  # rollup_bea resolves BEA via: precise HS10, then the 8-digit heading (suffix-robust;
+  # the BEA commodity is stable within a heading), then the GTAP sector (coarse catch-all).
   bea_path <- file.path(RATE_AGG_RESOURCE_DIR, 'hs10_bea_crosswalk.csv')
   hs10_bea <- read_csv(bea_path, show_col_types = FALSE,
                        col_types = cols(hs10 = col_character(), bea_code = col_character())) %>%
@@ -100,7 +105,26 @@ load_aggregation_resources <- function() {
     # crosswalk rows with an empty bea_code are explicit non-mappings; treat as absent
     filter(!is.na(bea_code), bea_code != '')
 
-  return(list(weights = weights, partner_mapping = partner_mapping, hs10_bea = hs10_bea))
+  # HS8 (heading) -> BEA: modal commodity per heading (98.4% of headings are unambiguous;
+  # deterministic tiebreak: most rows, then lowest bea_code).
+  hs8_bea <- hs10_bea %>%
+    mutate(hs8 = substr(hts10, 1, 8)) %>%
+    count(hs8, bea_code, name = 'n') %>%
+    arrange(hs8, desc(n), bea_code) %>%
+    distinct(hs8, .keep_all = TRUE) %>%
+    select(hs8, bea_code)
+
+  # GTAP sector -> BEA (the crosswalk is uppercase; the weights' gtap_code is lowercase).
+  gtap_bea_path <- file.path(RATE_AGG_RESOURCE_DIR, 'gtap_bea_crosswalk.csv')
+  gtap_bea <- read_csv(gtap_bea_path, show_col_types = FALSE,
+                       col_types = cols(gtap_code = col_character(), bea_code = col_character())) %>%
+    transmute(gtap_code = tolower(gtap_code), bea_code) %>%
+    filter(!is.na(bea_code), bea_code != '') %>%
+    distinct(gtap_code, .keep_all = TRUE)
+
+  bea_maps <- list(hs10 = hs10_bea, hs8 = hs8_bea, gtap = gtap_bea)
+
+  return(list(weights = weights, partner_mapping = partner_mapping, bea_maps = bea_maps))
 }
 
 #' Stop if any import-weighted pair is missing a value in `col` (silent-drop guard)
@@ -180,32 +204,51 @@ rollup_gtap <- function(pair_frame) {
 
 #' Import-weighted rollup of a pair frame to BEA commodity (deltas only)
 #'
+#' Resolves each HS10 to a BEA commodity by a precedence ladder — precise HS10,
+#' then the 8-digit heading (robust to the stat-suffix vintage skew), then the GTAP
+#' sector (coarse catch-all) — so no traded value is silently dropped. The tier each
+#' pair used is logged for transparency, and anything resolving to NO tier while
+#' carrying a tariff change is a hard error (it would be lost from the price model).
+#'
 #' @param pair_frame Output of build_pair_frame()
-#' @param hs10_bea HS10 -> BEA crosswalk (hts10, bea_code)
+#' @param bea_maps List with $hs10 (hts10, bea_code), $hs8 (hs8, bea_code),
+#'   $gtap (gtap_code, bea_code)
 #'
 #' @return Tibble: bea_code, etr_delta (fraction), total_imports
-rollup_bea <- function(pair_frame, hs10_bea) {
+rollup_bea <- function(pair_frame, bea_maps) {
 
-  joined <- pair_frame %>% left_join(hs10_bea, by = 'hts10')
+  resolved <- pair_frame %>%
+    mutate(hs8 = substr(hts10, 1, 8)) %>%
+    left_join(bea_maps$hs10 %>% rename(bea_hs10 = bea_code), by = 'hts10') %>%
+    left_join(bea_maps$hs8  %>% rename(bea_hs8  = bea_code), by = 'hs8') %>%
+    left_join(bea_maps$gtap %>% rename(bea_gtap = bea_code), by = 'gtap_code') %>%
+    # precedence: precise HS10 -> heading -> GTAP sector. This is the intended ladder,
+    # not a fill that masks missingness — anything reaching no tier is caught below.
+    mutate(bea_code = coalesce(bea_hs10, bea_hs8, bea_gtap))
 
-  # ~3% of import value has no BEA commodity. Dropping a pair with NO tariff change is
-  # harmless; dropping one WITH a change silently understates tau_M — so fail loud
-  # only in that case, and log the benign (zero-delta) drops.
-  unmapped <- joined %>% filter(is.na(bea_code))
-  unmapped_changed <- unmapped %>% filter(delta != 0)
-  if (nrow(unmapped_changed) > 0) {
-    stop(sprintf(paste0('%d (hts10, cty_code) pairs carry a tariff change but have no BEA ',
-                        'commodity ($%.2fB) — these would be lost from the I-O price model. ',
-                        'Extend hs10_bea_crosswalk.csv. Sample hts10: %s'),
-                 nrow(unmapped_changed), sum(unmapped_changed$imports) / 1e9,
-                 paste(head(unique(unmapped_changed$hts10), 5), collapse = ', ')))
+  # Hard-fail backstop: a tariff change with no BEA home at ANY tier would be lost
+  # from the price model. (Effectively never fires — every weighted HS10 has a
+  # gtap_code and all GTAP sectors map — but guards against a future gap.)
+  unresolved_changed <- resolved %>% filter(is.na(bea_code), delta != 0)
+  if (nrow(unresolved_changed) > 0) {
+    stop(sprintf(paste0('%d (hts10, cty_code) pairs carry a tariff change but resolve to no BEA ',
+                        'commodity at any tier ($%.2fB) — would be lost from the I-O price model. ',
+                        'Sample hts10: %s'),
+                 nrow(unresolved_changed), sum(unresolved_changed$imports) / 1e9,
+                 paste(head(unique(unresolved_changed$hts10), 5), collapse = ', ')))
   }
-  if (nrow(unmapped) > 0) {
-    message(sprintf('  BEA rollup: %d unmapped pairs with no rate change dropped ($%.2fB)',
-                    nrow(unmapped), sum(unmapped$imports) / 1e9))
-  }
 
-  joined %>%
+  # Transparency: report how much import value used each tier (coarse-fallback share visible)
+  tiers <- resolved %>% summarise(
+    hs10 = sum(imports[!is.na(bea_hs10)]),
+    hs8  = sum(imports[is.na(bea_hs10) & !is.na(bea_hs8)]),
+    gtap = sum(imports[is.na(bea_hs10) & is.na(bea_hs8) & !is.na(bea_gtap)]),
+    none = sum(imports[is.na(bea_code)])
+  )
+  message(sprintf('  BEA mapping by tier ($B): HS10 %.1f | HS8 %.1f | GTAP %.1f | unmapped %.1f',
+                  tiers$hs10 / 1e9, tiers$hs8 / 1e9, tiers$gtap / 1e9, tiers$none / 1e9))
+
+  resolved %>%
     filter(!is.na(bea_code)) %>%
     group_by(bea_code) %>%
     summarise(
@@ -312,7 +355,7 @@ prepare_rate_inputs <- function(scenario) {
     pairs <- build_pair_frame(slice, baseline_slice, resources)
 
     gtap_long <- rollup_gtap(pairs)
-    bea_long  <- rollup_bea(pairs, resources$hs10_bea)
+    bea_long  <- rollup_bea(pairs, resources$bea_maps)
 
     gtap_by_date[[as.character(d)]] <- gtap_long %>% mutate(date = d)
     bea_by_date[[as.character(d)]]  <- bea_long  %>% mutate(date = d)
