@@ -47,22 +47,100 @@ RATE_AGG_RESOURCE_DIR <- 'resources/rate_aggregation/2024'
 # Resource loading
 # =============================================================================
 
+#' Attach gtap_code to a (hts10, cty_code, imports) weight frame
+#'
+#' The tracker weight base carries no gtap_code. Resolve it from the model's
+#' hs10_gtap_crosswalk via a precedence ladder — exact HS10, then the modal GTAP
+#' sector of the 8- then 6-digit heading (robust to any residual suffix gap; a
+#' GTAP sector is stable within a heading). Fails loud if any code resolves to no
+#' tier — an unmapped weight would silently drop traded value from the rollup.
+#'
+#' @param weights Tibble with hts10, cty_code, imports
+#' @param resource_dir Directory holding hs10_gtap_crosswalk.csv
+#' @return weights with a non-NA gtap_code column added
+attach_gtap_code <- function(weights, resource_dir) {
+
+  xw <- read_csv(file.path(resource_dir, 'hs10_gtap_crosswalk.csv'),
+                 show_col_types = FALSE,
+                 col_types = cols(hs10 = col_character(), gtap_code = col_character())) %>%
+    mutate(hs10 = as.character(hs10))
+
+  hs10_map <- xw %>% distinct(hts10 = hs10, gtap_hs10 = gtap_code)
+  modal_at <- function(prefix_len, col) {
+    xw %>%
+      mutate(prefix = substr(hs10, 1, prefix_len)) %>%
+      count(prefix, gtap_code, name = 'n') %>%
+      arrange(prefix, desc(n), gtap_code) %>%
+      distinct(prefix, .keep_all = TRUE) %>%
+      transmute(prefix, !!col := gtap_code)
+  }
+  hs8_map <- modal_at(8, 'gtap_hs8')
+  hs6_map <- modal_at(6, 'gtap_hs6')
+
+  out <- weights %>%
+    mutate(hs8 = substr(hts10, 1, 8), hs6 = substr(hts10, 1, 6)) %>%
+    left_join(hs10_map, by = 'hts10') %>%
+    left_join(hs8_map, by = c('hs8' = 'prefix')) %>%
+    left_join(hs6_map, by = c('hs6' = 'prefix')) %>%
+    # The crosswalk stores gtap_code UPPERCASE; the rest of the model (SECTOR_ORDER,
+    # gtap_bea_crosswalk, rollup_gtap) keys on lowercase. Match it.
+    mutate(gtap_code = tolower(coalesce(gtap_hs10, gtap_hs8, gtap_hs6)))
+
+  unresolved <- out %>% filter(is.na(gtap_code))
+  if (nrow(unresolved) > 0) {
+    stop(sprintf('%d weight rows ($%.2fB) resolve to no gtap_code at HS10/HS8/HS6 — would drop traded value. Sample hts10: %s',
+                 nrow(unresolved), sum(unresolved$imports) / 1e9,
+                 paste(head(unique(unresolved$hts10), 5), collapse = ', ')))
+  }
+
+  out %>% select(hts10, cty_code, gtap_code, imports)
+}
+
 #' Load the HS10xcountry import weights (with GTAP sector) and partner mapping
 #'
+#' Weight source, in precedence order:
+#'   1. The tracker bundle's weight base, if published (weights/import_weights_hs10_country.*).
+#'      Keyed to the SAME HS10 vintage as the rate panel, so the rollup join is exact
+#'      by construction (see docs/tariff_rate_tracker_weights_request.md). Carries no
+#'      gtap_code — we attach it from hs10_gtap_crosswalk.csv (HS10, then HS8/HS6 modal).
+#'   2. Else the legacy local 2024 file, which already carries gtap_code but is on a
+#'      different HS10 stat-suffix vintage than the tracker panel (the source of the
+#'      ~5% unmatched value the prefix-fallback ladder papers over).
+#'
+#' @param rate_panel The `rate_panel:` config block (used to locate the bundle weights)
 #' @return List with $weights (hts10, cty_code, gtap_code, imports) and
 #'   $partner_mapping (cty_code, partner) and $hs10_bea (hts10, bea_code)
-load_aggregation_resources <- function() {
+load_aggregation_resources <- function(rate_panel = NULL) {
 
-  # ---- import weights (hts10 x cty_code x gtap_code, 2024 Census flows) ----
   # Resource files use `hs10`; the canonical panel uses `hts10` — rename on load.
-  weights_path <- file.path(RATE_AGG_RESOURCE_DIR, 'import_weights_hs10_country_2024.rds')
-  if (!file.exists(weights_path)) {
-    stop('Import weights not found: ', weights_path)
+  bundle_weights <- if (!is.null(rate_panel)) resolve_weights_path(rate_panel) else NULL
+
+  if (!is.null(bundle_weights)) {
+    message('  Import weights: tracker bundle ', bundle_weights)
+    raw_w <- if (str_detect(bundle_weights, '\\.parquet$')) {
+      arrow::read_parquet(bundle_weights)
+    } else {
+      read_csv(bundle_weights, show_col_types = FALSE,
+               col_types = cols(hts10 = col_character(), country = col_character(),
+                                cty_code = col_character()))
+    }
+    cty_col <- if ('cty_code' %in% names(raw_w)) 'cty_code' else 'country'
+    weights <- raw_w %>%
+      transmute(hts10 = as.character(hts10),
+                cty_code = as.character(.data[[cty_col]]),
+                imports = as.numeric(imports)) %>%
+      attach_gtap_code(RATE_AGG_RESOURCE_DIR)
+  } else {
+    weights_path <- file.path(RATE_AGG_RESOURCE_DIR, 'import_weights_hs10_country_2024.rds')
+    if (!file.exists(weights_path)) {
+      stop('Import weights not found: ', weights_path)
+    }
+    message('  Import weights: legacy local ', weights_path)
+    weights <- as_tibble(readRDS(weights_path)) %>%
+      rename(hts10 = hs10) %>%
+      mutate(hts10 = as.character(hts10), cty_code = as.character(cty_code)) %>%
+      select(hts10, cty_code, gtap_code, imports)
   }
-  weights <- as_tibble(readRDS(weights_path)) %>%
-    rename(hts10 = hs10) %>%
-    mutate(hts10 = as.character(hts10), cty_code = as.character(cty_code)) %>%
-    select(hts10, cty_code, gtap_code, imports)
 
   # Fail loud on degraded weights — these would silently corrupt every rollup.
   if (anyNA(weights$hts10) || anyNA(weights$cty_code)) {
@@ -145,6 +223,47 @@ assert_full_coverage <- function(frame, col, label) {
   invisible(NULL)
 }
 
+apply_prefix_rate_fallback <- function(frame, rate_slice, col, label, prefix_len) {
+  miss <- is.na(frame[[col]])
+  if (!any(miss)) return(frame)
+
+  prefix_of <- function(x) if (prefix_len > 0) substr(x, 1, prefix_len) else rep('', length(x))
+  prefix_col <- if (prefix_len > 0) paste0('hs', prefix_len) else 'country_mean'
+
+  # Restrict to the prefixes that actually need filling BEFORE grouping. With a
+  # vintage-aligned weight base only ~1,800 rows miss, so this turns a full-slice
+  # group-by (~1.5M groups over ~5M rows — minutes under memory pressure) into one
+  # cheap filter + a tiny aggregation. Filtered rows all carry a real rate, so no
+  # empty groups.
+  need_prefix <- unique(prefix_of(frame$hts10[miss]))
+  fallback <- rate_slice %>%
+    mutate(prefix = prefix_of(hts10)) %>%
+    filter(prefix %in% need_prefix) %>%
+    group_by(prefix, cty_code) %>%
+    summarise(
+      fallback_rate = mean(rate_total),
+      min_rate = min(rate_total),
+      max_rate = max(rate_total),
+      .groups = 'drop'
+    )
+
+  out <- frame %>%
+    mutate(prefix = prefix_of(hts10)) %>%
+    left_join(fallback, by = c('prefix', 'cty_code'))
+
+  filled <- is.na(out[[col]]) & !is.na(out$fallback_rate)
+  if (any(filled)) {
+    ambiguous <- filled & out$min_rate != out$max_rate
+    message(sprintf(paste0('  %s rate fallback (%s): filled %d rows ($%.2fB); ',
+                           '%d rows use headings with non-constant rates'),
+                    toupper(prefix_col), label, sum(filled), sum(out$imports[filled]) / 1e9,
+                    sum(ambiguous)))
+    out[[col]] <- if_else(is.na(out[[col]]), out$fallback_rate, out[[col]])
+  }
+
+  out %>% select(-prefix, -fallback_rate, -min_rate, -max_rate)
+}
+
 # =============================================================================
 # Core aggregation (ported from tariff-etrs)
 # =============================================================================
@@ -168,6 +287,18 @@ build_pair_frame <- function(scenario_slice, baseline_slice, resources) {
   frame <- resources$weights %>%
     left_join(scenario_levels, by = c('hts10', 'cty_code')) %>%
     left_join(baseline_levels, by = c('hts10', 'cty_code'))
+
+  frame <- frame %>%
+    apply_prefix_rate_fallback(scenario_slice, 'level', 'scenario', 8) %>%
+    apply_prefix_rate_fallback(baseline_slice, 'base_level', 'baseline', 8) %>%
+    apply_prefix_rate_fallback(scenario_slice, 'level', 'scenario', 6) %>%
+    apply_prefix_rate_fallback(baseline_slice, 'base_level', 'baseline', 6) %>%
+    apply_prefix_rate_fallback(scenario_slice, 'level', 'scenario', 4) %>%
+    apply_prefix_rate_fallback(baseline_slice, 'base_level', 'baseline', 4) %>%
+    apply_prefix_rate_fallback(scenario_slice, 'level', 'scenario', 2) %>%
+    apply_prefix_rate_fallback(baseline_slice, 'base_level', 'baseline', 2) %>%
+    apply_prefix_rate_fallback(scenario_slice, 'level', 'scenario', 0) %>%
+    apply_prefix_rate_fallback(baseline_slice, 'base_level', 'baseline', 0)
 
   assert_full_coverage(frame, 'level', 'scenario')
   assert_full_coverage(frame, 'base_level', 'baseline')
@@ -332,13 +463,33 @@ prepare_rate_inputs <- function(scenario) {
   dir.create(baseline_dir, showWarnings = FALSE, recursive = TRUE)
 
   # ---- inputs ----
-  resources <- load_aggregation_resources()
-  scenario_panel <- read_rate_panel(rate_panel, rate_panel$tracker_scenario)
-  actual_panel   <- read_rate_panel(rate_panel, 'actual')
-  baseline_slice <- slice_panel_at(actual_panel, rate_panel$baseline_date)
+  resources <- load_aggregation_resources(rate_panel)
+  use_snapshots <- has_snapshot_series(rate_panel, rate_panel$tracker_scenario)
+
+  if (use_snapshots) {
+    baseline_slice <- read_rate_snapshot(rate_panel, 'actual', rate_panel$baseline_date)
+    snapshot_dates <- list_rate_snapshot_dates(rate_panel, rate_panel$tracker_scenario)
+  } else {
+    scenario_panel <- read_rate_panel(rate_panel, rate_panel$tracker_scenario)
+    actual_panel   <- if (identical(rate_panel$tracker_scenario, 'actual')) {
+      scenario_panel
+    } else {
+      read_rate_panel(rate_panel, 'actual')
+    }
+    baseline_slice <- slice_panel_at(actual_panel, rate_panel$baseline_date)
+    snapshot_dates <- sort(unique(scenario_panel$valid_from))
+  }
+  if (!is.null(rate_panel$snapshot_dates)) {
+    requested_dates <- as.Date(unlist(rate_panel$snapshot_dates))
+    missing_dates <- setdiff(requested_dates, snapshot_dates)
+    if (length(missing_dates) > 0) {
+      stop('rate_panel.snapshot_dates not found in scenario panel: ',
+           paste(missing_dates, collapse = ', '))
+    }
+    snapshot_dates <- sort(unique(requested_dates))
+  }
 
   # ---- snapshot dates = scenario interval starts; reference date must be one ----
-  snapshot_dates <- sort(unique(scenario_panel$valid_from))
   time_varying <- length(snapshot_dates) > 1
   if (!gtap_reference_date %in% snapshot_dates) {
     stop('gtap_reference_date (', gtap_reference_date, ') is not an interval start in the ',
@@ -351,7 +502,11 @@ prepare_rate_inputs <- function(scenario) {
   ref_partner_gtap <- NULL
 
   for (d in as.list(snapshot_dates)) {
-    slice <- slice_panel_at(scenario_panel, d)
+    slice <- if (use_snapshots) {
+      read_rate_snapshot(rate_panel, rate_panel$tracker_scenario, d)
+    } else {
+      slice_panel_at(scenario_panel, d)
+    }
     pairs <- build_pair_frame(slice, baseline_slice, resources)
 
     gtap_long <- rollup_gtap(pairs)

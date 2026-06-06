@@ -56,6 +56,74 @@ resolve_panel_path <- function(rate_panel, series) {
   return(hit[1])
 }
 
+resolve_series_dir <- function(rate_panel, series) {
+  root <- rate_panel$root
+  if (is.null(root)) {
+    stop('rate_panel.root not set in model_params.yaml')
+  }
+
+  vintage_dir <- file.path(root, rate_panel$vintage %||% 'latest')
+  if (series == 'actual') {
+    file.path(vintage_dir, 'actual')
+  } else {
+    file.path(vintage_dir, 'scenarios', series)
+  }
+}
+
+snapshot_dir <- function(rate_panel, series) {
+  file.path(resolve_series_dir(rate_panel, series), 'snapshots')
+}
+
+#' Resolve the bundle's import-weight base, if the tracker published one
+#'
+#' The weight base is vintage-specific but NOT series-specific (same import flows
+#' for actual + every scenario), so it lives at the vintage root, beside actual/.
+#' See docs/tariff_rate_tracker_weights_request.md for the contract.
+#'
+#' @return Path to import_weights_hs10_country.{parquet,csv.gz}, or NULL if absent
+resolve_weights_path <- function(rate_panel) {
+  root <- rate_panel$root
+  if (is.null(root)) return(NULL)
+  wdir <- file.path(root, rate_panel$vintage %||% 'latest', 'weights')
+  candidates <- file.path(wdir, c('import_weights_hs10_country.parquet',
+                                  'import_weights_hs10_country.csv.gz'))
+  hit <- candidates[file.exists(candidates)]
+  if (length(hit) == 0) return(NULL)
+  return(hit[1])
+}
+
+has_snapshot_series <- function(rate_panel, series) {
+  dir.exists(snapshot_dir(rate_panel, series))
+}
+
+list_rate_snapshot_dates <- function(rate_panel, series) {
+  snap_dir <- snapshot_dir(rate_panel, series)
+  if (!dir.exists(snap_dir)) {
+    stop('No snapshot directory found for series "', series, '": ', snap_dir)
+  }
+
+  dirs <- list.dirs(snap_dir, recursive = FALSE, full.names = FALSE)
+  dates <- str_match(dirs, '^valid_from=(\\d{4}-\\d{2}-\\d{2})$')[, 2]
+  dates <- as.Date(dates[!is.na(dates)])
+  if (length(dates) == 0) {
+    stop('No valid_from=YYYY-MM-DD snapshot directories found in: ', snap_dir)
+  }
+
+  sort(dates)
+}
+
+resolve_snapshot_path <- function(rate_panel, series, date) {
+  date <- as.Date(date)
+  path <- file.path(snapshot_dir(rate_panel, series),
+                    paste0('valid_from=', date),
+                    'rates.parquet')
+  if (!file.exists(path)) {
+    stop('No rate snapshot found for series "', series, '" at ', date,
+         '\n  Looked for: ', path)
+  }
+  path
+}
+
 #' Read a rate panel file (parquet or rds) into a tibble
 #'
 #' @param path File path ending in .parquet or .rds
@@ -66,7 +134,16 @@ read_panel_file <- function(path) {
     if (!requireNamespace('arrow', quietly = TRUE)) {
       stop('Reading parquet rate panels requires the `arrow` package: ', path)
     }
-    return(arrow::read_parquet(path))
+    ds <- arrow::open_dataset(path)
+    raw_names <- names(ds)
+    keep_cols <- c(
+      'hts10', 'cty_code', 'country',
+      'rate_total', 'total_rate',
+      raw_names[str_detect(raw_names, '^rate_[a-z0-9_]+$')],
+      'valid_from', 'valid_until', 'effective_date'
+    )
+    keep_cols <- intersect(unique(keep_cols), raw_names)
+    return(arrow::read_parquet(path, col_select = all_of(keep_cols)))
   }
   return(as_tibble(readRDS(path)))
 }
@@ -177,6 +254,18 @@ read_rate_panel <- function(rate_panel, series) {
   return(panel)
 }
 
+read_rate_snapshot <- function(rate_panel, series, date) {
+  path <- resolve_snapshot_path(rate_panel, series, date)
+  message(sprintf('  Reading rate snapshot [%s @ %s]: %s', series, as.Date(date), path))
+  raw <- read_panel_file(path)
+  panel <- normalize_panel(raw, interval_end = rate_panel$interval_end %||% 'inclusive')
+  sliced <- slice_panel_at(panel, date)
+  message(sprintf('    %s rows, %d countries',
+                  format(nrow(sliced), big.mark = ','),
+                  length(unique(sliced$cty_code))))
+  sliced
+}
+
 #' Slice a canonical interval panel to a static snapshot at one date
 #'
 #' Half-open semantics: the row in effect on `date` satisfies
@@ -193,9 +282,12 @@ slice_panel_at <- function(panel, date) {
     filter(valid_from <= date,
            is.na(valid_until) | date < valid_until)
 
-  # Each (hts10, cty_code) should be covered by exactly one interval
-  dups <- sliced %>% count(hts10, cty_code) %>% filter(n > 1)
-  if (nrow(dups) > 0) {
+  # Each (hts10, cty_code) should be covered by exactly one interval. Use vctrs for a
+  # C-level duplicate scan — a single-revision snapshot is ~5M rows where every row is
+  # its own (hts10, cty_code) group, and dplyr count()/group_by on that is O(minutes).
+  # Only pay for the detailed offender list if a duplicate actually exists (rare).
+  if (vctrs::vec_duplicate_any(sliced[c('hts10', 'cty_code')])) {
+    dups <- sliced %>% count(hts10, cty_code) %>% filter(n > 1)
     stop(sprintf('Overlapping intervals: %d (hts10, cty_code) pairs covered twice at %s',
                  nrow(dups), date))
   }
