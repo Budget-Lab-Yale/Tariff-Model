@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How time works in this model</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1b19; --muted:#5c584f; --faint:#8b867d;
+    --line:#e7e3db; --navy:#23335a; --navy-soft:#eef1f7; --code:#2b2a27;
+    --warn:#b45309; --warn-bg:#fbf1e3; --ok:#1f7a4d;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto}
+  header.top{padding:52px 0 18px;border-bottom:2px solid var(--ink)}
+  .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--navy);font-weight:650}
+  h1{font-size:30px;line-height:1.15;margin:.3em 0 .15em;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:15px;font-style:italic;max-width:64ch}
+  h2{font-size:20px;margin:44px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+  p{margin:.6em 0}
+  a{color:var(--navy)}
+  code{font-family:var(--mono);font-size:.87em;background:#f1efe9;padding:1px 5px;border-radius:5px;color:var(--code);word-break:break-word}
+  ul{margin:.5em 0;padding-left:22px} li{margin:.4em 0}
+  pre{background:#1f1e1c;color:#e9e6df;border-radius:11px;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+  pre .c{color:#9aa0a6}
+  .tldr{background:var(--navy-soft);border-left:4px solid var(--navy);border-radius:0 10px 10px 0;padding:14px 18px;margin:20px 0}
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:16px 0}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:600px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f4f2ec;font-weight:650;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  tbody tr:last-child td{border-bottom:none}
+  td code,th code{font-size:.9em}
+  .note{background:var(--warn-bg);border-left:4px solid var(--warn);border-radius:0 10px 10px 0;padding:12px 16px;margin:16px 0;font-size:14px}
+  .ok{color:var(--ok);font-weight:650}
+  .foot{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="kicker">Tariff Model · Reference</div>
+  <h1>How time works in this model</h1>
+  <p class="lede">A single-page map of the model's temporal logic — what "starts" when, which knob controls it, and which outputs use the full time path vs. a single snapshot. Written because this logic is currently spread across five files with no one place to see it.</p>
+</header>
+
+<div class="tldr">
+  <p style="margin-top:0"><b>TL;DR.</b> The model <b>starts at the beginning of 2025</b> and walks through the <b>real historical tariff path</b> day by day. Tariff rates are carried as a daily time series of <i>increases over a pinned pre-tariff baseline</i> (~2.93%, the early-2025 MFN average). That time path drives <b>revenue</b> and <b>macro</b>. A <b>single date</b> (<code>gtap_reference_date</code>, e.g. <code>2026-09-29</code>) is sliced out and fed to the heavy structural model, so <b>prices, sector output, and foreign GDP</b> are "long-run, as if that one date's tariffs were permanent."</p>
+  <p style="margin-bottom:0">Two consequences that trip people up:</p>
+  <ul style="margin-bottom:0">
+    <li><b>Macro reports 2025</b> (GDP 2025 Q4-Q4 etc.); <b>revenue does not</b> — the revenue total is the FY2026–FY2035 budget window, so Jan–Sep 2025 collections (which fall in FY2025) are excluded. Deliberate convention, not a bug, and a one-line change.</li>
+    <li><b><code>eta</code> (the noncompliance factor) is time-invariant</b> — one number per (partner-group × sector), the same at every date.</li>
+  </ul>
+</div>
+
+<h2>The actual timeline (from a real <code>2026-04-06</code> run)</h2>
+<p>The rate schedule is the daily <code>etr_level</code> series. For <code>2026-04-06</code> it spans <b>2025-01-26 → 2026-12-31</b> (340 days of 2025, 365 of 2026):</p>
+<pre>2025-01-26   2.93%   <span class="c">baseline (pre-tariff MFN avg) — the "zero" every delta is measured from</span>
+2025-01-27   4.27%   <span class="c">first China IEEPA tariff</span>
+2025-02-04   6.30%
+2025-04-02  12.23%   <span class="c">"Liberation Day" reciprocal tariffs</span>
+2025-04-05  19.72%   <span class="c">2025 peak</span>
+2025-04-14  11.63%   <span class="c">partial rollback</span>
+   ... <span class="c">(tracks every 2025 move)</span> ...
+2025-11-15  14.84%
+2026-04-06  11.58%
+2026-09-29   9.40%   <span class="c">last policy change — held flat from here on</span>
+2026-12-31   9.40%   <span class="c">schedule horizon (extrapolated)</span></pre>
+<p>Beyond 2026-12-31 the final rate (2026-09-29's level) is <b>held constant forward through FY2035</b> for revenue (see <code>compute_fy_weighted_etr_increase</code>, "After the last date: last etr_increase continues"). The scenario <i>name</i> ("2026-04-06") is a vintage label, not a start date.</p>
+
+<h2>The temporal knobs (what controls what, and where)</h2>
+<div class="tw">
+<table>
+<thead><tr><th>Knob</th><th>Lives in</th><th>What it controls</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td><code>baseline_date</code></td><td><code>model_params.yaml</code> → <code>rate_panel:</code> (new path)</td><td>The pinned pre-tariff snapshot every rate is differenced against (the delta denominator, ~2.93%).</td><td><code>2025-01-01</code></td></tr>
+<tr><td>the rate schedule (<code>etr_increase_by_date</code>)</td><td>produced upstream; the full daily ETR path</td><td>The historical + scenario tariff path. Drives revenue (day-weighted) and macro (sampled).</td><td>2025-01-26 → 2026-12-31</td></tr>
+<tr><td><code>gtap_reference_date</code></td><td><code>model_params.yaml</code></td><td>The <b>single</b> date whose tariff snapshot is fed to GTAP + the I-O price model. Everything "structural / long-run" is as-of this date.</td><td><code>2026-09-29</code></td></tr>
+<tr><td><code>usmm_dates</code></td><td><code>model_params.yaml</code></td><td>The handful of dates the macro decomposition samples the path at (keeps it to a few components).</td><td><code>[2026-02-24, 04-06, 07-24, 09-29]</code></td></tr>
+<tr><td><code>temp_component_dates</code></td><td><code>model_params.yaml</code></td><td>The one window <code>[onset, offset]</code> treated as a <i>temporary</i> tariff (uses the temp IRF) instead of a permanent step.</td><td><code>[2026-02-24, 2026-07-24]</code></td></tr>
+<tr><td>IRF onset quarters</td><td><code>05a_usmm_surrogate.R</code> constants</td><td>When each macro impulse-response family starts in calendar time. <b>perm: 2025Q2</b> (<code>USMM_SHOCK_QUARTER=6</code>); <b>temp: 2026Q1</b> (<code>USMM_TEMP_SHOCK_QUARTER=9</code>).</td><td>(fixed quarters)</td></tr>
+<tr><td>revenue FY window</td><td><code>04_calculate_revenue.R:246</code></td><td>Which fiscal years enter the headline total.</td><td><code>FY2026–FY2035</code></td></tr>
+</tbody>
+</table>
+</div>
+<div class="note">US fiscal year convention everywhere: <b>FY<i>N</i> = Oct 1 of <i>N−1</i> → Sep 30 of <i>N</i></b>. So FY2026 = Oct 2025 → Sep 2026. Oct–Dec 2025 tariffs are FY2026; Jan–Sep 2025 are FY2025.</div>
+
+<h2>Which outputs use the full time path vs. the single snapshot</h2>
+<p>This is the split that causes the most confusion. <b>Not every output sees the whole schedule.</b></p>
+<div class="tw">
+<table>
+<thead><tr><th>Output block</th><th>Time basis</th></tr></thead>
+<tbody>
+<tr><td><b>Conventional revenue</b></td><td><b>Full daily path</b>, day-weighted per fiscal year. (The GTAP behavioral <i>level</i> — the substitution/quantity response — comes from the single <code>gtap_reference_date</code> solve, then is scaled across years by the time path.)</td></tr>
+<tr><td><b>Macro</b> (GDP, unemployment, PCE, payroll, fed funds)</td><td><b>Full path</b>, sampled at <code>usmm_dates</code>, decomposed into permanent + temporary + refund impulses.</td></tr>
+<tr><td><b>Dynamic revenue</b></td><td>Blends the macro (time-path) and GTAP (reference-date) responses over 16 quarters.</td></tr>
+<tr><td><b>Prices</b> (pre-sub, PE post-sub, GE)</td><td><b>Single <code>gtap_reference_date</code> snapshot</b> — long-run, as-if-permanent.</td></tr>
+<tr><td><b>Sector output</b></td><td><b>Single <code>gtap_reference_date</code> snapshot.</b></td></tr>
+<tr><td><b>Foreign GDP</b></td><td><b>Single <code>gtap_reference_date</code> snapshot</b> (long-run GE).</td></tr>
+<tr><td><b>Distribution</b></td><td>Derived from the price snapshot.</td></tr>
+</tbody>
+</table>
+</div>
+<p>So: a price effect of "X%" means "the long-run consumer price impact if the 2026-09-29 tariff schedule were permanent" — <i>not</i> an average over 2025–2026. Revenue and macro, by contrast, integrate the whole bumpy path.</p>
+
+<h2>The 2025 question, precisely</h2>
+<ul>
+<li><b>Rate schedule:</b> includes all of 2025 (starts 2025-01-26). <span class="ok">✔</span></li>
+<li><b>Macro:</b> responds from 2025Q2; the model reports GDP/U-rate/PCE for 2025 Q4-Q4. <span class="ok">✔</span></li>
+<li><b>Revenue:</b> the CBO baseline file <i>has</i> FY2025, and the code <i>computes</i> FY2025 revenue — but the final total is filtered to <code>fiscal_year &gt;= 2026</code>, so FY2025 (≈ the Jan–Sep 2025 tariff collections) is <b>dropped</b> from the headline. This is the standard forward-looking budget-window convention.
+  <ul><li>To <b>include FY2025</b>: remove the <code>&gt;= 2026</code> floor at <code>04_calculate_revenue.R:246</code>. FY2026 already includes the Oct–Dec 2025 collections regardless.</li></ul>
+</li>
+</ul>
+
+<h2>eta (noncompliance) and time</h2>
+<p><code>eta</code> is <b>time-invariant</b>: <code>eta_by_partner_gtap.csv</code> is keyed by <code>(eta_group, gtap_code)</code> only — no date. The same haircut applies in 2025 and 2026.</p>
+<p>It is, however, <b>per-sector</b>. Because the model tariffs <i>different products on different dates</i>, the import-weighted <i>average</i> haircut across all currently-tariffed goods drifts over time even though no single sector's <code>eta</code> changes. (This is the only mechanism by which the noncompliance-adjusted rate path can have a different <i>shape</i> than the statutory path.)</p>
+<p><code>eta</code> is only active when a scenario supplies a granular eta file (<code>noncompliance_active = TRUE</code>, the new rate-panel scenarios). Legacy <code>tariff_etrs</code> scenarios (e.g. <code>2026-04-06</code>) run with <code>eta = 1</code> (statutory = adjusted) on the structural side and apply only the flat <code>compliance_effect</code> (0.10) haircut to revenue.</p>
+
+<h2>Known time-related gotchas</h2>
+<p>(See the model review for detail.)</p>
+<ul>
+<li><b>IRF onset split</b> (<code>05a</code>): perm and temp impulse-responses start in different quarters (2025Q2 vs 2026Q1). Fixed; a <code>validate_irf_onsets()</code> assertion now hard-stops if a re-extracted IRF vintage breaks the assumption.</li>
+<li><b>FY-window edge</b> (<code>04_calculate_revenue.R:64-71</code>): if a scenario's <i>first</i> tariff date is <i>after</i> a budget-window FY start, the pre-policy days wrongly get the first regime's rate instead of 0. Does <b>not</b> affect schedules that start in early 2025 (like <code>2026-04-06</code>); does affect scenarios whose schedule starts at 2026-01-01.</li>
+<li><b>Daily-output horizon</b> (<code>11_write_outputs.R:464</code>): the daily ETR CSV is hardcoded to end 2026-12-31; 2027+ policy dates would be silently truncated.</li>
+</ul>
+
+<p class="foot">Companion to <code>docs/how_time_works.md</code>. All facts verified against the code and a real <code>2026-04-06</code> run.</p>
+</div>
+</body>
+</html>
