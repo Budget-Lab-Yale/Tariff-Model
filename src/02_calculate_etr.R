@@ -435,6 +435,7 @@ calculate_etr <- function(inputs) {
   if (isTRUE(inputs$is_time_varying)) {
     message('  Computing per-date weighted ETRs for time-varying scenario...')
 
+    # (a) applied-statutory per-date weighted ETRs
     per_date_etrs <- calculate_per_date_weighted_etrs(
       inputs$etr_matrix_by_date,
       inputs$etr_dates,
@@ -442,9 +443,29 @@ calculate_etr <- function(inputs) {
       import_baseline_dollars
     )
 
-    # Reference date weighted ETR
+    # (b) eta'-adjusted per-date weighted ETRs (baseline-weighted). Equals (a)
+    # when noncompliance is inactive (etr_matrix_by_date_b == etr_matrix_by_date).
+    per_date_etrs_b <- calculate_per_date_weighted_etrs(
+      inputs$etr_matrix_by_date_b,
+      inputs$etr_dates,
+      viws_baseline,
+      import_baseline_dollars
+    )
+
     ref_date <- inputs$gtap_reference_date
-    ref_etr <- per_date_etrs %>%
+
+    # Revenue time profile: the GTAP etr_increase anchor (inputs$etr_increase, the
+    # mtax of the reference-date GTAP run) is shocked with the (b) eta'-adjusted
+    # rates when noncompliance is active, so its cross-date profile must track the
+    # (b) effective-rate path -- not the (a) applied-statutory path -- otherwise a
+    # (b) level is scaled by an (a) shape (zero only when eta' is uniform across the
+    # tariffed mix). (a) and (b) coincide when noncompliance is inactive, so legacy
+    # runs are bit-for-bit unchanged.
+    profile_etrs <- if (isTRUE(inputs$noncompliance_active)) per_date_etrs_b else per_date_etrs
+    profile_label <- if (isTRUE(inputs$noncompliance_active)) 'b' else 'a'
+
+    # Reference date weighted ETR (on the same profile that scales the anchor)
+    ref_etr <- profile_etrs %>%
       filter(date == ref_date) %>%
       pull(weighted_etr)
 
@@ -454,21 +475,21 @@ calculate_etr <- function(inputs) {
 
     # Scale GTAP etr_increase proportionally by each date's weighted ETR
     # (post-sub, for revenue calculations)
-    etr_increase_by_date <- per_date_etrs %>%
+    etr_increase_by_date <- profile_etrs %>%
       mutate(
         etr_increase = etr_increase * (weighted_etr / ref_etr)
       ) %>%
       select(date, etr_increase)
 
-    message(sprintf('  Scaled etr_increase for %d dates (ref=%.4f%%)',
-                    nrow(etr_increase_by_date), ref_etr))
+    message(sprintf('  Scaled etr_increase for %d dates (ref=%.4f%%, profile=%s)',
+                    nrow(etr_increase_by_date), ref_etr, profile_label))
     for (i in seq_len(nrow(etr_increase_by_date))) {
       message(sprintf('    %s: etr_increase=%.4f',
                       etr_increase_by_date$date[i],
                       etr_increase_by_date$etr_increase[i]))
     }
 
-    # Pre-sub per-date ETR increases (raw from Tariff-ETRs, for USMM)
+    # Pre-sub per-date ETR increases (raw, for USMM)
     presub_etr_increase_by_date <- per_date_etrs %>%
       mutate(etr_increase = weighted_etr / 100) %>%
       select(date, etr_increase)
@@ -481,12 +502,6 @@ calculate_etr <- function(inputs) {
     }
 
     # (b) per-date eta'-adjusted increases (for USMM); baseline-weighted
-    per_date_etrs_b <- calculate_per_date_weighted_etrs(
-      inputs$etr_matrix_by_date_b,
-      inputs$etr_dates,
-      viws_baseline,
-      import_baseline_dollars
-    )
     b_etr_increase_by_date <- per_date_etrs_b %>%
       mutate(etr_increase = weighted_etr / 100) %>%
       select(date, etr_increase)
