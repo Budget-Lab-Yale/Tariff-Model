@@ -1,0 +1,35 @@
+# =============================================================================
+# adcvd_collected.csv — INTERIM AD/CVD cash deposits for the collected-side strip
+# =============================================================================
+# Built 2026-06-10 (see docs/open_questions.md #1 for the source research).
+# APPROXIMATE BY CONSTRUCTION — replace when a recent case-level Appendix A
+# arrives from CBP (Office of Trade: ADCVDISSUES-HQ@cbp.dhs.gov, or FOIA).
+#
+# LEVEL: $2.0B/yr interim rate, prorated to the 10-month in-scope window
+#   (Jun-2025..Mar-2026) = $1.667B total. Anchors: FY2020 official collections
+#   $1.77B ("AD/CVD: Collection of Outstanding Claims", FY2021 report to
+#   Congress, dhs.gov, Oct-2021 — the latest official aggregate anywhere);
+#   FY2019 $1.9B. Rounded up modestly for the growth in orders in force
+#   (~503 FY2019 -> ~700 by 2024; FY2024 petition surge), partially offset by
+#   lower China subject-import volumes under 301/IEEPA.
+#
+# PARTNER SPLIT: FY2019 shares of cash deposits collected BY CASE, parsed from
+#   Appendix A of CBP's "AD/CVD Enforcement Actions and Compliance Initiatives:
+#   FY 2019" report to Congress (dhs.gov; 431 cases, parse total $1.969B vs
+#   $1.9B stated in the report). Shares: Canada 46.5% (softwood-lumber
+#   cluster), China 18.9%, S. Korea 13.2%, ROW 9.7%, Mexico 7.9%, EU 3.0%,
+#   Japan 0.9%; UK ~0 (dropped). Caveat: 2025 softwood deposit rates roughly
+#   doubled, so the true Canada share today is likely HIGHER — the partner
+#   split only redistributes (Treasury-only branch), it does not move the
+#   aggregate strip.
+#
+# year_month blank -> spread across the in-scope window by import value;
+# hs2 blank -> spread across the partner's chapters by import value.
+partner_group,year_month,hs2,adcvd_usd
+Canada,,,775188079
+China,,,314454317
+S. Korea,,,219300774
+ROW,,,160855929
+Mexico,,,131413850
+EU,,,49860184
+Japan,,,15479914

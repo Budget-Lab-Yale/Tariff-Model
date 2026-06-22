@@ -141,6 +141,77 @@ calculate_country_etrs <- function(etr_matrix, viws, viws_baseline,
 }
 
 
+#' Alpha-corrected derived-imports ETR (substitution-correction; revenue only)
+#'
+#' Same as calculate_country_etrs() but the GTAP cell ratio (postsim/baseline) is
+#' decomposed into a cross-commodity (between) and a within-commodity-source
+#' (within) factor, each raised to its own alpha exponent — the two-channel
+#' substitution correction from the calibration. This is computed ALONGSIDE the
+#' full-GTAP ETR purely to feed the revenue alpha->GTAP transition; it never
+#' touches the published post-sub ETR, prices, or USMM.
+#'
+#'   ratio[s,c]   = viws[s,c] / viws_baseline[s,c]            (full GTAP cell shift)
+#'   between[s]   = sum_c viws[s,c] / sum_c viws_baseline[s,c] (commodity-total shift,
+#'                  summed over the 8 partner columns, usa excluded)
+#'   within[s,c]  = ratio[s,c] / between[s]                    (source-mix shift)
+#'   ratio_alpha  = within^(passthrough ? 1 : alpha_within) * between^alpha_between
+#'
+#' alpha_within = alpha_between = 1 reduces EXACTLY to calculate_country_etrs()
+#' (within * between == ratio; the zero guards coincide), so an alpha-inactive run
+#' is bit-for-bit unchanged.
+#'
+#' @param passthrough Character vector of lowercase gtap_codes that keep the FULL
+#'   within shift (exponent 1) — the commodity pass-through list.
+calculate_country_etrs_alpha <- function(etr_matrix, viws, viws_baseline,
+                                         import_baseline_dollars,
+                                         alpha_within = 1, alpha_between = 1,
+                                         passthrough = character(0)) {
+
+  country_config <- list(
+    list(viws = 'china',  etr = 'china',  suffix = 'chn'),
+    list(viws = 'canada', etr = 'canada', suffix = 'ca'),
+    list(viws = 'mexico', etr = 'mexico', suffix = 'mx'),
+    list(viws = 'uk',     etr = 'uk',     suffix = 'uk'),
+    list(viws = 'japan',  etr = 'japan',  suffix = 'jp'),
+    list(viws = 'eu',     etr = 'eu',     suffix = 'eu'),
+    list(viws = 'row',    etr = 'row',    suffix = 'row'),
+    list(viws = 'ftrow',  etr = 'ftrow',  suffix = 'fta')
+  )
+  partner_cols <- vapply(country_config, function(x) x$viws, character(1))
+
+  sectors <- intersect(rownames(viws), rownames(import_baseline_dollars))
+
+  # Commodity-total (between) ratio over the 8 partner columns (usa excluded),
+  # precomputed once. ratio > 0 in any partner column implies between > 0.
+  vp <- viws[sectors, partner_cols, drop = FALSE]
+  vb <- viws_baseline[sectors, partner_cols, drop = FALSE]
+  between <- if_else(rowSums(vb) > 0, rowSums(vp) / rowSums(vb), 0)
+  within_exp <- if_else(sectors %in% passthrough, 1, alpha_within)
+
+  result <- list()
+  for (cfg in country_config) {
+    raw_imports          <- viws[sectors, cfg$viws]
+    baseline_viws_vec    <- viws_baseline[sectors, cfg$viws]
+    baseline_dollars_vec <- import_baseline_dollars[sectors, cfg$viws]
+
+    ratio  <- if_else(baseline_viws_vec > 0, raw_imports / baseline_viws_vec, 0)
+    within <- if_else(between > 0 & ratio > 0, ratio / between, 0)
+    ratio_alpha <- if_else(within > 0 & between > 0,
+                           within^within_exp * between^alpha_between, 0)
+    country_imports <- ratio_alpha * baseline_dollars_vec
+
+    etr_lookup  <- setNames(etr_matrix[[cfg$etr]], etr_matrix$gtap_code)
+    sector_etrs <- etr_lookup[sectors]
+    matched_imports <- sum(country_imports)
+    result[[paste0('imports_', cfg$suffix)]] <- matched_imports
+    result[[paste0('etr_', cfg$suffix)]] <-
+      if (matched_imports > 0) sum(sector_etrs * country_imports) / matched_imports else 0
+  }
+
+  return(as.data.frame(result))
+}
+
+
 #' Calculate etr_increase from post-sim and baseline weighted ETRs
 #'
 #' @param post_sub_etr Post-substitution weighted ETR (percentage)
@@ -252,9 +323,12 @@ calculate_etr <- function(inputs) {
   viws_baseline <- inputs$baselines$viws_baseline
   import_baseline_dollars <- inputs$baselines$import_baseline_dollars
 
-  # Post-substitution (using post-sim VIWS with derived import formula)
+  # Post-substitution = rate (c): the eta'-adjusted (b) matrix re-weighted by
+  # post-sim VIWS (GTAP's source-composition shift). Uses etr_matrix_b so the
+  # published post-sub ETR matches the post-sub price (which also starts from b).
+  # (b) == (a) when noncompliance is inactive, so legacy behavior is preserved.
   postsim_country_etrs <- calculate_country_etrs(
-    inputs$etr_matrix, inputs$viws,
+    inputs$etr_matrix_b, inputs$viws,
     viws_baseline, import_baseline_dollars
   )
   post_sub_etr <- calculate_weighted_etr(postsim_country_etrs)
@@ -262,12 +336,43 @@ calculate_etr <- function(inputs) {
   # Store the calculated aggregates for downstream use
   inputs$gtap_postsim <- postsim_country_etrs
 
+  # Alpha-corrected post-sub ETR (substitution correction) — computed ALONGSIDE
+  # the full-GTAP post-sub ETR purely to drive the revenue alpha->GTAP transition
+  # (04_calculate_revenue.R). The published post-sub ETR (pe_postsub_increase),
+  # prices, and USMM all stay FULL GTAP. R_alpha = 1 when alpha is inactive, so
+  # revenue is then bit-for-bit unchanged. (post_sub_etr is the same rate (c)
+  # matrix etr_matrix_b — only the import WEIGHTS differ via the alpha exponents.)
+  post_sub_etr_alpha <- post_sub_etr
+  R_alpha <- 1
+  if (isTRUE(inputs$alpha_active)) {
+    postsim_alpha_etrs <- calculate_country_etrs_alpha(
+      inputs$etr_matrix_b, inputs$viws, viws_baseline, import_baseline_dollars,
+      alpha_within  = inputs$alpha_within,
+      alpha_between = inputs$alpha_between,
+      passthrough   = inputs$alpha_passthrough
+    )
+    post_sub_etr_alpha <- calculate_weighted_etr(postsim_alpha_etrs)
+    R_alpha <- if (post_sub_etr != 0) post_sub_etr_alpha / post_sub_etr else 1
+    message(sprintf(paste0('  Alpha-corrected post-sub ETR: %.4f%% vs full-GTAP %.4f%% ',
+                           '-> R_alpha = %.4f (revenue near-term anchor)'),
+                    post_sub_etr_alpha, post_sub_etr, R_alpha))
+  }
+
   # Pre-substitution (using baseline - ratio is 1, so imports = baseline_dollars)
   presim_country_etrs <- calculate_country_etrs(
     inputs$etr_matrix, viws_baseline,
     viws_baseline, import_baseline_dollars
   )
   pre_sub_etr <- calculate_weighted_etr(presim_country_etrs)
+
+  # (b) eta'-adjusted statutory, baseline-weighted (pre-substitution). Drives the
+  # USMM impulse and is reported as a diagnostic. Equals (a) when noncompliance is
+  # inactive (etr_matrix_b == etr_matrix).
+  presim_b_country_etrs <- calculate_country_etrs(
+    inputs$etr_matrix_b, viws_baseline,
+    viws_baseline, import_baseline_dollars
+  )
+  b_pre_sub_etr <- calculate_weighted_etr(presim_b_country_etrs)
 
   # -------------------------------------------------------------------------
   # Calculate all-in ETRs from levels matrices
@@ -295,9 +400,17 @@ calculate_etr <- function(inputs) {
   )
   pre_sub_all_in <- calculate_weighted_etr(presim_levels_country) / 100
 
-  # Compute all-in ETR from scenario levels (post-substitution)
+  # (b) all-in level (baseline + eta'*delta), baseline-weighted — diagnostic
+  presim_b_levels_country <- calculate_country_etrs(
+    inputs$levels_matrix_b, viws_baseline,
+    viws_baseline, import_baseline_dollars
+  )
+  b_all_in <- calculate_weighted_etr(presim_b_levels_country) / 100
+
+  # All-in ETR from scenario levels, post-substitution = rate (c) levels:
+  # eta'-adjusted (b) levels re-weighted by post-sim VIWS.
   postsim_levels_country <- calculate_country_etrs(
-    inputs$levels_matrix, inputs$viws,
+    inputs$levels_matrix_b, inputs$viws,
     viws_baseline, import_baseline_dollars
   )
   post_sub_all_in <- calculate_weighted_etr(postsim_levels_country) / 100
@@ -316,6 +429,7 @@ calculate_etr <- function(inputs) {
 
   etr_increase_by_date <- NULL
   presub_etr_increase_by_date <- NULL
+  b_etr_increase_by_date <- NULL
   per_date_levels <- NULL
 
   if (isTRUE(inputs$is_time_varying)) {
@@ -366,6 +480,17 @@ calculate_etr <- function(inputs) {
                       presub_etr_increase_by_date$etr_increase[i]))
     }
 
+    # (b) per-date eta'-adjusted increases (for USMM); baseline-weighted
+    per_date_etrs_b <- calculate_per_date_weighted_etrs(
+      inputs$etr_matrix_by_date_b,
+      inputs$etr_dates,
+      viws_baseline,
+      import_baseline_dollars
+    )
+    b_etr_increase_by_date <- per_date_etrs_b %>%
+      mutate(etr_increase = weighted_etr / 100) %>%
+      select(date, etr_increase)
+
     # Compute per-date all-in levels (for output transparency)
     if (!is.null(inputs$levels_matrix_by_date)) {
       message('  Computing per-date all-in ETR levels...')
@@ -391,6 +516,8 @@ calculate_etr <- function(inputs) {
 
   # Pre-sub etr_increase for USMM (raw from Tariff-ETRs, as fraction)
   presub_etr_increase <- pre_sub_etr / 100
+  # (b) eta'-adjusted increase: the USMM impulse when noncompliance is active
+  b_etr_increase <- b_pre_sub_etr / 100
 
   results <- list(
     # Main ETR results (as percentages) - goods-weighted for display
@@ -402,12 +529,23 @@ calculate_etr <- function(inputs) {
     baseline_etr = baseline_etr * 100,
     # etr_increase for revenue calculations (from mtax, post-sub)
     etr_increase = etr_increase,
+    # Alpha substitution correction for the revenue alpha->GTAP transition.
+    # R_alpha = (alpha-corrected post-sub ETR)/(full-GTAP post-sub ETR); 1 when
+    # alpha is inactive (revenue then bit-for-bit unchanged). post_sub_etr_alpha
+    # is a diagnostic; the published post-sub ETR stays full-GTAP.
+    R_alpha = R_alpha,
+    post_sub_etr_alpha = post_sub_etr_alpha,
     # Per-date etr_increase for revenue (NULL for static scenarios)
     etr_increase_by_date = etr_increase_by_date,
     # Pre-sub etr_increase for USMM (raw from Tariff-ETRs)
     presub_etr_increase = presub_etr_increase,
     # Per-date pre-sub etr_increase for USMM (NULL for static scenarios)
     presub_etr_increase_by_date = presub_etr_increase_by_date,
+    # (b) eta'-adjusted statutory: USMM impulse (when active) + diagnostic
+    b_increase = b_pre_sub_etr,
+    b_all_in = b_all_in * 100,
+    b_etr_increase = b_etr_increase,
+    b_etr_increase_by_date = b_etr_increase_by_date,
     # Country-level data for output (deltas)
     postsim_country = postsim_country_etrs,
     presim_country = presim_country_etrs,
@@ -419,7 +557,8 @@ calculate_etr <- function(inputs) {
     per_date_levels = per_date_levels
   )
 
-  message(sprintf('  Goods-weighted pre-sub ETR: %.2f%%', pre_sub_etr))
+  message(sprintf('  Goods-weighted pre-sub ETR (a): %.2f%%', pre_sub_etr))
+  message(sprintf('  Goods-weighted eta\'-adjusted ETR (b): %.2f%%', b_pre_sub_etr))
   message(sprintf('  Goods-weighted PE post-sub ETR: %.2f%%', post_sub_etr))
 
   return(results)

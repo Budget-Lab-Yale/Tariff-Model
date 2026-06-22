@@ -338,6 +338,99 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
     inputs$tau_M <- disaggregate_tau_M(inputs$tau_M, io_data_dir)
   }
 
+  # ---- (b) eta'-adjusted (noncompliance) artifacts ----
+  # When 00a produced the `_b` files, these drive the GTAP-shifted re-weighting
+  # (post-sub prices), the USMM impulse, and (via the mtax-shocked GTAP run)
+  # revenue. When absent — legacy tariff_etrs scenarios, or a rate_inputs/ written
+  # before this feature — fall back to (a) so behavior is unchanged and the old
+  # revenue-side compliance haircut still applies (noncompliance_active = FALSE).
+  read_sector_matrix_b <- function(path, label) {
+    raw <- read_csv(path, show_col_types = FALSE)
+    assert_has_columns(raw, 'gtap_code', label)
+    if ('date' %in% names(raw)) {
+      by_date <- raw %>% mutate(date = as.Date(date))
+      flat <- by_date %>% filter(date == inputs$gtap_reference_date) %>% select(-date)
+      list(flat = flat, by_date = by_date)
+    } else {
+      list(flat = raw, by_date = NULL)
+    }
+  }
+
+  etr_b_file    <- file.path(tariff_etrs_dir, 'gtap_deltas_by_sector_country_b.csv')
+  levels_b_file <- file.path(tariff_etrs_dir, 'gtap_levels_by_sector_country_b.csv')
+  bea_b_file    <- file.path(tariff_etrs_dir, 'bea_deltas_by_commodity_b.csv')
+  inputs$noncompliance_active <- all(file.exists(c(etr_b_file, levels_b_file, bea_b_file)))
+
+  if (inputs$noncompliance_active) {
+    em_b <- read_sector_matrix_b(etr_b_file, 'ETR delta matrix (b)')
+    inputs$etr_matrix_b         <- em_b$flat
+    inputs$etr_matrix_by_date_b <- em_b$by_date
+
+    lv_b <- read_sector_matrix_b(levels_b_file, 'ETR levels matrix (b)')
+    inputs$levels_matrix_b         <- lv_b$flat
+    inputs$levels_matrix_by_date_b <- lv_b$by_date
+
+    bea_b_raw <- read_csv(bea_b_file, show_col_types = FALSE)
+    if ('date' %in% names(bea_b_raw)) {
+      inputs$bea_deltas_by_date_b <- bea_b_raw %>% mutate(date = as.Date(date))
+      bea_b_flat <- bea_b_raw %>%
+        filter(date == as.character(inputs$gtap_reference_date)) %>%
+        select(-date)
+    } else {
+      inputs$bea_deltas_by_date_b <- NULL
+      bea_b_flat <- bea_b_raw
+    }
+    inputs$tau_M_b <- setNames(bea_b_flat$etr_delta, bea_b_flat$bea_code)
+    if (bea_io_level == 'detail') {
+      inputs$tau_M_b <- disaggregate_tau_M(inputs$tau_M_b, io_data_dir)
+    }
+    message(sprintf('  Loaded (b) eta\'-adjusted artifacts: noncompliance ACTIVE (tau_M_b mean=%.4f%%)',
+                    mean(inputs$tau_M_b) * 100))
+  } else {
+    inputs$etr_matrix_b            <- inputs$etr_matrix
+    inputs$etr_matrix_by_date_b    <- inputs$etr_matrix_by_date
+    inputs$levels_matrix_b         <- inputs$levels_matrix
+    inputs$levels_matrix_by_date_b <- inputs$levels_matrix_by_date
+    inputs$tau_M_b                 <- inputs$tau_M
+    inputs$bea_deltas_by_date_b    <- inputs$bea_deltas_by_date
+    message('  No (b) artifacts found -> noncompliance INACTIVE (b == a; legacy revenue haircut applies)')
+  }
+
+  # ---- alpha substitution-correction parameters (revenue transition ONLY) ----
+  # Calibrated by the harness (calibrate.R --stage alpha). Consumed ONLY by the
+  # revenue alpha->GTAP transition in 04_calculate_revenue.R: the structural model
+  # (published post-sub ETR, prices, USMM) stays FULL GTAP (alpha = 1). Defaults
+  # (no `substitution` block): alpha = 1, empty passthrough, inactive -> revenue
+  # and every structural output are bit-for-bit unchanged.
+  inputs$alpha_within      <- 1
+  inputs$alpha_between     <- 1
+  inputs$alpha_passthrough <- character(0)
+  inputs$alpha_active      <- FALSE
+  sub_cfg <- inputs$model_params$substitution
+  if (!is.null(sub_cfg) && !is.null(sub_cfg$alpha_file)) {
+    if (!file.exists(sub_cfg$alpha_file)) {
+      stop('substitution.alpha_file not found: ', sub_cfg$alpha_file)
+    }
+    ap <- read_csv(sub_cfg$alpha_file, show_col_types = FALSE)
+    inputs$alpha_within  <- ap$alpha[ap$channel == 'within'][1]
+    inputs$alpha_between <- ap$alpha[ap$channel == 'between'][1]
+    if (is.na(inputs$alpha_within) || is.na(inputs$alpha_between)) {
+      stop('substitution.alpha_file must have within and between channel rows: ',
+           sub_cfg$alpha_file)
+    }
+    if (!is.null(sub_cfg$commodity_passthrough_file)) {
+      pt <- read_csv(sub_cfg$commodity_passthrough_file, show_col_types = FALSE)
+      inputs$alpha_passthrough <- tolower(pt$gtap_code[pt$include])
+    }
+    inputs$alpha_active <- TRUE
+    message(sprintf(paste0('  Loaded alpha params: within=%.4f between=%.4f ',
+                           '(%d passthrough sectors); revenue transition ACTIVE'),
+                    inputs$alpha_within, inputs$alpha_between,
+                    length(inputs$alpha_passthrough)))
+  } else {
+    message('  No substitution.alpha_file -> alpha = 1 (full GTAP; revenue transition INACTIVE)')
+  }
+
   # ============================
   # Mappings
   # ============================
