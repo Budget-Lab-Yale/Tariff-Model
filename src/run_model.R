@@ -144,10 +144,12 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
       markup_assumption = ma
     )
 
-    # PE post-substitution
+    # PE post-substitution -> rate (c): start from the eta'-adjusted (b) tariff
+    # vector and (b) source matrix, then apply GTAP's source-composition shift.
+    # (b) == (a) when noncompliance is inactive, so this is a no-op for legacy runs.
     tau_M_post <- compute_postsub_tau_M(
-      inputs$tau_M, inputs$gtap_bea_crosswalk,
-      inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
+      inputs$tau_M_b, inputs$gtap_bea_crosswalk,
+      inputs$etr_matrix_b, inputs$viws, inputs$baselines$viws_baseline
     )
     omega_M_post <- compute_postsub_omega_M(
       matrices$omega_M, inputs$gtap_bea_crosswalk,
