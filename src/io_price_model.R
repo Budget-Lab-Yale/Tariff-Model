@@ -451,6 +451,125 @@ aggregate_bea_to_pce <- function(bea_price_df, pce_bridge, numerator_col,
 }
 
 
+#' Calculate a PCE-weighted average from a PCE category table
+#'
+#' @param data Data frame with a value column and purchasers_value column
+#' @param value_col Value column to average
+#' @param weight_col Weight column; defaults to purchasers_value
+#' @param value_scale Optional scale applied before averaging
+#' @return Weighted average
+weighted_pce_average <- function(data, value_col, weight_col = 'purchasers_value',
+                                 value_scale = 1) {
+  weights <- data[[weight_col]]
+  total_weight <- sum(weights)
+  if (total_weight == 0) {
+    stop('Total PCE weight is zero - cannot compute aggregate')
+  }
+  sum(data[[value_col]] * value_scale * weights) / total_weight
+}
+
+
+#' Summarize GE decomposition terms at the aggregate PCE level
+#'
+#' @param pce_category GE decomposition table from decompose_ge_prices()
+#' @return Tibble with metric, value, and unit columns
+summarize_ge_pce_decomp <- function(pce_category) {
+  decomp_cols <- c(
+    import_price_component = 'import_price_component',
+    domestic_price_component = 'domestic_price_component',
+    share_shift_component = 'share_shift_component',
+    residual_component = 'residual_component',
+    ge_price_increase = 'ge'
+  )
+
+  tibble(
+    metric = names(decomp_cols),
+    value = vapply(decomp_cols, function(col) {
+      weighted_pce_average(pce_category, col)
+    }, numeric(1)),
+    unit = 'pct'
+  )
+}
+
+
+#' Join two tables and average their shared numeric columns
+#'
+#' @param x First table
+#' @param y Second table
+#' @param keys Join key columns
+#' @return Joined table with numeric columns averaged
+average_numeric_columns <- function(x, y, keys) {
+  numeric_cols <- setdiff(intersect(
+    names(x)[vapply(x, is.numeric, logical(1))],
+    names(y)[vapply(y, is.numeric, logical(1))]
+  ), keys)
+  keep_cols <- union(keys, setdiff(names(x), numeric_cols))
+
+  joined <- x %>%
+    inner_join(
+      y %>% select(all_of(c(keys, numeric_cols))),
+      by = keys,
+      suffix = c('_a', '_b')
+    )
+
+  for (col in numeric_cols) {
+    joined[[col]] <- (joined[[paste0(col, '_a')]] + joined[[paste0(col, '_b')]]) / 2
+  }
+
+  joined %>%
+    select(all_of(keep_cols), all_of(numeric_cols))
+}
+
+
+#' Average two sets of price results element-wise
+#'
+#' @param a Price results list from compute_io_prices() or compute_ge_prices()
+#' @param b Price results list from same function with different markup_assumption
+#' @return Averaged price results list
+average_price_results <- function(a, b) {
+  avg <- list(
+    aggregate = (a$aggregate + b$aggregate) / 2,
+    bea_commodity_prices = (a$bea_commodity_prices + b$bea_commodity_prices) / 2,
+    markup_assumption = 'average'
+  )
+
+  avg$pce_category_prices <- a$pce_category_prices %>%
+    inner_join(
+      b$pce_category_prices %>% select(nipa_line, sr_price_effect_b = sr_price_effect),
+      by = 'nipa_line'
+    ) %>%
+    mutate(
+      sr_price_effect = (sr_price_effect + sr_price_effect_b) / 2
+    ) %>%
+    select(-sr_price_effect_b)
+
+  if (!is.null(a$direct_aggregate) && !is.null(b$direct_aggregate)) {
+    avg$direct_aggregate <- (a$direct_aggregate + b$direct_aggregate) / 2
+    avg$supply_chain_aggregate <- (a$supply_chain_aggregate + b$supply_chain_aggregate) / 2
+  }
+
+  return(avg)
+}
+
+
+#' Average GE decomposition results across markup assumptions
+#'
+#' @param a GE decomposition result from decompose_ge_prices()
+#' @param b GE decomposition result from decompose_ge_prices()
+#' @return Averaged decomposition result
+average_ge_decomposition_results <- function(a, b) {
+  pce_category <- average_numeric_columns(a$pce_category, b$pce_category, 'nipa_line')
+
+  list(
+    gtap_commodity = a$gtap_commodity,
+    bea_commodity = average_numeric_columns(a$bea_commodity, b$bea_commodity, 'bea_code'),
+    pce_category = pce_category,
+    summary = summarize_ge_pce_decomp(pce_category),
+    markup_assumption = 'average'
+  )
+}
+
+
 # ==== Core computation =======================================================
 
 #' Build I-O matrices from BEA Use tables
@@ -812,9 +931,9 @@ compute_io_prices <- function(tau_M, B_MD, leontief_domestic,
     rename(sr_price_effect = price)
 
   # ---- Derive aggregate from category table (single source of truth) ----
-  aggregate <- sum(pce_category_prices$sr_price_effect / 100 *
-                   pce_category_prices$purchasers_value) /
-               sum(pce_category_prices$purchasers_value)
+  aggregate <- weighted_pce_average(
+    pce_category_prices, 'sr_price_effect', value_scale = 1 / 100
+  )
 
   # ---- Diagnostics ----
   message(sprintf('  I-O price effects (%s markups):', markup_assumption))
@@ -1081,9 +1200,9 @@ compute_ge_prices <- function(ppa_usa, gtap_bea_crosswalk, viws_baseline,
     rename(sr_price_effect = price)
 
   # ---- Aggregate from category table (single source of truth) ----
-  aggregate <- sum(pce_category_prices$sr_price_effect / 100 *
-                   pce_category_prices$purchasers_value) /
-               sum(pce_category_prices$purchasers_value)
+  aggregate <- weighted_pce_average(
+    pce_category_prices, 'sr_price_effect', value_scale = 1 / 100
+  )
 
   # ---- Diagnostics ----
   message(sprintf('  GE price effects (%s markups, no USD offset):', markup_assumption))
@@ -1209,28 +1328,7 @@ decompose_ge_prices <- function(ppa_usa, ppm_usa, ppd_usa,
       mutate(ge_minus_pre_sub = ge - pre_sub)
   }
 
-  summary <- tibble(
-        metric = c(
-          'import_price_component',
-          'domestic_price_component',
-          'share_shift_component',
-          'residual_component',
-          'ge_price_increase'
-        ),
-        value = c(
-      sum(pce_category$import_price_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$share_shift_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$residual_component * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value),
-      sum(pce_category$ge * pce_category$purchasers_value) /
-        sum(pce_category$purchasers_value)
-    ),
-    unit = 'pct'
-  )
+  summary <- summarize_ge_pce_decomp(pce_category)
 
   return(list(
     gtap_commodity = gtap_commodity,

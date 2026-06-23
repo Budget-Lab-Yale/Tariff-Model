@@ -189,15 +189,9 @@ compute_for_markup <- function(ma) {
 if (markup_assumption == 'average') {
   result_cp <- compute_for_markup('constant_percentage')
   result_cd <- compute_for_markup('constant_dollar')
-
-  avg_aggregate <- (result_cp$aggregate + result_cd$aggregate) / 2
-  avg_direct <- (result_cp$direct_aggregate + result_cd$direct_aggregate) / 2
-  avg_supply <- (result_cp$supply_chain_aggregate + result_cd$supply_chain_aggregate) / 2
+  result <- average_price_results(result_cp, result_cd)
 } else {
   result <- compute_for_markup(markup_assumption)
-  avg_aggregate <- result$aggregate
-  avg_direct <- result$direct_aggregate
-  avg_supply <- result$supply_chain_aggregate
 }
 
 # ==== Report results =========================================================
@@ -215,9 +209,9 @@ if (baseline_days > 0) {
                   baseline_days, start_date, first_tariff_date - 1))
 }
 message('')
-message(sprintf('  Aggregate PCE price effect:  %.3f pp', avg_aggregate * 100))
-message(sprintf('    Direct (imported goods):   %.3f pp', avg_direct * 100))
-message(sprintf('    Supply chain (intermediates): %.3f pp', avg_supply * 100))
+message(sprintf('  Aggregate PCE price effect:  %.3f pp', result$aggregate * 100))
+message(sprintf('    Direct (imported goods):   %.3f pp', result$direct_aggregate * 100))
+message(sprintf('    Supply chain (intermediates): %.3f pp', result$supply_chain_aggregate * 100))
 message('')
 
 if (markup_assumption == 'average') {
@@ -227,17 +221,7 @@ if (markup_assumption == 'average') {
 }
 
 # Show top 10 most-affected PCE categories
-if (markup_assumption == 'average') {
-  pce_avg <- result_cp$pce_category_prices %>%
-    left_join(
-      result_cd$pce_category_prices %>% select(nipa_line, sr_price_effect_cd = sr_price_effect),
-      by = 'nipa_line'
-    ) %>%
-    mutate(sr_price_effect = (sr_price_effect + sr_price_effect_cd) / 2) %>%
-    select(-sr_price_effect_cd)
-} else {
-  pce_avg <- result$pce_category_prices
-}
+pce_avg <- result$pce_category_prices
 
 message('Top 15 most-affected PCE categories (pp):')
 top_cats <- pce_avg %>%

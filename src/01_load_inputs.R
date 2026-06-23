@@ -471,9 +471,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$qmwreg <- gtap_data$qmwreg
   inputs$qxwreg <- gtap_data$qxwreg
   inputs$sector_outputs <- gtap_data$sector_outputs
-  inputs$imports_by_country <- gtap_data$imports_by_country
   inputs$viws <- gtap_data$viws
-  inputs$vgdp <- gtap_data$vgdp
   inputs$ppm <- gtap_data$ppm
   inputs$ppd <- gtap_data$ppd
   inputs$ppa <- gtap_data$ppa

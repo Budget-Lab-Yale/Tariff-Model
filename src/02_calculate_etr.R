@@ -17,6 +17,12 @@ library(tidyverse)
 # Country-level ETR calculation from etr_matrix + VIWS
 # =============================================================================
 
+COUNTRY_CONFIG <- tibble(
+  viws = c('china', 'canada', 'mexico', 'uk', 'japan', 'eu', 'row', 'ftrow'),
+  etr = c('china', 'canada', 'mexico', 'uk', 'japan', 'eu', 'row', 'ftrow'),
+  suffix = c('chn', 'ca', 'mx', 'uk', 'jp', 'eu', 'row', 'fta')
+)
+
 #' Calculate country-level ETRs from sector ETR matrix and VIWS imports
 #'
 #' Uses Excel-compatible formula for derived imports:
@@ -28,184 +34,102 @@ library(tidyverse)
 #' @param viws Matrix of imports by commodity x source country (from GTAP post-sim)
 #' @param viws_baseline Matrix of baseline imports by commodity x source country
 #' @param import_baseline_dollars Matrix of baseline imports in dollars
+#' @param alpha_within Within-commodity-source substitution exponent. Default 1
+#'   uses the full GTAP cell shift.
+#' @param alpha_between Cross-commodity substitution exponent. Default 1 uses
+#'   the full GTAP commodity-total shift.
+#' @param passthrough Character vector of lowercase gtap_codes that keep the full
+#'   within shift when alpha_within is not 1.
 #' @return Data frame with imports_* and etr_* columns (same format as aggregates.csv)
 calculate_country_etrs <- function(etr_matrix, viws, viws_baseline,
-                                   import_baseline_dollars) {
-
-  # Country mapping: VIWS column names -> ETR column names -> output suffix
-  # VIWS uses: china, canada, mexico, uk, japan, eu, row, ftrow
-  # ETR matrix uses same names as VIWS
-  # Output uses: chn, ca, mx, uk, jp, eu, row, fta (matching aggregates.csv format)
-  country_config <- list(
-    list(viws = 'china', etr = 'china', suffix = 'chn'),
-    list(viws = 'canada', etr = 'canada', suffix = 'ca'),
-    list(viws = 'mexico', etr = 'mexico', suffix = 'mx'),
-    list(viws = 'uk', etr = 'uk', suffix = 'uk'),
-    list(viws = 'japan', etr = 'japan', suffix = 'jp'),
-    list(viws = 'eu', etr = 'eu', suffix = 'eu'),
-    list(viws = 'row', etr = 'row', suffix = 'row'),
-    list(viws = 'ftrow', etr = 'ftrow', suffix = 'fta')
-  )
+                                   import_baseline_dollars,
+                                   alpha_within = 1, alpha_between = 1,
+                                   passthrough = character(0)) {
 
   if (is.null(viws_baseline) || is.null(import_baseline_dollars)) {
     stop('viws_baseline and import_baseline_dollars are required for derived imports')
   }
 
+  missing_viws <- setdiff(COUNTRY_CONFIG$viws, colnames(viws))
+  missing_viws_baseline <- setdiff(COUNTRY_CONFIG$viws, colnames(viws_baseline))
+  missing_import_dollars <- setdiff(COUNTRY_CONFIG$viws, colnames(import_baseline_dollars))
+  missing_etr_cols <- setdiff(COUNTRY_CONFIG$etr, names(etr_matrix))
+  if (length(missing_viws) > 0) {
+    stop('VIWS missing required column(s): ', paste(missing_viws, collapse = ', '))
+  }
+  if (length(missing_viws_baseline) > 0) {
+    stop('VIWS baseline missing required column(s): ',
+         paste(missing_viws_baseline, collapse = ', '))
+  }
+  if (length(missing_import_dollars) > 0) {
+    stop('Import baseline dollars missing required column(s): ',
+         paste(missing_import_dollars, collapse = ', '))
+  }
+  if (length(missing_etr_cols) > 0) {
+    stop('ETR matrix missing required column(s): ', paste(missing_etr_cols, collapse = ', '))
+  }
+
+  all_viws_sectors <- rownames(viws)
+  goods_sectors <- rownames(import_baseline_dollars)
+  sectors <- intersect(all_viws_sectors, goods_sectors)
+
+  missing_baseline <- setdiff(sectors, rownames(viws_baseline))
+  missing_dollars <- setdiff(sectors, rownames(import_baseline_dollars))
+  if (length(missing_baseline) > 0 || length(missing_dollars) > 0) {
+    stop('Baseline rows missing for sector(s): ',
+         paste(union(missing_baseline, missing_dollars), collapse = ', '))
+  }
+
+  missing_etr <- setdiff(sectors, etr_matrix$gtap_code)
+  if (length(missing_etr) > 0) {
+    stop('ETR matrix missing gtap_code for sector(s): ', paste(missing_etr, collapse = ', '))
+  }
+
+  alpha_active <- !identical(alpha_within, 1) ||
+    !identical(alpha_between, 1) ||
+    length(passthrough) > 0
+  if (alpha_active) {
+    vp <- viws[sectors, COUNTRY_CONFIG$viws, drop = FALSE]
+    vb <- viws_baseline[sectors, COUNTRY_CONFIG$viws, drop = FALSE]
+    between <- if_else(rowSums(vb) > 0, rowSums(vp) / rowSums(vb), 0)
+    within_exp <- if_else(sectors %in% passthrough, 1, alpha_within)
+  }
+
   result <- list()
 
-  for (cfg in country_config) {
-    viws_col <- cfg$viws
-    etr_col <- cfg$etr
-    output_suffix <- cfg$suffix
+  for (i in seq_len(nrow(COUNTRY_CONFIG))) {
+    viws_col <- COUNTRY_CONFIG$viws[i]
+    etr_col <- COUNTRY_CONFIG$etr[i]
+    output_suffix <- COUNTRY_CONFIG$suffix[i]
 
-    # Get raw imports for this country from VIWS
-    if (!viws_col %in% colnames(viws)) {
-      stop('VIWS missing required column: ', viws_col)
-    }
+    raw_imports <- viws[sectors, viws_col]
+    baseline_viws_vec <- viws_baseline[sectors, viws_col]
+    baseline_dollars_vec <- import_baseline_dollars[sectors, viws_col]
 
-    # Only process sectors that exist in import_baseline_dollars (goods sectors only)
-    # Services sectors don't have tariffs and should be excluded
-    all_viws_sectors <- rownames(viws)
-    goods_sectors <- rownames(import_baseline_dollars)
-    sectors <- intersect(all_viws_sectors, goods_sectors)
-
-    # Get raw imports only for goods sectors
-    sector_indices <- match(sectors, all_viws_sectors)
-    raw_imports <- viws[sector_indices, viws_col]
-
-    if (!viws_col %in% colnames(viws_baseline)) {
-      stop('VIWS baseline missing required column: ', viws_col)
-    }
-    if (!viws_col %in% colnames(import_baseline_dollars)) {
-      stop('Import baseline dollars missing required column: ', viws_col)
-    }
-
-    baseline_viws <- viws_baseline[, viws_col]
-    baseline_dollars <- import_baseline_dollars[, viws_col]
-
-    # derived_import = (postsim / baseline) * baseline_dollars
-    # Handle division by zero: if baseline is 0, use 0
-
-    # Validate all sectors exist in baseline matrices (vectorized check)
-    missing_baseline <- setdiff(sectors, rownames(viws_baseline))
-    missing_dollars <- setdiff(sectors, rownames(import_baseline_dollars))
-    if (length(missing_baseline) > 0 || length(missing_dollars) > 0) {
-      stop('Baseline rows missing for sector(s): ',
-           paste(union(missing_baseline, missing_dollars), collapse = ', '))
-    }
-
-    # Vectorized calculation using direct row indexing by sector name
-    baseline_viws_vec <- baseline_viws[sectors]
-    baseline_dollars_vec <- baseline_dollars[sectors]
-
-    # Calculate ratio where baseline > 0, else 0
     ratio <- if_else(baseline_viws_vec > 0, raw_imports / baseline_viws_vec, 0)
+    if (alpha_active) {
+      within <- if_else(between > 0 & ratio > 0, ratio / between, 0)
+      ratio <- if_else(within > 0 & between > 0,
+                       within^within_exp * between^alpha_between, 0)
+    }
     country_imports <- ratio * baseline_dollars_vec
 
     total_imports <- sum(country_imports)
     result[[paste0('imports_', output_suffix)]] <- total_imports
 
-    # Calculate weighted ETR if column exists and has imports
-    # IMPORTANT: Only include sectors with ETR values in the weighted average
-    # (services sectors without tariffs should not dilute the average)
-    if (!etr_col %in% names(etr_matrix)) {
-      stop('ETR matrix missing required column: ', etr_col)
-    }
     if (total_imports <= 0) {
       stop('Total imports are non-positive for country: ', viws_col)
     }
 
-    # Validate all sectors exist in ETR matrix (vectorized check)
-    missing_etr <- setdiff(sectors, etr_matrix$gtap_code)
-    if (length(missing_etr) > 0) {
-      stop('ETR matrix missing gtap_code for sector(s): ', paste(missing_etr, collapse = ', '))
-    }
-
-    # Build named lookup vector for ETR values (gtap_code -> etr)
     etr_lookup <- setNames(etr_matrix[[etr_col]], etr_matrix$gtap_code)
-
-    # Vectorized weighted ETR calculation
     sector_etrs <- etr_lookup[sectors]
-    weighted_etr <- sum(sector_etrs * country_imports)
     matched_imports <- sum(country_imports)
 
-    # Use matched imports as denominator (excludes services without tariffs)
     if (matched_imports > 0) {
-      result[[paste0('etr_', output_suffix)]] <- weighted_etr / matched_imports
+      result[[paste0('etr_', output_suffix)]] <- sum(sector_etrs * country_imports) / matched_imports
     } else {
       stop('No matched imports for ETR weighting in country: ', viws_col)
     }
-  }
-
-  return(as.data.frame(result))
-}
-
-
-#' Alpha-corrected derived-imports ETR (substitution-correction; revenue only)
-#'
-#' Same as calculate_country_etrs() but the GTAP cell ratio (postsim/baseline) is
-#' decomposed into a cross-commodity (between) and a within-commodity-source
-#' (within) factor, each raised to its own alpha exponent — the two-channel
-#' substitution correction from the calibration. This is computed ALONGSIDE the
-#' full-GTAP ETR purely to feed the revenue alpha->GTAP transition; it never
-#' touches the published post-sub ETR, prices, or USMM.
-#'
-#'   ratio[s,c]   = viws[s,c] / viws_baseline[s,c]            (full GTAP cell shift)
-#'   between[s]   = sum_c viws[s,c] / sum_c viws_baseline[s,c] (commodity-total shift,
-#'                  summed over the 8 partner columns, usa excluded)
-#'   within[s,c]  = ratio[s,c] / between[s]                    (source-mix shift)
-#'   ratio_alpha  = within^(passthrough ? 1 : alpha_within) * between^alpha_between
-#'
-#' alpha_within = alpha_between = 1 reduces EXACTLY to calculate_country_etrs()
-#' (within * between == ratio; the zero guards coincide), so an alpha-inactive run
-#' is bit-for-bit unchanged.
-#'
-#' @param passthrough Character vector of lowercase gtap_codes that keep the FULL
-#'   within shift (exponent 1) — the commodity pass-through list.
-calculate_country_etrs_alpha <- function(etr_matrix, viws, viws_baseline,
-                                         import_baseline_dollars,
-                                         alpha_within = 1, alpha_between = 1,
-                                         passthrough = character(0)) {
-
-  country_config <- list(
-    list(viws = 'china',  etr = 'china',  suffix = 'chn'),
-    list(viws = 'canada', etr = 'canada', suffix = 'ca'),
-    list(viws = 'mexico', etr = 'mexico', suffix = 'mx'),
-    list(viws = 'uk',     etr = 'uk',     suffix = 'uk'),
-    list(viws = 'japan',  etr = 'japan',  suffix = 'jp'),
-    list(viws = 'eu',     etr = 'eu',     suffix = 'eu'),
-    list(viws = 'row',    etr = 'row',    suffix = 'row'),
-    list(viws = 'ftrow',  etr = 'ftrow',  suffix = 'fta')
-  )
-  partner_cols <- vapply(country_config, function(x) x$viws, character(1))
-
-  sectors <- intersect(rownames(viws), rownames(import_baseline_dollars))
-
-  # Commodity-total (between) ratio over the 8 partner columns (usa excluded),
-  # precomputed once. ratio > 0 in any partner column implies between > 0.
-  vp <- viws[sectors, partner_cols, drop = FALSE]
-  vb <- viws_baseline[sectors, partner_cols, drop = FALSE]
-  between <- if_else(rowSums(vb) > 0, rowSums(vp) / rowSums(vb), 0)
-  within_exp <- if_else(sectors %in% passthrough, 1, alpha_within)
-
-  result <- list()
-  for (cfg in country_config) {
-    raw_imports          <- viws[sectors, cfg$viws]
-    baseline_viws_vec    <- viws_baseline[sectors, cfg$viws]
-    baseline_dollars_vec <- import_baseline_dollars[sectors, cfg$viws]
-
-    ratio  <- if_else(baseline_viws_vec > 0, raw_imports / baseline_viws_vec, 0)
-    within <- if_else(between > 0 & ratio > 0, ratio / between, 0)
-    ratio_alpha <- if_else(within > 0 & between > 0,
-                           within^within_exp * between^alpha_between, 0)
-    country_imports <- ratio_alpha * baseline_dollars_vec
-
-    etr_lookup  <- setNames(etr_matrix[[cfg$etr]], etr_matrix$gtap_code)
-    sector_etrs <- etr_lookup[sectors]
-    matched_imports <- sum(country_imports)
-    result[[paste0('imports_', cfg$suffix)]] <- matched_imports
-    result[[paste0('etr_', cfg$suffix)]] <-
-      if (matched_imports > 0) sum(sector_etrs * country_imports) / matched_imports else 0
   }
 
   return(as.data.frame(result))
@@ -345,7 +269,7 @@ calculate_etr <- function(inputs) {
   post_sub_etr_alpha <- post_sub_etr
   R_alpha <- 1
   if (isTRUE(inputs$alpha_active)) {
-    postsim_alpha_etrs <- calculate_country_etrs_alpha(
+    postsim_alpha_etrs <- calculate_country_etrs(
       inputs$etr_matrix_b, inputs$viws, viws_baseline, import_baseline_dollars,
       alpha_within  = inputs$alpha_within,
       alpha_between = inputs$alpha_between,
@@ -591,29 +515,15 @@ calculate_etr <- function(inputs) {
 #' @return Overall weighted ETR (as percentage)
 calculate_weighted_etr <- function(data) {
 
-  # Import columns
-  imports <- c(
-    data$imports_chn,
-    data$imports_ca,
-    data$imports_mx,
-    data$imports_uk,
-    data$imports_jp,
-    data$imports_eu,
-    data$imports_row,
-    data$imports_fta
-  )
+  import_cols <- paste0('imports_', COUNTRY_CONFIG$suffix)
+  etr_cols <- paste0('etr_', COUNTRY_CONFIG$suffix)
+  missing_cols <- setdiff(c(import_cols, etr_cols), names(data))
+  if (length(missing_cols) > 0) {
+    stop('Country ETR data missing required column(s): ', paste(missing_cols, collapse = ', '))
+  }
 
-  # ETR columns
-  etrs <- c(
-    data$etr_chn,
-    data$etr_ca,
-    data$etr_mx,
-    data$etr_uk,
-    data$etr_jp,
-    data$etr_eu,
-    data$etr_row,
-    data$etr_fta
-  )
+  imports <- as.numeric(data[1, import_cols])
+  etrs <- as.numeric(data[1, etr_cols])
 
   # Weighted average
   total_imports <- sum(imports)

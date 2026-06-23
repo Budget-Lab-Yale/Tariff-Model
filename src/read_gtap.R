@@ -509,7 +509,7 @@ extract_mtax_etr_increase <- function(slc, target_region = 1) {
   ))
 }
 
-#' Read GTAP solution with VIWS and VGDP
+#' Read GTAP solution with VIWS
 #'
 #' Master reader that parses each file once and passes parsed objects to
 #' extraction functions.
@@ -519,7 +519,7 @@ extract_mtax_etr_increase <- function(slc, target_region = 1) {
 #' @param sl4_path Path to .sl4 file (for metadata)
 #' @param sector_mapping Data frame with gtap_code and aggregate_sector columns
 #'   (used to derive goods indices for NVPP adjustment)
-#' @return List containing all extracted GTAP data including viws and vgdp
+#' @return List containing extracted GTAP data needed by downstream loaders
 read_gtap_full <- function(sol_path, slc_path, sl4_path, sector_mapping) {
 
   # ---- Parse each file once ----
@@ -546,8 +546,6 @@ read_gtap_full <- function(sol_path, slc_path, sl4_path, sector_mapping) {
 
   # ---- Extract .slc data ----
   result$viws <- extract_viws(slc, regions, commodities, target_region = 1)
-  result$vgdp <- extract_vgdp(slc, regions)
-
   # Calculate etr_increase from mtax
   mtax_data <- extract_mtax_etr_increase(slc, target_region = 1)
   result$etr_increase <- mtax_data$etr_increase
@@ -572,34 +570,6 @@ read_gtap_full <- function(sol_path, slc_path, sl4_path, sector_mapping) {
 
   return(result)
 }
-
-# ============================================================================
-# IMPORTS BY COUNTRY
-# ============================================================================
-
-#' Get total imports by source country
-#'
-#' Aggregates the VIWS (imports) matrix across commodities to get
-#' total imports by source country.
-#'
-#' @param gtap_data Result from read_gtap_full() containing viws matrix
-#' @return Named vector of imports by country (in $millions)
-get_imports_by_country <- function(gtap_data) {
-  if (is.null(gtap_data$viws)) {
-    stop('viws not found in GTAP data - need to use read_gtap_full()')
-  }
-
-  # Sum across commodities (rows) for each source country (columns)
-  country_totals <- colSums(gtap_data$viws)
-
-  names(country_totals) <- GTAP_TO_ABBR[names(country_totals)]
-
-  return(country_totals)
-}
-
-# ============================================================================
-# SECTOR OUTPUTS WITH MAPPINGS
-# ============================================================================
 
 #' Get sector outputs with full mapping metadata
 #'
@@ -727,22 +697,15 @@ load_gtap_from_files <- function(solution_dir, file_prefix = NULL,
   result$qxwreg <- get_export_change(gtap_data, 'usa')
   message(sprintf('    - Export change (qxwreg): %.2f%%', result$qxwreg))
 
-  # Imports by country
-  result$imports_by_country <- get_imports_by_country(gtap_data)
-  message(sprintf('    - Imports by country: %d countries', length(result$imports_by_country)))
-
   result$sector_outputs <- get_sector_outputs_full(gtap_data, sector_mapping, 'usa')
   message(sprintf('    - Sector outputs: %d sectors (with mappings)', nrow(result$sector_outputs)))
 
   # Raw data for downstream calculations
   result$viws <- gtap_data$viws
-  result$vgdp <- gtap_data$vgdp
   result$ppm <- gtap_data$ppm
   result$ppd <- gtap_data$ppd
   result$ppa <- gtap_data$ppa
   result$ppriv <- gtap_data$ppriv
-  result$qva <- gtap_data$qva
-  result$vom <- gtap_data$vom
   result$qgdp <- gtap_data$qgdp
 
   # ETR increase from mtax (for revenue calculations)
