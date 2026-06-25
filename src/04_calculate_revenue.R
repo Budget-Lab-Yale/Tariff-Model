@@ -124,11 +124,17 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   # When noncompliance is active, the GTAP shock — and thus the mtax-derived
   # etr_increase that drives gross_revenue — already reflects rate (b). Applying
   # the revenue-side compliance haircut again would double-count, so zero it out.
-  # Legacy (inactive) scenarios keep the historical haircut.
+  # Legacy (inactive) scenarios keep the historical haircut. Bridge scenarios can
+  # opt back into the historical haircut while using a neutral eta file so rates
+  # remain statutory (b == a) but revenue follows the old flat-compliance method.
   noncompliance_active <- isTRUE(inputs$noncompliance_active)
-  compliance_effect_applied <- if (noncompliance_active) 0 else compliance_effect
+  legacy_revenue_haircut <- isTRUE(inputs$model_params$noncompliance$legacy_revenue_haircut)
+  compliance_effect_applied <- if (noncompliance_active && !legacy_revenue_haircut) 0 else compliance_effect
 
-  if (noncompliance_active) {
+  if (noncompliance_active && legacy_revenue_haircut) {
+    message(sprintf('  Noncompliance active with neutral/bridge override: applying legacy revenue haircut %.1f%%',
+                    compliance_effect * 100))
+  } else if (noncompliance_active) {
     message('  Noncompliance active: haircut applied upstream via eta\' (revenue compliance_effect = 0)')
   } else {
     message(sprintf('  Using compliance effect: %.1f%%', compliance_effect * 100))

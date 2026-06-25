@@ -2,18 +2,17 @@
 # Model Parameters: tracker_actual_2026-06-13
 # =============================================================================
 # Calibration-harness scenario on the 2026-06-13 tracker rate vintage (28 rate
-# revisions in the Jun 2025 - Mar 2026 window). That vintage publishes no import-
-# weight base, so the rollups borrow the 2026-06-04_2 weight base via
-# `weights_vintage` (verified exact: all 18,324 weight HS10 codes are present in
-# the 6-13 rate panel). For src/calibration only -- not the production pipeline.
+# revisions in the Jun 2025 - Mar 2026 window). For src/calibration only -- not
+# the production pipeline.
 
 rate_panel:
   root: 'C:/Users/jar335/Documents/Interfaces/model_data/tariff-rate-tracker'
-  vintage: 'latest_2026_06_13'
-  weights_vintage: '2026-06-04_2'   # 6-13 ships no weights; borrow 6-04_2's (exact join)
-  tracker_scenario: 'actual'
+  vintage: 'latest_2026_06_13'  tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
+
+# Latest interval start in this bundle.
+gtap_reference_date: '2026-11-10'
 
 gtap:
   include_retaliation: false

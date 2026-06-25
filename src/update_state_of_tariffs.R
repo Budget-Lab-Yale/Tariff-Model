@@ -143,7 +143,7 @@ for (col in 2:5) {
 # Update row labels in column A for the new layout (now has 2025 and 2026 GDP rows)
 writeData(wb, 'T1', 'Effective Tariff Rates at the End of 2026',
           startCol = 1, startRow = 7, colNames = FALSE)
-writeData(wb, 'T1', 'Overall, Pre-Substitution',
+writeData(wb, 'T1', 'Overall, Applied Statutory',
           startCol = 1, startRow = 8, colNames = FALSE)
 writeData(wb, 'T1', 'Overall, Post-Substitution',
           startCol = 1, startRow = 9, colNames = FALSE)
@@ -155,11 +155,11 @@ writeData(wb, 'T1', 'Dynamic Revenue, 2026-2035 (Trillions)',
           startCol = 1, startRow = 12, colNames = FALSE)
 writeData(wb, 'T1', 'Prices in the Medium Run',
           startCol = 1, startRow = 13, colNames = FALSE)
-writeData(wb, 'T1', 'Percent Change in PCE Price Level, pre-substitution',
+writeData(wb, 'T1', 'Percent Change in PCE Price Level, applied statutory',
           startCol = 1, startRow = 14, colNames = FALSE)
 writeData(wb, 'T1', 'Percent Change in PCE Price Level, post-substitution',
           startCol = 1, startRow = 15, colNames = FALSE)
-writeData(wb, 'T1', 'Average Household Real Income Loss, Pre-Substitution (2025$)',
+writeData(wb, 'T1', 'Average Household Real Income Loss, Applied Statutory (2025$)',
           startCol = 1, startRow = 16, colNames = FALSE)
 writeData(wb, 'T1', 'Average Household Real Income Loss, Post-Substitution (2025$)',
           startCol = 1, startRow = 17, colNames = FALSE)

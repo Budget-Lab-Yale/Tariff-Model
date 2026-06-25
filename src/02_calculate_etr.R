@@ -5,7 +5,7 @@
 # country-level tariff rates and import weights from GTAP.
 #
 # This module now calculates ETRs from:
-# - etr_matrix: Tariff-ETRs output (sector x country ETR matrix)
+# - etr_matrix: rate input output (sector x country ETR matrix)
 # - viws: GTAP post-simulation imports by commodity x country
 # - baselines$viws_baseline: GTAP baseline imports
 #
@@ -194,7 +194,7 @@ calculate_per_date_weighted_etrs <- function(etr_matrix_by_date, etr_dates,
 #' Calculate weighted effective tariff rates
 #'
 #' @param inputs List containing:
-#'   - etr_matrix: Tariff-ETRs output (sector x country ETR matrix)
+#'   - etr_matrix: rate input output (sector x country ETR matrix)
 #'   - viws: GTAP post-simulation imports matrix
 #'   - baselines$gtap: Baseline imports and ETRs
 #'   - assumptions: Global assumptions including baseline_etr
@@ -453,7 +453,7 @@ calculate_etr <- function(inputs) {
   # Compile results
   # -------------------------------------------------------------------------
 
-  # Pre-sub etr_increase for USMM (raw from Tariff-ETRs, as fraction)
+  # Pre-sub etr_increase for USMM (raw rate input, as fraction)
   presub_etr_increase <- pre_sub_etr / 100
   # (b) eta'-adjusted increase: the USMM impulse when noncompliance is active
   b_etr_increase <- b_pre_sub_etr / 100
@@ -476,7 +476,7 @@ calculate_etr <- function(inputs) {
     post_sub_etr_alpha = post_sub_etr_alpha,
     # Per-date etr_increase for revenue (NULL for static scenarios)
     etr_increase_by_date = etr_increase_by_date,
-    # Pre-sub etr_increase for USMM (raw from Tariff-ETRs)
+    # Pre-sub etr_increase for USMM (raw rate input)
     presub_etr_increase = presub_etr_increase,
     # Per-date pre-sub etr_increase for USMM (NULL for static scenarios)
     presub_etr_increase_by_date = presub_etr_increase_by_date,

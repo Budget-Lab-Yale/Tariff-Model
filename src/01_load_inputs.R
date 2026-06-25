@@ -189,20 +189,17 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$model_params <- load_model_params(scenario_dir)
 
   # ============================
-  # Tariff-ETRs outputs
+  # Rate-derived inputs
   # ============================
 
-  # Rate-derived inputs: select from config, NOT directory presence — a stale
-  # rate_inputs/ left over from an earlier run must not hijack a legacy scenario.
-  # The tracker-panel path (00a) writes rate_inputs/; the legacy path tariff_etrs/.
-  tariff_etrs_dir <- if (!is.null(inputs$model_params$rate_panel)) {
-    file.path('output', scenario, 'rate_inputs')
-  } else {
-    file.path('output', scenario, 'tariff_etrs')
+  # Step 0a writes all rate-derived matrices under rate_inputs/.
+  if (is.null(inputs$model_params$rate_panel)) {
+    stop('model_params.yaml must have a rate_panel block')
   }
+  rate_inputs_dir <- file.path('output', scenario, 'rate_inputs')
 
   # ---- Deltas (tariff increases from baseline) ----
-  etr_file <- file.path(tariff_etrs_dir, 'gtap_deltas_by_sector_country.csv')
+  etr_file <- file.path(rate_inputs_dir, 'gtap_deltas_by_sector_country.csv')
   if (!file.exists(etr_file)) {
     stop('ETR delta matrix not found: ', etr_file)
   }
@@ -239,7 +236,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   # ---- Scenario levels (absolute tariff rates) ----
-  levels_file <- file.path(tariff_etrs_dir, 'gtap_levels_by_sector_country.csv')
+  levels_file <- file.path(rate_inputs_dir, 'gtap_levels_by_sector_country.csv')
   if (!file.exists(levels_file)) {
     stop('ETR levels matrix not found: ', levels_file)
   }
@@ -276,7 +273,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
                   nrow(inputs$baseline_levels_matrix)))
 
   # ---- Census-country files (optional passthrough data) ----
-  census_deltas_file <- file.path(tariff_etrs_dir, 'deltas_by_census_country.csv')
+  census_deltas_file <- file.path(rate_inputs_dir, 'deltas_by_census_country.csv')
   if (file.exists(census_deltas_file)) {
     inputs$census_country_deltas <- read_csv(census_deltas_file, show_col_types = FALSE)
     message(sprintf('  Loaded census-country deltas: %d rows',
@@ -285,7 +282,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
     inputs$census_country_deltas <- NULL
   }
 
-  census_levels_file <- file.path(tariff_etrs_dir, 'levels_by_census_country.csv')
+  census_levels_file <- file.path(rate_inputs_dir, 'levels_by_census_country.csv')
   if (file.exists(census_levels_file)) {
     inputs$census_country_levels <- read_csv(census_levels_file, show_col_types = FALSE)
     message(sprintf('  Loaded census-country levels: %d rows',
@@ -306,10 +303,10 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   # ---- BEA-level ETR deltas (for Boston Fed I-O price model) ----
-  bea_deltas_file <- file.path(tariff_etrs_dir, 'bea_deltas_by_commodity.csv')
+  bea_deltas_file <- file.path(rate_inputs_dir, 'bea_deltas_by_commodity.csv')
   if (!file.exists(bea_deltas_file)) {
     stop('BEA deltas file not found: ', bea_deltas_file,
-         '\n  Re-run Tariff-ETRs to generate BEA-level output')
+         '\n  Re-run Step 0a to generate BEA-level output')
   }
   bea_deltas_raw <- read_csv(bea_deltas_file, show_col_types = FALSE)
 
@@ -341,9 +338,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # ---- (b) eta'-adjusted (noncompliance) artifacts ----
   # When 00a produced the `_b` files, these drive the GTAP-shifted re-weighting
   # (post-sub prices), the USMM impulse, and (via the mtax-shocked GTAP run)
-  # revenue. When absent — legacy tariff_etrs scenarios, or a rate_inputs/ written
-  # before this feature — fall back to (a) so behavior is unchanged and the old
-  # revenue-side compliance haircut still applies (noncompliance_active = FALSE).
+  # revenue. When absent, fall back to (a) so older rate_inputs remain runnable.
   read_sector_matrix_b <- function(path, label) {
     raw <- read_csv(path, show_col_types = FALSE)
     assert_has_columns(raw, 'gtap_code', label)
@@ -356,9 +351,9 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
     }
   }
 
-  etr_b_file    <- file.path(tariff_etrs_dir, 'gtap_deltas_by_sector_country_b.csv')
-  levels_b_file <- file.path(tariff_etrs_dir, 'gtap_levels_by_sector_country_b.csv')
-  bea_b_file    <- file.path(tariff_etrs_dir, 'bea_deltas_by_commodity_b.csv')
+  etr_b_file    <- file.path(rate_inputs_dir, 'gtap_deltas_by_sector_country_b.csv')
+  levels_b_file <- file.path(rate_inputs_dir, 'gtap_levels_by_sector_country_b.csv')
+  bea_b_file    <- file.path(rate_inputs_dir, 'bea_deltas_by_commodity_b.csv')
   inputs$noncompliance_active <- all(file.exists(c(etr_b_file, levels_b_file, bea_b_file)))
 
   if (inputs$noncompliance_active) {

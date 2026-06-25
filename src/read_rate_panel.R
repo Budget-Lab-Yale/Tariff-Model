@@ -11,10 +11,7 @@
 #   hts10 (chr), cty_code (chr), valid_from (Date), valid_until (Date, EXCLUSIVE),
 #   rate_total (fraction)[, rate_<authority> (fraction) ...]
 #
-# tariff-etrs and tariff-rate-tracker produce the SAME conceptual object — the
-# effective tariff rate at HS10xcountry, with all USMCA / metal-content / exemption
-# adjustments already reflected in the tracker output. `total_rate` (= base_rate +
-# total_additional) is that combined effective rate; we read it as `rate_total`.
+# The tracker output has all USMCA, metal-content, and exemption adjustments`r`n# already reflected in `total_rate`, which we read as `rate_total`.
 # =============================================================================
 
 library(tidyverse)
@@ -74,17 +71,18 @@ snapshot_dir <- function(rate_panel, series) {
   file.path(resolve_series_dir(rate_panel, series), 'snapshots')
 }
 
-#' Resolve the bundle's import-weight base, if the tracker published one
+#' Resolve the bundle's import-weight base
 #'
 #' The weight base is vintage-specific but NOT series-specific (same import flows
 #' for actual + every scenario), so it lives at the vintage root, beside actual/.
-#' See docs/tariff_rate_tracker_weights_request.md for the contract.
+#' The tracker publishes weights at every vintage, so the weight base always comes
+#' from the rate panel's own vintage. See docs/tariff_rate_tracker_weights_request.md.
 #'
 #' @return Path to import_weights_hs10_country.{parquet,csv.gz}, or NULL if absent
 resolve_weights_path <- function(rate_panel) {
   root <- rate_panel$root
   if (is.null(root)) return(NULL)
-  wdir <- file.path(root, rate_panel$vintage %||% 'latest', 'weights')
+  wdir <- file.path(root, rate_panel$vintage, 'weights')
   candidates <- file.path(wdir, c('import_weights_hs10_country.parquet',
                                   'import_weights_hs10_country.csv.gz'))
   hit <- candidates[file.exists(candidates)]

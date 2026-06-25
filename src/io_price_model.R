@@ -54,7 +54,7 @@ resolve_io_data_dir <- function(level = 'summary') {
 #' Disaggregate summary-level tau_M to detail-level BEA codes
 #'
 #' When using detail-level BEA tables, the tariff vector (tau_M) from
-#' Tariff-ETRs uses summary BEA codes (e.g., 311FT). This function expands
+#' Rate inputs use summary BEA codes (e.g., 311FT). This function expands
 #' it to detail codes (e.g., 311111, 311119, ...) using the summary-to-detail
 #' mapping. Each detail code inherits its parent summary code's tariff.
 #'

@@ -32,7 +32,7 @@ source('src/calibration/calibration_helpers.R')
 source('src/calibration/adcvd_strip.R')
 source('src/calibration/deminimis_strip.R')
 
-TM_HS10_GTAP_CROSSWALK <- 'resources/rate_aggregation/2024/hs10_gtap_crosswalk.csv'
+TM_HS6_GTAP_CROSSWALK <- 'resources/rate_aggregation/hs6_gtap_crosswalk.csv'
 
 #' Calibrate eta for a scenario and write the slim (eta_group x gtap_code) contract.
 #'
@@ -207,11 +207,12 @@ calibrate_eta <- function(scenario) {
   msg('[B] Aggregating to partner group x GTAP...')
   panel_tr <- filter(panel, period == 'train')
 
-  # TM's own HS10->GTAP crosswalk (uppercase gtap_code; derive gtap_code_lc).
-  xwalk <- read_csv(TM_HS10_GTAP_CROSSWALK,
+  # TM's own HS6->GTAP crosswalk (uppercase gtap_code; derive gtap_code_lc). GTAP
+  # sector is determined by the 6-digit heading, so we join on the HS6 prefix.
+  xwalk <- read_csv(TM_HS6_GTAP_CROSSWALK,
                     col_types = cols(.default = col_character())) %>%
-    transmute(hs10, gtap_code, gtap_code_lc = tolower(gtap_code)) %>%
-    distinct(hs10, gtap_code, gtap_code_lc)
+    transmute(hs6_code, gtap_code, gtap_code_lc = tolower(gtap_code)) %>%
+    distinct(hs6_code, gtap_code, gtap_code_lc)
 
   eta_pg_hs2 <- schedule %>%
     distinct(partner_group, hs2, eta_twoway_announced, eta_twoway_compadj)
@@ -221,7 +222,8 @@ calibrate_eta <- function(scenario) {
               statrev_announced = sum(imports * rate_h2avg),
               conval            = sum(con_val_mo),
               .by = c(hs10, partner_group, hs2)) %>%
-    left_join(xwalk, by = 'hs10') %>%
+    mutate(hs6_code = substr(hs10, 1, 6)) %>%
+    left_join(xwalk, by = 'hs6_code') %>%
     left_join(eta_pg_hs2, by = c('partner_group', 'hs2'))
 
   unmatched <- cells %>% filter(is.na(gtap_code))

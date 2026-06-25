@@ -12,9 +12,9 @@
 #                              commodities) or 'summary' (73 commodities)
 #
 # Example:
-#   Rscript run.R 2-21_perm
-#   Rscript run.R 2-21_perm --markup constant_dollar
-#   Rscript run.R 2-21_perm --bea-io-level detail
+#   Rscript run.R tracker_actual_2026-06-13
+#   Rscript run.R tracker_actual_2026-06-13 --markup constant_dollar
+#   Rscript run.R tracker_actual_2026-06-13 --bea-io-level detail
 # =============================================================================
 
 args <- commandArgs(trailingOnly = TRUE)

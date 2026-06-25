@@ -1,0 +1,42 @@
+# =============================================================================
+# Model Parameters: tracker_new_301_2026-06-23
+# =============================================================================
+# 2026-06-23 tracker vintage, scenario where Section 122 expires and is replaced
+# with new forced-labor and other Section 301 actions.
+
+rate_panel:
+  root: 'C:/Users/jar335/Documents/Interfaces/model_data/tariff-rate-tracker'
+  vintage: '2026-06-23-10'
+  tracker_scenario: 'new_301'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state, matching the prior tracker reference convention.
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'output/calibration/tracker_actual_2026-06-23/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'output/calibration/tracker_actual_2026-06-23/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'

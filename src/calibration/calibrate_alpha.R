@@ -33,7 +33,7 @@ suppressPackageStartupMessages({
 
 source('src/calibration/calibration_helpers.R')
 
-TM_HS10_GTAP_CROSSWALK   <- 'resources/rate_aggregation/2024/hs10_gtap_crosswalk.csv'
+TM_HS6_GTAP_CROSSWALK    <- 'resources/rate_aggregation/hs6_gtap_crosswalk.csv'
 GTAP_COMMODITY_SECTORS   <- 'resources/calibration/gtap_commodity_sectors.csv'
 IMDB_2024_FILE           <- file.path('output', 'calibration', '_imdb',
                                       'imdb_2024_hs10_country.csv')
@@ -53,14 +53,15 @@ calibrate_alpha <- function(scenario) {
   dir.create(alpha_dir, showWarnings = FALSE, recursive = TRUE)
 
   # ---- panel -> GTAP-grain cells (shared by panel + 2024 source) ----
-  xwalk <- read_csv(TM_HS10_GTAP_CROSSWALK,
+  xwalk <- read_csv(TM_HS6_GTAP_CROSSWALK,
                     col_types = cols(.default = col_character())) %>%
-    transmute(hs10, gtap_code = tolower(gtap_code)) %>%
-    distinct(hs10, gtap_code)
+    transmute(hs6_code, gtap_code = tolower(gtap_code)) %>%
+    distinct(hs6_code, gtap_code)
   pmap <- load_gtap_partner_map()
 
   to_cells <- function(df) df %>%
-    left_join(xwalk, by = 'hs10') %>%
+    mutate(hs6_code = substr(hs10, 1, 6)) %>%
+    left_join(xwalk, by = 'hs6_code') %>%
     left_join(pmap,  by = 'cty_code') %>%
     mutate(gtap_code = coalesce(gtap_code, 'unmapped'),
            partner   = coalesce(partner, 'row')) %>%
@@ -242,7 +243,8 @@ calibrate_alpha <- function(scenario) {
   # alpha at fitted strengths -- so the GTAP-baseline-vs-2024 level gap drops out.
   d2024 <- act_before %>% transmute(gtap_code, partner, d2024 = value)
   obs_w <- panel %>%
-    left_join(xwalk, by = 'hs10') %>% left_join(pmap, by = 'cty_code') %>%
+    mutate(hs6_code = substr(hs10, 1, 6)) %>%
+    left_join(xwalk, by = 'hs6_code') %>% left_join(pmap, by = 'cty_code') %>%
     mutate(gtap_code = coalesce(gtap_code, 'unmapped'),
            partner   = coalesce(partner, 'row')) %>%
     filter(gtap_code != 'unmapped') %>%

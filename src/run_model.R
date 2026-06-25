@@ -17,7 +17,6 @@ suppressPackageStartupMessages({
 
 # Source helper modules
 source('src/helpers.R')
-source('src/00_run_tariff_etrs.R')
 source('src/00a_prepare_rate_inputs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
@@ -58,33 +57,16 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   #---------------------------
   # Step 0a: Prepare rate inputs
   #---------------------------
-  # New path: read the upstream tariff-rate-tracker panel and do the GTAP/BEA
-  # rollups, deltas, and shocks.txt here (replaces Tariff-ETRs). Selected by the
-  # presence of a `rate_panel` block in model_params.yaml. The legacy Tariff-ETRs
-  # path remains for scenarios still configured with `tariff_etrs` until cutover.
+  # Read the upstream tariff-rate-tracker panel and do the GTAP/BEA rollups,
+  # deltas, and shocks.txt generation in this repo.
 
   model_params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
 
-  if (!is.null(model_params$rate_panel)) {
-    message('Step 0a: Preparing rate inputs from tracker panel...')
-    prepare_rate_inputs(scenario)
-  } else {
-    message('Step 0: Running Tariff-ETRs (legacy path)...')
-    assumptions <- yaml::read_yaml('config/global_assumptions.yaml')
-
-    etrs_scenario <- model_params$tariff_etrs$scenario
-    if (is.null(etrs_scenario)) {
-      stop('model_params.yaml must have tariff_etrs.scenario field (or a rate_panel block)')
-    }
-
-    tariff_etrs_path <- assumptions$tariff_etrs_path
-    if (is.null(tariff_etrs_path)) {
-      stop('global_assumptions.yaml must have tariff_etrs_path field')
-    }
-
-    run_tariff_etrs(scenario, etrs_scenario = etrs_scenario,
-                    tariff_etrs_path = tariff_etrs_path)
+  if (is.null(model_params$rate_panel)) {
+    stop('model_params.yaml must have a rate_panel block')
   }
+  message('Step 0a: Preparing rate inputs from tracker panel...')
+  prepare_rate_inputs(scenario)
 
   #---------------------------
   # Step 0b: Run GTAP

@@ -112,10 +112,9 @@ over time even though no single sector's `eta` changes. (This is the only mechan
 which the noncompliance-adjusted rate path can have a different *shape* than the
 statutory path.)
 
-`eta` is only active when a scenario supplies a granular eta file
-(`noncompliance_active = TRUE`, the new rate-panel scenarios). Legacy `tariff_etrs`
-scenarios (e.g. `2026-04-06`) run with `eta = 1` (statutory = adjusted) on the structural
-side and apply only the flat `compliance_effect` (0.10) haircut to revenue.
+`eta` is active when a scenario supplies a granular eta file
+(`noncompliance_active = TRUE`). Without that file, Step 0a falls back to the
+flat `compliance_effect` setting from `config/global_assumptions.yaml`.
 
 ---
 

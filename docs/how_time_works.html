@@ -118,7 +118,7 @@
 <h2>eta (noncompliance) and time</h2>
 <p><code>eta</code> is <b>time-invariant</b>: <code>eta_by_partner_gtap.csv</code> is keyed by <code>(eta_group, gtap_code)</code> only — no date. The same haircut applies in 2025 and 2026.</p>
 <p>It is, however, <b>per-sector</b>. Because the model tariffs <i>different products on different dates</i>, the import-weighted <i>average</i> haircut across all currently-tariffed goods drifts over time even though no single sector's <code>eta</code> changes. (This is the only mechanism by which the noncompliance-adjusted rate path can have a different <i>shape</i> than the statutory path.)</p>
-<p><code>eta</code> is only active when a scenario supplies a granular eta file (<code>noncompliance_active = TRUE</code>, the new rate-panel scenarios). Legacy <code>tariff_etrs</code> scenarios (e.g. <code>2026-04-06</code>) run with <code>eta = 1</code> (statutory = adjusted) on the structural side and apply only the flat <code>compliance_effect</code> (0.10) haircut to revenue.</p>
+<p><code>eta</code> is active when a scenario supplies a granular eta file (<code>noncompliance_active = TRUE</code>). Without that file, Step 0a falls back to the flat <code>compliance_effect</code> setting from <code>config/global_assumptions.yaml</code>.</p>
 
 <h2>Known time-related gotchas</h2>
 <p>(See the model review for detail.)</p>

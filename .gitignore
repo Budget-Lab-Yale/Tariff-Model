@@ -48,3 +48,18 @@ reports/State of U.S. Tariffs_*
 
 # Archived scenarios
 config/scenarios/archive/
+
+# Scratch / diagnostic working dir
+/data/
+
+# Run logs
+/logs_*.txt
+
+# Generated reports (large binary bundles, office docs, exported pages)
+/reports/
+
+# Slides / presentation build artifacts
+/slides/
+
+# Office temp lock files
+~$*
