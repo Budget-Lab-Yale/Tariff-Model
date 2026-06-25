@@ -131,12 +131,15 @@ way they consume any sibling model:
 
 ```
 <production>/model_data/Tariff-Model/v1/<vintage>/
-  dependencies.csv     # ID, interface, version, vintage, scenario  (lineage stamp)
-  manifest.json        # model version, vintage, git commit, run options, deps
-  <scenario>/          # the run's result CSVs
+  <scenario>/
+    dependencies.csv   # ID, interface, version, vintage, scenario  (lineage stamp)
+    manifest.json      # model version, vintage, git commit, run options, deps
+    *.csv              # the run's result files
 ```
 
-`vintage` is a `YYYYMMDDHHMM` run timestamp (override with `--vintage`).
+`vintage` is a `YYYYMMDDHHMM` run timestamp (override with `--vintage`). The lineage
+stamp lives **inside the scenario dir** (not at the vintage root) so it travels with
+the output and concurrent one-scenario-per-job runs can't clobber a shared file.
 `dependencies.csv` records exactly which tariff-rate-tracker vintage + scenario
 produced the run — e.g. `Tariff-Rate-Tracker, 2, 2026-06-25-14, actual` — so any
 published tariff output is traceable to its tracker input. Pass `--write-local` to

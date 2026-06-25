@@ -92,8 +92,10 @@ git_commit <- function() {
 #'
 #' Copies the scenario's results/ into {vintage_root}/{scenario}/ and writes
 #' dependencies.csv (Budget Lab schema: ID, interface, version, vintage, scenario)
-#' + manifest.json at the vintage root. No-op (with a message) when no output root
-#' is configured.
+#' + manifest.json INTO that scenario dir (not the vintage root) so the lineage
+#' stamp travels with the scenario output and concurrent one-scenario-per-job runs
+#' can't clobber a shared root file. No-op (with a message) when no output root is
+#' configured.
 #'
 #' @param scenario Scenario name
 #' @param vintage This run's vintage id
@@ -126,7 +128,7 @@ publish_run <- function(scenario, vintage, resolved_rate_panel, results_dir,
     vintage   = resolved_rate_panel$vintage,
     scenario  = resolved_rate_panel$tracker_scenario
   )
-  write_csv(deps, file.path(vintage_root, 'dependencies.csv'))
+  write_csv(deps, file.path(scenario_dir, 'dependencies.csv'))
 
   manifest <- list(
     model             = 'Tariff-Model',
@@ -139,7 +141,7 @@ publish_run <- function(scenario, vintage, resolved_rate_panel, results_dir,
     bea_io_level      = bea_io_level,
     dependencies      = deps
   )
-  jsonlite::write_json(manifest, file.path(vintage_root, 'manifest.json'),
+  jsonlite::write_json(manifest, file.path(scenario_dir, 'manifest.json'),
                        auto_unbox = TRUE, pretty = TRUE)
 
   message(sprintf('  Published interface output -> %s', scenario_dir))
