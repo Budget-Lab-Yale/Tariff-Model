@@ -178,6 +178,6 @@ These are baked into the wrapper scripts; each was load-bearing for a clean run:
 
 ## First validated run
 
-`tracker_actual_2026-06-23_no_eta_alpha` (vintage `2026-06-25-14`, neutral eta):
+`tracker_actual_2026-06-25_no_eta_alpha` (vintage `2026-06-25-14`, neutral eta):
 all 11 steps, exit 0, GTAP solved under Wine in-pipeline, ~4 min, ~29 GB peak,
 33 output files.

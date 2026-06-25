@@ -1,12 +1,12 @@
 # =============================================================================
-# Model Parameters: tracker_actual_2026-06-23_no_eta_alpha
+# Model Parameters: tracker_new_301_2026-06-25_no_eta_alpha
 # =============================================================================
-# Bridge scenario: 2026-06-23 actual/current-law policy with eta neutralized
-# and alpha substitution correction disabled.
+# Bridge scenario: 2026-06-25 new_301 policy with eta neutralized and alpha
+# substitution correction disabled.
 
 rate_panel:
-  vintage: '2026-06-23-10'
-  tracker_scenario: 'actual'
+  vintage: '2026-06-25-14'
+  tracker_scenario: 'new_301'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
 

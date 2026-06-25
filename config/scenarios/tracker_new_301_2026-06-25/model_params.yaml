@@ -1,15 +1,16 @@
 # =============================================================================
-# Model Parameters: tracker_new_301_2026-06-23_no_eta_alpha
+# Model Parameters: tracker_new_301_2026-06-25
 # =============================================================================
-# Bridge scenario: 2026-06-23 new_301 policy with eta neutralized and alpha
-# substitution correction disabled.
+# 2026-06-25 tracker vintage, scenario where Section 122 expires and is replaced
+# with new forced-labor and other Section 301 actions.
 
 rate_panel:
-  vintage: '2026-06-23-10'
+  vintage: '2026-06-25-14'
   tracker_scenario: 'new_301'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
 
+# End-2026 policy state, matching the prior tracker reference convention.
 gtap_reference_date: '2026-11-10'
 
 gtap:
@@ -18,8 +19,11 @@ gtap:
 refund_2026: 166.0
 
 noncompliance:
-  eta_file: 'output/calibration/neutral/eta_zero_by_partner_gtap.csv'
-  legacy_revenue_haircut: true
+  eta_file: 'output/calibration/tracker_actual_2026-06-25/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'output/calibration/tracker_actual_2026-06-25/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
 
 calibration:
   window_start: '2025-06'
