@@ -16,6 +16,22 @@
 
 library(tidyverse)
 
+#' Resolve the tracker-bundle root, allowing an environment override
+#'
+#' Scenario configs carry `rate_panel.root`, but in practice that has been a
+#' per-user absolute path (e.g. a Windows `C:/Users/...` dir), which is not
+#' portable across machines. To run the same committed scenario on a laptop and
+#' on the HPC without editing the config, the env var TARIFF_RATE_TRACKER_ROOT
+#' takes precedence when set; otherwise the scenario's `root` is used.
+#'
+#' @param rate_panel The `rate_panel:` config block
+#' @return Effective bundle root (character), or NULL if neither source is set
+resolve_rate_panel_root <- function(rate_panel) {
+  env_root <- Sys.getenv('TARIFF_RATE_TRACKER_ROOT', unset = NA_character_)
+  if (!is.na(env_root) && nzchar(env_root)) return(env_root)
+  rate_panel$root
+}
+
 #' Resolve the on-disk path for one published series in a tracker bundle
 #'
 #' Mirrors the AuthoritySpec output layout:
@@ -27,9 +43,9 @@ library(tidyverse)
 #' @return Absolute path to the series' rate panel file (rds or parquet)
 resolve_panel_path <- function(rate_panel, series) {
 
-  root <- rate_panel$root
+  root <- resolve_rate_panel_root(rate_panel)
   if (is.null(root)) {
-    stop('rate_panel.root not set in model_params.yaml')
+    stop('rate_panel.root not set in model_params.yaml (and env TARIFF_RATE_TRACKER_ROOT unset)')
   }
 
   vintage_dir <- file.path(root, rate_panel$vintage %||% 'latest')
@@ -54,9 +70,9 @@ resolve_panel_path <- function(rate_panel, series) {
 }
 
 resolve_series_dir <- function(rate_panel, series) {
-  root <- rate_panel$root
+  root <- resolve_rate_panel_root(rate_panel)
   if (is.null(root)) {
-    stop('rate_panel.root not set in model_params.yaml')
+    stop('rate_panel.root not set in model_params.yaml (and env TARIFF_RATE_TRACKER_ROOT unset)')
   }
 
   vintage_dir <- file.path(root, rate_panel$vintage %||% 'latest')
@@ -80,7 +96,7 @@ snapshot_dir <- function(rate_panel, series) {
 #'
 #' @return Path to import_weights_hs10_country.{parquet,csv.gz}, or NULL if absent
 resolve_weights_path <- function(rate_panel) {
-  root <- rate_panel$root
+  root <- resolve_rate_panel_root(rate_panel)
   if (is.null(root)) return(NULL)
   wdir <- file.path(root, rate_panel$vintage, 'weights')
   candidates <- file.path(wdir, c('import_weights_hs10_country.parquet',

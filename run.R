@@ -52,7 +52,18 @@ if ('--bea-io-level' %in% args) {
   }
 }
 
+# Parse --vintage (output interface vintage id; default = run timestamp)
+vintage <- NULL
+if ('--vintage' %in% args) {
+  idx <- which(args == '--vintage')
+  if (idx < length(args)) vintage <- args[idx + 1]
+}
+
+# Parse --write-local (publish to the local scratch root instead of shared production)
+write_local <- '--write-local' %in% args
+
 # Run model
 source('src/run_model.R')
 run_scenario(scenario, markup_assumption = markup_assumption,
-             bea_io_level = bea_io_level)
+             bea_io_level = bea_io_level, vintage = vintage,
+             write_local = write_local)

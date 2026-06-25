@@ -1,0 +1,10 @@
+---
+# Filesystem roots for the Budget Lab interface convention.
+#   production : the shared, published model_data tree (read upstream deps from
+#                here; publish this model's vintages here).
+#   local      : a per-user scratch tree for dev runs (used when the model is run
+#                with write_locally = TRUE).
+# These are machine-specific; edit for your environment. The repo's in-tree
+# output/ dir is still used for working artifacts (rate_inputs, gtap solution).
+local: /nfs/roberts/scratch/pi_nrs36/jar335
+production: /nfs/roberts/project/pi_nrs36/shared

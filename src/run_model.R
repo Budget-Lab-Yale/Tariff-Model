@@ -17,6 +17,7 @@ suppressPackageStartupMessages({
 
 # Source helper modules
 source('src/helpers.R')
+source('src/interfaces.R')
 source('src/00a_prepare_rate_inputs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
@@ -42,7 +43,7 @@ source('src/11_write_outputs.R')
 #'
 #' @return List containing all model outputs
 run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
-                         bea_io_level = NULL) {
+                         bea_io_level = NULL, vintage = NULL, write_local = FALSE) {
 
   message(sprintf('\n=========================================================='))
   message(sprintf('Running Tariff Model: %s', scenario))
@@ -53,6 +54,17 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   if (!dir.exists(scenario_dir)) {
     stop(sprintf('Scenario directory not found: %s', scenario_dir))
   }
+
+  # Resolve the tariff-rate-tracker dependency (root/vintage/scenario) via the
+  # interface config and fix this run's vintage, so the published outputs can be
+  # stamped with exactly which tracker bundle they consumed.
+  interface_cfg <- read_interface_config()
+  scenario_params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
+  resolved_rate_panel <- resolve_rate_panel(scenario_params$rate_panel, interface_cfg)
+  run_vintage <- vintage %||% make_vintage()
+  message(sprintf('Run vintage: %s | tracker dependency: %s / %s\n',
+                  run_vintage, resolved_rate_panel$vintage,
+                  resolved_rate_panel$tracker_scenario))
 
   #---------------------------
   # Step 0a: Prepare rate inputs
@@ -309,6 +321,22 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
 
   message('\nStep 10: Writing outputs to disk...')
   write_outputs(results, scenario)
+
+  #---------------------------
+  # Step 11: Publish to the shared interface tree + stamp dependencies
+  #---------------------------
+
+  message('\nStep 11: Publishing interface output...')
+  publish_run(
+    scenario            = scenario,
+    vintage             = run_vintage,
+    resolved_rate_panel = resolved_rate_panel,
+    results_dir         = file.path('output', scenario, 'results'),
+    markup_assumption   = markup_assumption,
+    bea_io_level        = inputs$bea_io_level,
+    write_local         = write_local,
+    cfg                 = interface_cfg
+  )
 
   # Print key results summary
   message('\n----------------------------------------------------------')

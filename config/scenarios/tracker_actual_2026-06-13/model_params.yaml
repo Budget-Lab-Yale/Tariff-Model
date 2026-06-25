@@ -6,7 +6,6 @@
 # the production pipeline.
 
 rate_panel:
-  root: 'C:/Users/jar335/Documents/Interfaces/model_data/tariff-rate-tracker'
   vintage: 'latest_2026_06_13'  tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'

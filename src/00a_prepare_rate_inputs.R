@@ -24,6 +24,7 @@
 library(tidyverse)
 
 source('src/read_rate_panel.R')
+source('src/interfaces.R')
 
 # ==== Output ordering constants (must match downstream expectations) =========
 # Output ordering constants.
@@ -231,8 +232,10 @@ apply_prefix_rate_fallback <- function(frame, rate_slice, col, label, prefix_len
     group_by(prefix, cty_code) %>%
     summarise(
       fallback_rate = mean(rate_total),
-      min_rate = min(rate_total),
-      max_rate = max(rate_total),
+      # Guard all-NA groups so min()/max() don't warn "no non-missing arguments"
+      # (returns NA, same as the unguarded result, but silent). Behavior unchanged.
+      min_rate = if (all(is.na(rate_total))) NA_real_ else min(rate_total),
+      max_rate = if (all(is.na(rate_total))) NA_real_ else max(rate_total),
       .groups = 'drop'
     )
 
@@ -568,6 +571,9 @@ prepare_rate_inputs <- function(scenario) {
   if (is.null(rate_panel)) {
     stop('model_params.yaml must have a rate_panel block (root, vintage, tracker_scenario, baseline_date)')
   }
+  # Fill root (from output_roots/env), and default vintage + tracker_scenario from
+  # the interface config when the scenario doesn't pin them. See src/interfaces.R.
+  rate_panel <- resolve_rate_panel(rate_panel)
   gtap_reference_date <- as.Date(model_params$gtap_reference_date)
 
   out_dir <- file.path('output', scenario, 'rate_inputs')

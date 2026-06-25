@@ -193,8 +193,11 @@ run_gtap <- function(scenario, include_retaliation = TRUE,
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
   # Build CMF file
-  # Use forward slashes for GEMPACK compatibility
-  solution_path <- normalizePath(file.path(output_dir, solution_name), mustWork = FALSE)
+  # Use forward slashes for GEMPACK compatibility. Absolutize via the (already
+  # created) output_dir: normalizePath() leaves a non-existent leaf path relative
+  # on Linux (it only absolutizes it on Windows), which breaks GEMPACK's Solution
+  # file create when it runs from gtap_work_dir.
+  solution_path <- file.path(normalizePath(output_dir, mustWork = TRUE), solution_name)
   solution_path <- str_replace_all(solution_path, '\\\\', '/')
 
   # Replace all placeholders in CMF template

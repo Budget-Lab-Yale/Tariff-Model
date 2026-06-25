@@ -5,7 +5,6 @@
 # and alpha substitution correction disabled.
 
 rate_panel:
-  root: 'C:/Users/jar335/Documents/Interfaces/model_data/tariff-rate-tracker'
   vintage: '2026-06-23-10'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
