@@ -17,7 +17,7 @@ suppressPackageStartupMessages({
 
 # Source helper modules
 source('src/helpers.R')
-source('src/00_run_tariff_etrs.R')
+source('src/00a_prepare_rate_inputs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
 source('src/02_calculate_etr.R')
@@ -29,107 +29,6 @@ source('src/07_calculate_dynamic_revenue.R')
 source('src/08_calculate_foreign_gdp.R')
 source('src/09_calculate_distribution.R')
 source('src/11_write_outputs.R')
-source('src/12_export_excel.R')
-
-
-#' Average two sets of price results (element-wise)
-#'
-#' @param a Price results list from compute_io_prices() or compute_ge_prices()
-#' @param b Price results list from same function with different markup_assumption
-#' @return Averaged price results list
-average_price_results <- function(a, b) {
-  avg <- list(
-    aggregate = (a$aggregate + b$aggregate) / 2,
-    bea_commodity_prices = (a$bea_commodity_prices + b$bea_commodity_prices) / 2,
-    markup_assumption = 'average'
-  )
-
-  # Average per-PCE-category prices (join by nipa_line to be safe)
-  avg$pce_category_prices <- a$pce_category_prices %>%
-    inner_join(
-      b$pce_category_prices %>% select(nipa_line, sr_price_effect_b = sr_price_effect),
-      by = 'nipa_line'
-    ) %>%
-    mutate(
-      sr_price_effect = (sr_price_effect + sr_price_effect_b) / 2
-    ) %>%
-    select(-sr_price_effect_b)
-
-  # Average decomposition if present (presub Boston Fed only)
-  if (!is.null(a$direct_aggregate) && !is.null(b$direct_aggregate)) {
-    avg$direct_aggregate <- (a$direct_aggregate + b$direct_aggregate) / 2
-    avg$supply_chain_aggregate <- (a$supply_chain_aggregate + b$supply_chain_aggregate) / 2
-  }
-
-  return(avg)
-}
-
-
-#' Average GE decomposition results across markup assumptions
-#'
-#' @param a GE decomposition result from decompose_ge_prices()
-#' @param b GE decomposition result from decompose_ge_prices()
-#' @return Averaged decomposition result
-average_ge_decomposition_results <- function(a, b) {
-  avg_numeric_join <- function(x, y, keys) {
-    numeric_cols <- setdiff(intersect(
-      names(x)[vapply(x, is.numeric, logical(1))],
-      names(y)[vapply(y, is.numeric, logical(1))]
-    ), keys)
-    keep_cols <- union(keys, setdiff(names(x), numeric_cols))
-
-    joined <- x %>%
-      inner_join(
-        y %>% select(all_of(c(keys, numeric_cols))),
-        by = keys,
-        suffix = c('_a', '_b')
-      )
-
-    for (col in numeric_cols) {
-      joined[[col]] <- (joined[[paste0(col, '_a')]] + joined[[paste0(col, '_b')]]) / 2
-    }
-
-    joined %>%
-      select(all_of(keep_cols), all_of(numeric_cols))
-  }
-
-  summarize_pce_decomp <- function(pce_category) {
-    summary <- tibble(
-      metric = c(
-        'import_price_component',
-        'domestic_price_component',
-        'share_shift_component',
-        'residual_component',
-        'ge_price_increase'
-      ),
-      value = c(
-        sum(pce_category$import_price_component * pce_category$purchasers_value) /
-          sum(pce_category$purchasers_value),
-        sum(pce_category$domestic_price_component * pce_category$purchasers_value) /
-          sum(pce_category$purchasers_value),
-        sum(pce_category$share_shift_component * pce_category$purchasers_value) /
-          sum(pce_category$purchasers_value),
-        sum(pce_category$residual_component * pce_category$purchasers_value) /
-          sum(pce_category$purchasers_value),
-        sum(pce_category$ge * pce_category$purchasers_value) /
-          sum(pce_category$purchasers_value)
-      ),
-      unit = 'pct'
-    )
-
-    summary
-  }
-
-  pce_category <- avg_numeric_join(a$pce_category, b$pce_category, 'nipa_line')
-
-  list(
-    gtap_commodity = a$gtap_commodity,
-    bea_commodity = avg_numeric_join(a$bea_commodity, b$bea_commodity, 'bea_code'),
-    pce_category = pce_category,
-    summary = summarize_pce_decomp(pce_category),
-    markup_assumption = 'average'
-  )
-}
 
 
 #' Run the complete tariff model for a scenario
@@ -156,27 +55,18 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   }
 
   #---------------------------
-  # Step 0: Run Tariff-ETRs
+  # Step 0a: Prepare rate inputs
   #---------------------------
+  # Read the upstream tariff-rate-tracker panel and do the GTAP/BEA rollups,
+  # deltas, and shocks.txt generation in this repo.
 
-  message('Step 0: Running Tariff-ETRs...')
-
-  # Read model params and global assumptions to get ETRs config
   model_params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
-  assumptions <- yaml::read_yaml('config/global_assumptions.yaml')
 
-  etrs_scenario <- model_params$tariff_etrs$scenario
-  if (is.null(etrs_scenario)) {
-    stop('model_params.yaml must have tariff_etrs.scenario field')
+  if (is.null(model_params$rate_panel)) {
+    stop('model_params.yaml must have a rate_panel block')
   }
-
-  tariff_etrs_path <- assumptions$tariff_etrs_path
-  if (is.null(tariff_etrs_path)) {
-    stop('global_assumptions.yaml must have tariff_etrs_path field')
-  }
-
-  run_tariff_etrs(scenario, etrs_scenario = etrs_scenario,
-                  tariff_etrs_path = tariff_etrs_path)
+  message('Step 0a: Preparing rate inputs from tracker panel...')
+  prepare_rate_inputs(scenario)
 
   #---------------------------
   # Step 0b: Run GTAP
@@ -236,10 +126,12 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
       markup_assumption = ma
     )
 
-    # PE post-substitution
+    # PE post-substitution -> rate (c): start from the eta'-adjusted (b) tariff
+    # vector and (b) source matrix, then apply GTAP's source-composition shift.
+    # (b) == (a) when noncompliance is inactive, so this is a no-op for legacy runs.
     tau_M_post <- compute_postsub_tau_M(
-      inputs$tau_M, inputs$gtap_bea_crosswalk,
-      inputs$etr_matrix, inputs$viws, inputs$baselines$viws_baseline
+      inputs$tau_M_b, inputs$gtap_bea_crosswalk,
+      inputs$etr_matrix_b, inputs$viws, inputs$baselines$viws_baseline
     )
     omega_M_post <- compute_postsub_omega_M(
       matrices$omega_M, inputs$gtap_bea_crosswalk,

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memo on the Price-Impact Overhaul</title>
+  <style>
+    :root {
+      --bg: #f7f4ee;
+      --paper: #fffdf9;
+      --ink: #1f1f1b;
+      --muted: #5e5a52;
+      --rule: #d9d0c3;
+      --accent: #8b3a2f;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.5 Georgia, "Times New Roman", serif;
+    }
+    main {
+      max-width: 860px;
+      margin: 32px auto;
+      padding: 40px 48px;
+      background: var(--paper);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      border: 1px solid var(--rule);
+    }
+    h1, h2 {
+      line-height: 1.2;
+      margin: 0 0 14px;
+    }
+    h1 {
+      font-size: 2rem;
+      color: var(--accent);
+    }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 28px;
+      padding-top: 12px;
+      border-top: 1px solid var(--rule);
+    }
+    p, ul {
+      margin: 0 0 14px;
+    }
+    ul {
+      padding-left: 22px;
+    }
+    code {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+      background: #f2eee6;
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .formula {
+      margin: 14px 0 18px;
+      padding: 12px 14px;
+      background: #f6f1e8;
+      border-left: 4px solid var(--accent);
+      font-family: "Cascadia Code", Consolas, monospace;
+      white-space: pre-wrap;
+    }
+    .note {
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Memo on the Price-Impact Overhaul</h1>
+    <p>This note summarizes how the tariff model's price methodology changed, why we changed it, and what is still unresolved. It is meant to be readable by someone who knows the old model well, not as a technical appendix.</p>
+
+    <h2>1. The old approach</h2>
+    <p>The old model used a single aggregate formula for the effect of tariffs on the overall PCE price level:</p>
+    <div class="formula">price effect
+= (ETR × -USD offset × goods share × import share)
++ (ETR × goods share × import share × (1 + passthrough))</div>
+    <p>In code, that was implemented as:</p>
+    <ul>
+      <li><code>price_passthrough = 0.50</code></li>
+      <li><code>goods_share_pce = 0.31471</code></li>
+      <li><code>import_share = 0.20570</code></li>
+      <li><code>usd_offset = 0.174</code></li>
+    </ul>
+    <p>So, mechanically, the old model treated tariff price effects as a scalar function of the average tariff increase and a few fixed parameters. The “post-substitution” variant then adjusted the aggregate <code>goods_share</code> and <code>import_share</code> using two GTAP-derived scalars from NVPP data:</p>
+    <ul>
+      <li><code>goods_adjustment = goods_share_post / goods_share_pre</code></li>
+      <li><code>import_adjustment = import_share_post / import_share_pre</code></li>
+    </ul>
+    <p>That approach had real virtues. It was simple, transparent, fast, and easy to explain. It also produced a single number that moved in the right direction when the average tariff rate went up or down.</p>
+    <p>But its limitations became more serious as the scenarios became more complicated.</p>
+
+    <h2>2. The main problems with the old approach</h2>
+    <p>The biggest issue is that the old model compressed too much economics into one equation.</p>
+    <p>First, it relied on a single economy-wide import share. That share did not respond to changes in the tariff base in a granular way. A tariff package concentrated in autos, apparel, and electronics was treated too much like a tariff package with the same average ETR spread evenly across all goods. The old “post-substitution” fix helped somewhat, but only through two scalar adjustment factors. It still did not let import exposure vary commodity by commodity.</p>
+    <p>Second, the passthrough assumption was doing too much work. A <code>0.50</code> passthrough parameter means the direct tariff term is effectively multiplied by <code>1.5</code> before the exchange-rate offset is applied. That may have been a reasonable reduced-form shortcut when we were looking at a much narrower set of Trump 1.0-type tariffs. But as a single aggregate number it bundled together three distinct things — standard passthrough, the domestic supply-chain cost channel, and a domestic competitive-pricing response — without a clear structural interpretation. The new model unbundles the supply-chain channel and makes it explicit (Section 3); it <em>retains</em> a domestic-pricing markup of the same <code>0.50</code> magnitude, but now applied on top of that explicit structure rather than standing in for it. (See the scaling factor and the outstanding question below.)</p>
+    <p>Third, it was not really a consumer-price model. It produced an aggregate number, but it did not solve the basic communication problem reporters care about: how do tariff-induced changes in commodity prices map into consumer spending categories? Commodity definitions and consumption categories are not the same thing. Reporters ask about food, autos, appliances, clothing, and household budgets, not abstract import-weighted sectors.</p>
+    <p>Fourth, the old treatment of “long-run” product prices was internally inconsistent. Short-run product prices were built from <code>import_share × weighted_ETR</code> and then normalized to match the aggregate short-run effect. Long-run product prices were based on GTAP <code>ppa</code> and then normalized to match the aggregate post-substitution effect. In practice that meant the long-run aggregate was being “shared out” across products in proportion to GTAP commodity price changes, even though the aggregate itself came from a different reduced-form price equation. That is not wrong as a rough shortcut, but it is not a coherent price system.</p>
+
+    <h2>3. What the new approach does</h2>
+    <p>The new framework replaces the scalar formula with a commodity-level input-output model, and then maps those commodity results into consumer categories.</p>
+    <p>At a high level, the new pre-substitution calculation is:</p>
+    <div class="formula">P_c
+= [ωM_c τ_c + ωD_c (L'D B'MD τ)_c] × (1 + domestic_pricing − USD offset)</div>
+    <p>where:</p>
+    <ul>
+      <li><code>tau</code> is the tariff shock by BEA commodity</li>
+      <li><code>omega_M</code> and <code>omega_D</code> are commodity-specific import and domestic shares</li>
+      <li><code>B_MD</code> captures imported-input cost exposure by industry</li>
+      <li><code>L_D</code> is the domestic Leontief structure that propagates those cost shocks through the supply chain</li>
+      <li>the bracketed import + supply-chain effect is scaled by <code>(1 + domestic_pricing − usd_offset)</code>, where <code>domestic_pricing = 0.5</code> is the retained domestic competitive-pricing markup and <code>usd_offset = 0.174</code> is the exchange-rate offset. With the current parameters that net multiplier is <code>1.326</code>.</li>
+    </ul>
+    <p>Note on the markup: the <code>0.5</code> here is not the same object as the old <code>0.50</code> passthrough, even though the magnitude matches. In the old model <code>1 + 0.5</code> multiplied a single reduced-form direct term and bundled the supply chain into it. Here the supply-chain channel is computed explicitly through <code>L_D</code> and <code>B_MD</code>, and the <code>0.5</code> is a separate, structurally narrower domestic-pricing markup applied to the whole commodity-level effect. It is a retained judgment-call parameter, not an elimination (see Section 7).</p>
+    <p>That gives us price effects at the BEA commodity level. We then map those commodity prices into NIPA PCE categories using the PCE bridge, which means the model now produces category-level consumer price effects rather than just an overall scalar.</p>
+    <p>The model now reports three price concepts:</p>
+    <ul>
+      <li><code>pre_sub</code>: a partial-equilibrium, pre-substitution I-O result</li>
+      <li><code>pe_postsub</code>: a partial-equilibrium post-substitution result that updates tariff exposure and import shares using GTAP</li>
+      <li><code>ge</code>: a GTAP-based general-equilibrium consumer price concept, mapped back to BEA commodities and then to PCE categories</li>
+    </ul>
+    <p>That is a cleaner setup conceptually. The “partial-equilibrium” and “general-equilibrium” numbers are now distinct objects instead of being blended together in an ad hoc way.</p>
+
+    <h2>4. What is better about the new approach</h2>
+    <p>The main gain is that exposure now lives where it should live: at the commodity level, not in one fixed aggregate import share.</p>
+    <p>That matters for at least three reasons.</p>
+    <p>One, the tariff base matters. A scenario that hits a narrow set of highly import-intensive goods now looks different from a broad scenario that hits many goods with different supply-chain structures. The model can finally reflect that.</p>
+    <p>Two, the new setup gives us an honest mapping from commodity prices to consumer prices. That is important analytically and important for communication. We can now talk about autos, apparel, appliances, food, and other PCE categories directly.</p>
+    <p>Three, the post-substitution concept is more disciplined. Instead of just shrinking one aggregate import share, the model updates both the effective tariff on a commodity, through GTAP source-composition shifts, and the commodity’s import share in absorption, through GTAP NVPP data.</p>
+    <p>Finally, the new framework makes it possible to inspect the GE result rather than simply inherit it. We now have a GTAP GE decomposition that splits the GE consumer price effect into an import-price component, a domestic-price component, a share-shift component, and a residual interaction term. That makes the GTAP output much easier to explain than it was before.</p>
+
+    <h2>5. What the new approach costs us</h2>
+    <p>The new method is better, but it is not free.</p>
+    <p>It is more complicated. The old model could be summarized in one formula and four parameters. The new model needs BEA use tables, a PCE bridge, a GTAP-BEA crosswalk, markup assumptions, and GTAP outputs. That is a real cost in maintainability and in explainability.</p>
+    <p>It also introduces more judgment calls. We now have to choose whether to use constant-dollar or constant-percentage markups in the I-O model, or average the two. That is a more intellectually honest problem than before, but it is still a problem.</p>
+    <p>And the GE result is harder to explain. In some scenarios, especially broad tariff regimes, the GTAP GE consumer-price effect can end up above the pre-substitution partial-equilibrium effect. That is economically coherent, but it is not intuitive to non-specialists.</p>
+    <p>Finally, the detail I-O path brings its own compromise. It uses richer commodity detail, but on older benchmark tables than the summary path. That is an improvement in one dimension and a step back in another.</p>
+
+    <h2>6. Bottom line</h2>
+    <p>My view is that the overhaul was worth it.</p>
+    <p>The old model was useful as a quick reduced-form approximation. But it was too aggregate, too parameter-driven, and too dependent on a passthrough assumption that was doing more conceptual work than it could really support. Most importantly, it did not produce consumer-category results in a coherent way.</p>
+    <p>The new framework is more complex, but it is much closer to the question we are actually trying to answer: how do tariff shocks move through production, through import substitution, and ultimately into the prices consumers pay?</p>
+
+    <h2>7. Outstanding questions</h2>
+    <ul>
+      <li>What exchange-rate offset should we use in the partial-equilibrium I-O model, if any?</li>
+      <li>Is <code>domestic_pricing = 0.5</code> the right magnitude for the retained domestic competitive-pricing markup? It carries over the old passthrough magnitude and lifts every pre-sub and PE-post-sub price effect by a net <code>~33%</code> (the <code>1.326</code> multiplier); setting it to <code>0</code> would reduce the headline price effects accordingly.</li>
+      <li>Should the baseline I-O result use constant-dollar passthrough, constant-percentage passthrough, or the average of the two?</li>
+      <li>Does the current “post-substitution” PE result capture enough of the behavioral margins we care about, or is it still too narrow?</li>
+      <li>When should we show GTAP’s GE consumer-price result, given that it can be economically sensible but harder to explain?</li>
+      <li>Should the headline number for external use be pre-sub, PE post-sub, GE, or some clearly labeled range?</li>
+      <li>How much confidence should we place in the detail I-O path given the tradeoff between commodity detail and benchmark-year recency?</li>
+    </ul>
+    <p class="note">Prepared as a brief handoff note for review and discussion, not as a final methods appendix.</p>
+  </main>
+</body>
+</html>

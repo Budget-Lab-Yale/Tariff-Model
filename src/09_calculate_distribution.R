@@ -4,7 +4,10 @@
 # Calculates per-household tariff costs by income decile, showing the regressive
 # nature of tariff impacts (lower-income households pay a higher share of income).
 #
-# Source: F6 Distribution (C) sheet in Excel model
+# Source: F6 Distribution (C) sheet in Excel model. Decile income values are
+# CBO 2027 income after transfers and taxes in the January 2025 baseline,
+# expressed in 2025 dollars, from the reconciliation-act distributional
+# interactive.
 #
 # Formula chain:
 #   1. Per-decile PCE effect = aggregate_price * pce_variation
@@ -29,14 +32,11 @@ library(tidyverse)
 #' @param decile_params Data frame with decile, income, scaling_factor
 #' @param decile_pce Numeric vector of length 10: per-decile PCE price effect
 #'   as decimal (e.g., 0.0124 for 1.24%)
-#' @param inflation_factor Factor to convert 2024 dollars to 2025 dollars
 #'
 #' @return Data frame with pce_effect, pct_of_income, cost_per_hh columns
-calc_decile_distribution <- function(decile_params, decile_pce, inflation_factor) {
+calc_decile_distribution <- function(decile_params, decile_pce) {
   decile_params %>%
     mutate(
-      income_2025 = income * inflation_factor,
-
       # Per-decile PCE effect
       pce_effect = decile_pce,
 
@@ -44,12 +44,8 @@ calc_decile_distribution <- function(decile_params, decile_pce, inflation_factor
       pct_of_income = pce_effect * scaling_factor * 100,
 
       # Dollar cost per household in 2025 dollars.
-      cost_per_hh = -1 * (pct_of_income / 100) * income_2025,
-
-      # Display income in 2025 dollars to match the burden outputs.
-      income = income_2025
-    ) %>%
-    select(-income_2025)
+      cost_per_hh = -1 * (pct_of_income / 100) * income
+    )
 }
 
 
@@ -76,14 +72,6 @@ calculate_distribution <- function(price_results, inputs) {
                      'decile_parameters')
 
   # -------------------------------------------------------------------------
-  # Get inflation adjustment factor (convert 2024 dollars to 2025 dollars)
-  # -------------------------------------------------------------------------
-
-  inflation_factor <- 1 + (inputs$assumptions$inflation_2024_to_2025 %||% 0)
-  message(sprintf('  Inflation adjustment: %.1f%% (2024 -> 2025 dollars)',
-                  (inflation_factor - 1) * 100))
-
-  # -------------------------------------------------------------------------
   # Compute per-decile price effects
   # -------------------------------------------------------------------------
 
@@ -107,13 +95,11 @@ calculate_distribution <- function(price_results, inputs) {
 
   pre_distribution <- calc_decile_distribution(
     decile_params,
-    pre_decile_pce,
-    inflation_factor
+    pre_decile_pce
   )
   post_distribution <- calc_decile_distribution(
     decile_params,
-    post_decile_pce,
-    inflation_factor
+    post_decile_pce
   )
 
   # -------------------------------------------------------------------------

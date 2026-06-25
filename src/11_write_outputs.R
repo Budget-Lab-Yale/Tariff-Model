@@ -80,9 +80,11 @@ write_outputs <- function(results, scenario) {
 
   key_results <- tibble(
     metric = c(
-      # ETR
+      # ETR ((a) pre_sub = applied statutory; (c) pe_postsub = post-sub, post-noncompliance)
       'pre_sub_etr_increase', 'pe_postsub_etr_increase',
       'baseline_etr', 'pre_sub_all_in_etr', 'pe_postsub_all_in_etr',
+      # (b) eta'-adjusted statutory diagnostic (noncompliance, pre-substitution)
+      'eta_adj_etr_increase', 'eta_adj_all_in_etr',
       # Prices
       'pre_sub_price_increase', 'pe_postsub_price_increase',
       'ge_price_increase', 'pre_sub_per_hh_cost', 'post_sub_per_hh_cost',
@@ -102,6 +104,7 @@ write_outputs <- function(results, scenario) {
     value = c(
       results$etr$pre_sub_increase, results$etr$pe_postsub_increase,
       results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$pe_postsub_all_in,
+      results$etr$b_increase, results$etr$b_all_in,
       results$prices$pre_sub_price_increase, results$prices$pe_postsub_price_increase,
       results$prices$ge_price_increase,
       abs(results$distribution$pre_sub_per_hh_cost),
@@ -119,6 +122,7 @@ write_outputs <- function(results, scenario) {
     unit = c(
       'pct', 'pct',
       'pct', 'pct', 'pct',
+      'pct', 'pct',
       'pct', 'pct', 'pct', 'dollars', 'dollars',
       'pct', 'pct',
       'billions', 'billions',
@@ -470,7 +474,7 @@ write_outputs <- function(results, scenario) {
   }
 
   # ============================
-  # Sector-Country Matrices (raw Tariff-ETRs output)
+  # Sector-Country Matrices (raw rate input output)
   # ============================
 
   if (!is.null(results$inputs$levels_matrix)) {

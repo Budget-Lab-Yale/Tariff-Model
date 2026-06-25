@@ -1,0 +1,209 @@
+<title>Tariff Model Review — upstream-refactor</title>
+<style>
+  :root{
+    --bg:#faf9f6; --panel:#ffffff; --ink:#1c1b19; --muted:#615d57; --faint:#8b867d;
+    --line:#e7e3db; --navy:#23335a; --navy-soft:#eef1f7;
+    --crit:#b3261e; --crit-bg:#fbeceb; --med:#b45309; --med-bg:#fbf1e3; --low:#5b6472; --low-bg:#eef0f3;
+    --ok:#1f7a4d; --code:#2b2a27;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    -webkit-font-smoothing:antialiased;margin:0;padding:0 20px 96px}
+  .wrap{max-width:920px;margin:0 auto}
+  header.top{padding:54px 0 22px;border-bottom:2px solid var(--ink)}
+  .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--navy);font-weight:650}
+  h1{font-size:31px;line-height:1.15;margin:.32em 0 .2em;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:14.5px}
+  .sub code{font-family:var(--mono);font-size:.92em;background:var(--navy-soft);padding:1px 6px;border-radius:5px;color:var(--navy)}
+  h2{font-size:21px;margin:48px 0 14px;padding-bottom:7px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+  h3{font-size:16.5px;margin:30px 0 6px}
+  h4{font-size:14px;margin:18px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  p{margin:.55em 0}
+  a{color:var(--navy)}
+  code{font-family:var(--mono);font-size:.88em;background:#f1efe9;padding:1px 5px;border-radius:5px;color:var(--code);word-break:break-word}
+  /* stat chips */
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 4px}
+  .chip{flex:1 1 120px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .chip .n{font-size:27px;font-weight:700;line-height:1}
+  .chip .l{font-size:12px;color:var(--muted);margin-top:5px;text-transform:uppercase;letter-spacing:.05em}
+  .chip.crit{border-color:#e7b4af;background:var(--crit-bg)} .chip.crit .n{color:var(--crit)}
+  .chip.med .n{color:var(--med)} .chip.low .n{color:var(--low)}
+  /* badges */
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:2px 8px;border-radius:999px;vertical-align:middle}
+  .b-crit{background:var(--crit);color:#fff} .b-med{background:var(--med);color:#fff} .b-low{background:var(--low-bg);color:var(--low);border:1px solid #d3d7de}
+  .b-cat{background:var(--navy-soft);color:var(--navy);font-weight:650}
+  .b-unc{background:#fff4d6;color:#8a6d1a;border:1px solid #e9d399}
+  /* callout */
+  .callout{border-left:4px solid;border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0;background:var(--panel)}
+  .callout.crit{border-color:var(--crit);background:var(--crit-bg)}
+  .callout.note{border-color:var(--navy);background:var(--navy-soft)}
+  .callout h3{margin-top:0}
+  /* table */
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:16px 0}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:680px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f4f2ec;font-weight:650;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);position:sticky;top:0}
+  tbody tr:last-child td{border-bottom:none}
+  td .f{font-family:var(--mono);font-size:11.5px;color:var(--navy);white-space:nowrap}
+  .rank{font-weight:700;color:var(--faint)}
+  .finding{margin:20px 0;padding-bottom:4px}
+  .finding .meta{font-family:var(--mono);font-size:12px;color:var(--navy);margin:2px 0 6px}
+  .fix{font-size:13.5px;background:#f3f6f1;border:1px solid #d9e4d4;border-radius:8px;padding:9px 13px;margin:8px 0}
+  .fix b{color:var(--ok)}
+  ul{margin:.5em 0;padding-left:22px} li{margin:.32em 0}
+  .foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px}
+  hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="kicker">Code &amp; Economics Review</div>
+  <h1>Yale Budget Lab Tariff Model</h1>
+  <p class="sub">Branch <code>upstream-refactor</code> · 2026-06-22 · 13 reviewer passes (8 subsystem + 5 cross-cutting), every finding adversarially verified against the code, then deduplicated &amp; ranked. <b>54</b> raw findings → <b>40 confirmed</b>, 4 uncertain, 10 refuted.</p>
+</header>
+
+<div class="chips">
+  <div class="chip crit"><div class="n">1</div><div class="l">Critical</div></div>
+  <div class="chip med"><div class="n">8</div><div class="l">Medium</div></div>
+  <div class="chip low"><div class="n">35</div><div class="l">Low</div></div>
+  <div class="chip"><div class="n">10</div><div class="l">Refuted / dropped</div></div>
+</div>
+
+<h2>Executive summary</h2>
+<p>The model is <b>broadly sound and internally disciplined</b>. The canonical fractional-ETR convention is respected on the live paths, the noncompliance <code>(a)/(b)/(c)</code> decomposition is implemented coherently, and the calibration harness reproduces its golden fixtures bit-for-bit. The large majority of findings are low-severity consistency, documentation, or defensive-coding gaps that are <i>latent</i> on current data rather than active wrong numbers.</p>
+<p><b>There is one critical bug that corrupts a headline output.</b> The temporary-tariff IRFs are shifted using the <i>permanent</i>-shock onset constant, delaying every temporary-tariff macro response by exactly three quarters — distorting the flagship 2026 Q4-over-Q4 GDP, unemployment, PCE, and fed-funds figures for every scenario with a temp window (including the live <code>2026-04-06</code> family). A second issue in the same module compounds it by double-counting overlapping temp IRFs.</p>
+<p>The biggest recurring <b>theme</b> is a noncompliance/substitution inconsistency in the <b>time-varying revenue path</b>: the per-fiscal-year revenue trajectory is anchored to a post-noncompliance (b) GTAP level but scaled by a pre-noncompliance (a) time profile (found independently by two reviewers), and a related FY-window edge carries the first tariff regime into pre-policy days, overstating FY2026 revenue. A second theme is <b>silent-drop / coercion fragility</b> (inner_join on PCE keys, missing <code>nrow&gt;0</code> guards, Date-vs-character filters) — dormant today, but each a house-rule violation that exists precisely to surface the data problems they would otherwise mask.</p>
+
+<div class="callout note">
+  <h3>Trust assessment</h3>
+  <ul style="margin-bottom:0">
+    <li><b>Price, ETR, sector, foreign-GDP, distribution levels</b> — trustworthy at current parameters.</li>
+    <li><b>Macro 2026 Q4-Q4 numbers</b> — <b style="color:var(--crit)">do not trust</b> until the temp-IRF onset bug (and the overlap double-count) are fixed.</li>
+    <li><b>Conventional revenue</b> — slightly overstated in FY2026; bounded inter-year profile bias under active noncompliance. The 10-year total is affected but not grossly.</li>
+    <li>Everything else is cosmetic or maintainability.</li>
+  </ul>
+</div>
+
+<h2>Top findings, ranked by impact</h2>
+<div class="tw">
+<table>
+<thead><tr><th>#</th><th>Sev</th><th>Cat</th><th>Finding</th><th>Location</th><th>Impact</th></tr></thead>
+<tbody>
+<tr><td class="rank">1</td><td><span class="badge b-crit">crit</span></td><td><span class="badge b-cat">bug</span></td><td>Temp IRF shifted by perm-onset constant (3-qtr delay)</td><td class="f">05a_usmm_surrogate.R:337</td><td>Headline 2026 Q4-Q4 GDP / U-rate / PCE / fed-funds wrong for all temp scenarios</td></tr>
+<tr><td class="rank">2</td><td><span class="badge b-med">med</span></td><td><span class="badge b-cat">econ</span></td><td>Overlapping temp IRFs summed (double-counted reversion)</td><td class="f">05a_usmm_surrogate.R:258</td><td>Macro paths over-apply temporary dynamics in 4 live scenarios</td></tr>
+<tr><td class="rank">3</td><td><span class="badge b-med">med</span></td><td><span class="badge b-cat">consist</span></td><td>FY-weighted ETR carries first regime into pre-policy days</td><td class="f">04_calculate_revenue.R:64</td><td>FY2026 (in 10-yr total) revenue overstated when first date &gt; FY start</td></tr>
+<tr><td class="rank">4</td><td><span class="badge b-med">med</span></td><td><span class="badge b-cat">econ</span></td><td>Time-varying revenue: (b) level anchor × (a) time profile</td><td class="f">02_calculate_etr.R:438</td><td>Per-FY conventional revenue profile biased under active noncompliance</td></tr>
+<tr><td class="rank">5</td><td><span class="badge b-med">med</span> <span class="badge b-unc">unc</span></td><td><span class="badge b-cat">econ</span></td><td><code>domestic_pricing=0.5</code> markup vs overhaul memo's (1−offset)</td><td class="f">io_price_model.R:763</td><td>Headline price effects ~33% above documented formula — <b>needs owner confirm</b></td></tr>
+<tr><td class="rank">6</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">bug</span></td><td>Price model drops tariff'd commodities absent from B_MD (message, not stop)</td><td class="f">io_price_model.R:692</td><td>Latent: non-zero shock on a future un-mapped commodity silently lost</td></tr>
+<tr><td class="rank">7</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">bug</span></td><td>check-stage SKIP crashes on <code>%||%</code> under R 4.3.1</td><td class="f">check_eta_reproduction.R:42</td><td>Reproduction gate dies with a confusing error in the common skip case</td></tr>
+<tr><td class="rank">8</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">bug</span></td><td>(b) <code>tau_M_b</code> loader lacks <code>nrow&gt;0</code> guard</td><td class="f">01_load_inputs.R:347</td><td>Empty (b) ref-date slice → all-zero post-sub price, no error</td></tr>
+<tr><td class="rank">9</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">bug</span></td><td><code>daily_etr_levels</code> hardcoded 2026-12-31 horizon</td><td class="f">11_write_outputs.R:464</td><td>Latent: 2027+ policy dates silently truncated from tracker CSV</td></tr>
+<tr><td class="rank">10</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">econ</span></td><td>Unweighted heading-mean rate fallback</td><td class="f">00a_prepare_rate_inputs.R:245</td><td>Small bias on ~$0.25B dispersed-heading fill (self-instrumented)</td></tr>
+<tr><td class="rank">11</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">econ</span></td><td>BEA adjustment codes keep <code>omega_D=1</code> supply-chain passthrough</td><td class="f">io_price_model.R:601</td><td>~0.003–0.014 pp aggregate price overstatement</td></tr>
+<tr><td class="rank">12</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">consist</span></td><td>Snapshot vs panel <code>baseline_date</code> semantics differ</td><td class="f">00a_prepare_rate_inputs.R:601</td><td>Same config can run in panel mode, hard-crash in snapshot mode</td></tr>
+<tr><td class="rank">13</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">econ</span></td><td>eta uncovered cells pass through at statutory (η′=1)</td><td class="f">calibrate_eta.R:244</td><td>Newly-tariffed lines off the train basket get no noncompliance haircut</td></tr>
+<tr><td class="rank">14</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">econ</span></td><td><code>R_alpha</code> reference-date scalar reused across all dates</td><td class="f">02_calculate_etr.R:345</td><td>Near-term revenue substitution wedge approximated; fades in 5 FYs</td></tr>
+<tr><td class="rank">15</td><td><span class="badge b-low">low</span> <span class="badge b-unc">unc</span></td><td><span class="badge b-cat">econ</span></td><td>alpha corrects rate channel but not qmwreg quantity</td><td class="f">04_calculate_revenue.R:208</td><td>Documented design choice; rationale comment missing</td></tr>
+<tr><td class="rank">16</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">bug</span></td><td>Untraded-goods sector would crash Step 2</td><td class="f">00a_prepare_rate_inputs.R:413</td><td>Latent: matrix row-set not reconciled with consumer's 45-sector expectation</td></tr>
+<tr><td class="rank">17</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">consist</span></td><td>Mixed sign convention in <code>by_decile</code> (% positive, $ negative)</td><td class="f">09_calculate_distribution.R:43</td><td>Raw distribution.csv mixes signs; Excel re-coerces defensively</td></tr>
+<tr><td class="rank">18</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">econ</span></td><td>Stale <code>scaling_factor</code> after income-vector edit</td><td class="f">decile_parameters.csv</td><td>Per-decile %-of-income off by ≤1.5% (working-tree state)</td></tr>
+<tr><td class="rank">19</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">econ</span></td><td>Per-HH average uses simple <code>mean()</code> of deciles</td><td class="f">09_calculate_distribution.R:109</td><td>Correct today; unenforced equal-population assumption</td></tr>
+<tr><td class="rank">20</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">bug</span></td><td>GTAP shocks rounded to 0.1pp; sub-0.05pp cells dropped</td><td class="f">00a_prepare_rate_inputs.R:432</td><td>GE leg loses tiny shocks the price/ETR legs keep; dropped mass unlogged</td></tr>
+<tr><td class="rank">21–37</td><td><span class="badge b-low">low</span></td><td><span class="badge b-cat">misc</span></td><td colspan="3">Date-vs-char slices · levels zero-fill · <code>30441</code> magic constant · <code>bea_io_level</code> default 4-way disagreement · dead <code>inflation_2024_to_2025</code> · <code>average_*</code> inner_join · base <code>ifelse()</code> on dynamic-revenue path · CBO convolution implicit row order · duplicated GE-decomp summarizer · triplicated ETR weighting · unused loaded fields · Excel exporter sourced-not-called · stale docstrings — see detail below.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>1 · The critical bug (verified directly)</h2>
+<div class="callout crit">
+  <h3><span class="badge b-crit">critical</span> Temp IRF shifted by the permanent-shock onset constant</h3>
+  <div class="meta">src/05a_usmm_surrogate.R:337-347</div>
+  <p>The perm and temp IRF families have <b>different native onset quarters</b>. I confirmed this against the raw IRF data:</p>
+  <ul>
+    <li><code>perm10_fed.csv</code> — first material response at <b>2025Q2</b> = index 6 (= <code>USMM_SHOCK_QUARTER</code>). ✓</li>
+    <li><code>temp10_fed.csv</code> — first material response at <b>2026Q1</b> = index 9 (2025Q4 holds only a <code>-1e-14</code> numerical zero). <b>3 quarters later.</b></li>
+  </ul>
+  <p><code>construct_usmm_response()</code> computes a single <code>onset_shift = comp$onset_q − USMM_SHOCK_QUARTER</code> (=6) and applies it to <b>both</b> the shifted-perm path and the temp path via <code>shift_irf(temp_irf[[var]], onset_shift)</code>. For the perm path this correctly re-centers a 2025Q2 IRF; for the temp path it adds the 3-quarter gap on top of the IRF's <i>already-2026Q1</i> native onset.</p>
+  <p><b>Worked through the live <code>2026-04-06</code> config</b> (<code>temp_component_dates=[2026-02-24, 2026-07-24]</code>): comp1 onset 2026-02-24 → <code>onset_q=9</code> → <code>onset_shift=3</code>, pushing the temp IRF from index 9 (2026Q1) to index 12 (<b>2026Q4</b>); comp2 is pushed into 2027Q1. Every temporary-tariff response moves ~3 quarters too late — largely out of the 2026 window that defines the flagship 2026 Q4-over-Q4 numbers. Static and shifted-perm-only scenarios are unaffected.</p>
+  <div class="fix"><b>Fix</b> — introduce <code>USMM_TEMP_SHOCK_QUARTER &lt;- 9</code> and shift temp components by <code>comp$onset_q − 9</code>, keeping perm components on <code>USMM_SHOCK_QUARTER</code>. Add an assertion that each IRF family's first-nonzero quarter matches its assumed native onset, so a future IRF re-extraction can't silently desync. (<code>refund_fed.csv</code> is correctly added with no shift.)</div>
+</div>
+
+<h2>2 · Highest-impact medium findings</h2>
+
+<div class="finding">
+<h3><span class="badge b-med">medium</span> Overlapping temp IRFs summed, double-applying reversion dynamics</h3>
+<div class="meta">src/05a_usmm_surrogate.R:258-262</div>
+<p>The match predicate <code>use_temp &lt;- any(onset &gt;= temp_pairs$onset &amp; offset &lt;= temp_pairs$offset)</code> flags <i>every</i> telescoping component fully contained in the temp window. For <code>2026-04-06</code>, both interior segments <code>[02-24→04-06]</code> and <code>[04-06→07-24]</code> qualify, so two separate deltas are each fed through the temp IRF. Unlike the shifted-perm path (which differences on/off to telescope correctly), the temp branch has <b>no offset truncation</b> — and the temp IRF already embeds a full rise-and-revert path, so summing two same-sign overlapping episodes compounds the reversion dynamics for what is conceptually one temporary regime with a mid-window step-up. Affects 4 live scenarios. Best fixed together with the critical bug — same function.</p>
+<div class="fix"><b>Fix</b> — decide whether a temp window maps to one temp-IRF impulse (sized to the window's peak delta, placed at window onset) or one IRF per interior segment; if the latter, document why summing overlapping un-truncated temp IRFs is correct. Otherwise collapse the window to one temp component.</div>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-med">medium</span> FY-weighted ETR carries the first regime into pre-policy days</h3>
+<div class="meta">src/04_calculate_revenue.R:26-27, 64-71</div>
+<p><code>compute_fy_weighted_etr_increase</code>'s docstring says "Before the first date: <code>etr_increase = 0</code>", but the implementation uses <code>increases[1]</code> (the first regime's tariffed rate) when no schedule date precedes the interval start. The verifier <b>corrected the original note</b>: produced outputs have earliest date <b>2026-01-01</b>, so FY2026 (2025-10-01 → 2026-09-30) <b>is inside</b> the budget window. When the first schedule date (2026-01-01) falls after <code>fy_start</code> (2025-10-01), the pre-policy Oct–Dec 2025 quarter is treated as fully tariffed. Reproduced: with first date 2026-01-01 @ 0.10 and 2026-02-20 @ 0.14, FY2026 <code>etr_increase</code> = 0.1244 vs the correct 0.0992 — a <b>2.52pp overstatement</b> flowing into the 10-year headline total with no clamp.</p>
+<div class="fix"><b>Fix</b> — set <code>active_etr &lt;- 0</code> when <code>length(active_idx)==0</code>. Baseline subtraction already accounts for pre-policy collections, so 0 is the economically correct pre-policy value. Reconcile the docstring.</div>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-med">medium</span> Time-varying revenue: (b) level anchor scaled by an (a) time profile</h3>
+<div class="meta">src/02_calculate_etr.R:438-461 &nbsp;(two reviewers converged)</div>
+<p>For time-varying scenarios the per-FY <code>etr_increase</code> is <code>mtax_etr_increase * (weighted_etr / ref_etr)</code>. The <b>level anchor</b> traces to a GTAP run shocked with the rate-(b) eta′-adjusted reference-date rates, but the <b>scaling ratio</b> comes from <code>inputs$etr_matrix_by_date</code> — the rate-(a) applied-statutory delta. So the revenue level is post-noncompliance (b) while its time profile is pre-noncompliance (a). Internally contradictory: the same module hands USMM a <i>(b)</i> time profile but hands revenue an <i>(a)</i> one off the same (b) level. Bias is exactly zero at the reference date and when noncompliance is inactive; it bites only when eta′ composition shifts across dates. Diluted by FY day-weighting → medium.</p>
+<div class="fix"><b>Fix</b> — when <code>inputs$noncompliance_active</code>, build the scaling ratio from the (b) per-date series (<code>per_date_etrs_b / ref_b_etr</code>, already computed at 02_calculate_etr.R:484-492 for USMM). Trivial — the inputs already exist.</div>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-med">medium</span> <span class="badge b-unc">uncertain — needs owner</span> <code>domestic_pricing=0.5</code> markup vs the overhaul memo</h3>
+<div class="meta">src/io_price_model.R:763-767</div>
+<p>The applied scaling is <code>1 + domestic_pricing − usd_offset</code> = 1 + 0.5 − 0.174 = <b>1.326</b>, multiplying every pre-sub and PE-post-sub commodity price effect up ~33% before the USD offset. This contradicts <code>price_model_overhaul_memo.md</code>, which presents the new formula as <code>×(1 − USD offset)</code> and argues the old 0.50 multiplier "is hard to defend." <b>Key correction:</b> the in-file docstring, <code>@param</code> block, config comment, and runtime log are all <i>consistent</i> with the code; git history (<code>3f24056</code> shipped <code>(1−usd_offset)</code>; <code>6297b8e</code> deliberately re-added <code>domestic_pricing</code> after) strongly indicates the <b>code is intentional and the memo is stale</b>. The drift lives only in out-of-file notes (memo, MEMORY.md). But this is a methodology decision: if <code>0.5</code> is not the intended central case, headline price effects are ~33% high.</p>
+<div class="fix"><b>Fix</b> — confirm intent. If intentional, update <code>price_model_overhaul_memo.md</code> + MEMORY.md to document/justify the retained markup. If not, set <code>domestic_pricing=0</code>.</div>
+</div>
+
+<h2>3 · Cross-cutting themes</h2>
+<ol>
+<li><b>(a) vs (b) discipline is the model's main coherence risk.</b> The pipeline routes (b) to GTAP/USMM/prices correctly, but the time-varying revenue path mixes a (b) level with an (a) profile (#4), and the FY-window edge (#3) overstates pre-policy days. Fixing both — via one <code>noncompliance_active</code> branch in the revenue per-date scaling — would make revenue use the same (b) concept USMM already uses.</li>
+<li><b>IRF onset assumptions are fragile and unasserted.</b> #1 and #2 both stem from assuming all IRF families share one onset/placement convention. A family-level "first-nonzero quarter matches assumed native onset" assertion would have caught #1 at re-extraction time.</li>
+<li><b>Silent-drop / coercion as a recurring anti-pattern.</b> inner_join on PCE keys, missing <code>nrow&gt;0</code> guard on the (b) loader, <code>message()</code>-not-<code>stop()</code> on unmatched <code>tau_M</code>, and Date-vs-character filters are all dormant but each contradicts the explicit house rule that missing values must surface. Cheap to harden; the rules exist precisely to catch the refactor's data-shape changes.</li>
+<li><b>The code is more trustworthy than the prose right now.</b> <code>30441</code> appears inline duplicating a named CBO parameter; the price-formula narrative drifted across memo/MEMORY/brief while the code stayed consistent; <code>bea_io_level</code>'s default is stated four ways. Narrative docs need a reconciliation pass.</li>
+<li><b>Reference-date approximations stretched across time-varying schedules.</b> <code>R_alpha</code> (#14) and the (a)-profile scaling (#4) share a root: GTAP solves only at the reference date, and several quantities from that one solve are applied uniformly across a multi-date schedule. Worth a documented statement of which quantities are reference-date approximations and why that's acceptable.</li>
+</ol>
+
+<h2>4 · Simplification opportunities</h2>
+<div class="tw">
+<table>
+<thead><tr><th>Opportunity</th><th>Where</th><th>Effort</th><th>Payoff</th></tr></thead>
+<tbody>
+<tr><td>Extract shared <code>summarize_ge_pce_decomp()</code>, call from both sites</td><td class="f">run_model.R:97 ↔ io_price_model.R:1212</td><td>Low</td><td>Kills char-for-char duplicated decomp arithmetic</td></tr>
+<tr><td>Collapse <code>calculate_country_etrs</code>/<code>_alpha</code> into one parameterized fn (α=1 default) + module-scope <code>COUNTRY_CONFIG</code></td><td class="f">02_calculate_etr.R:39-212</td><td>Med</td><td>Central ETR-weighting math in one place; α=1 reduction is bit-for-bit</td></tr>
+<tr><td>Drop unused <code>imports_by_country</code>, <code>vgdp</code>, returned <code>qva</code>/<code>vom</code>, and the <code>get_imports_by_country()</code> call</td><td class="f">01_load_inputs.R:474; read_gtap.R:587</td><td>Low</td><td>Removes wasted GTAP work + 4 misleading dead fields</td></tr>
+<tr><td>Remove <code>source('src/12_export_excel.R')</code> from the core runner</td><td class="f">run_model.R:33</td><td>Trivial</td><td>Decouples core pipeline from openxlsx/report layer</td></tr>
+<tr><td>Delete dead <code>calculate_etr_increase()</code> (orphaned, stale /100 convention)</td><td class="f">02_calculate_etr.R:215</td><td>Trivial</td><td>Removes a misleading pp/fraction convention</td></tr>
+<tr><td>Resolve <code>consumption_share</code>: use or delete; fix stale <code>calculate_prices()</code> docstring</td><td class="f">09_calculate_distribution.R:37,58</td><td>Low</td><td>Removes latent "looks-load-bearing" column &amp; dead pointer</td></tr>
+<tr><td>Fix false <code># %||%</code> comment + the <code>%||%</code> crash</td><td class="f">calibrate.R:98; check_eta_reproduction.R:42</td><td>Trivial</td><td>Un-breaks the common reproduction-gate SKIP path</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>5 · Needs a run or a domain owner</h2>
+<ul>
+<li><b>#1/#2 magnitude.</b> Misalignment + double-count are unambiguous from data &amp; code, but the pp impact on 2026 Q4-Q4 needs a before/after run of <code>2026-04-06</code>.</li>
+<li><b>#5 — is <code>domestic_pricing=0.5</code> the intended central case?</b> A methodology decision; code &amp; git history say yes, the memo says it was eliminated. If "no," headline price effects are ~33% high.</li>
+<li><b>#4 realized bias.</b> Structurally confirmed; the size depends on how non-uniform eta′ is across products — needs an (a)-scaled vs (b)-scaled revenue comparison.</li>
+<li><b>Legacy parity.</b> Per the refactor design the pre-refactor pipeline is broken, so no golden-output diff was possible for the 00a path; #16 (untraded-sector crash) and the levels zero-fill are behavioral divergences from the legacy producer that can't be confirmed against a golden output that no longer runs.</li>
+</ul>
+
+<h2>6 · Coverage gaps (completeness critic)</h2>
+<p>Areas that were thin or never centered, worth a focused follow-up pass:</p>
+<ul>
+<li><b>End-to-end (a)/(b)/eta′ consumption trace</b> — the largest uncommitted change; reviewers covered eta′ <i>production</i>, no one centered its <i>consumption</i> across all four legs (GTAP shock, USMM impulse, post-sub prices, revenue compliance zero-out). <span class="f">00a:451-720, 01:342-396, run_model:248-256, 05a:455-466, 04:120-134</span></li>
+<li><b>decile gradient, not just levels</b> — the income edit moved low deciles down and high deciles up while <code>scaling_factor</code> stayed stale, so the regressivity <i>gradient</i> is biased in opposite directions across deciles (stronger than the ≤1.5% levels claim). <span class="f">decile_parameters.csv</span></li>
+<li><b><code>06_calculate_sectors.R</code></b> — got zero findings; confirmed a real minor gap: <code>get_effect()</code> (line 61-63) returns the raw filtered vector with no length assertion — a missing/duplicated <code>aggregate_sector</code> label yields a zero- or multi-length scalar silently.</li>
+<li><b><code>read_gtap.R</code> parsing depth</b> — no finding addressed <code>.sol</code>/HAR variable extraction robustness (mtax, qgdp, viws, vgdp); the trust boundary where all downstream revenue/macro/sector numbers originate.</li>
+<li><b>USMM→GTAP 16-quarter dynamic-revenue blend</b> — never examined for double-counting the substitution channel against the GTAP <code>mtax</code> base. <span class="f">07_calculate_dynamic_revenue.R; helpers.R:96</span></li>
+<li><b>Largest unreviewed files</b> — <code>12_export_excel.R</code> (878 ln, output-only) and <code>weighted_avg_2025_prices.R</code> / <code>build_import_content_matrix.R</code>: confirm whether either feeds resources the live pipeline consumes.</li>
+</ul>
+
+<p class="foot">Generated by a 13-pass adversarially-verified multi-agent review (69 agents). The critical finding was additionally hand-verified against the raw IRF CSVs and the surrogate code. Refuted/dropped findings (10) included a claimed eta double-count, a claimed fraction/pp bug in the price formula, and several mischaracterizations the verifier overturned against the actual code.</p>
+</div>

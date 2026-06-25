@@ -40,8 +40,17 @@ domestic_pricing: 0.5
 # Revenue Parameters
 # -----------------------------------------------------------------------------
 
-# Compliance effect: reduction in collections due to noncompliance/evasion
-# Applied as negative adjustment to gross revenue
+# Compliance effect: reduction in collections due to noncompliance/evasion.
+#
+# This now doubles as the FLAT FALLBACK for the eta' noncompliance factor: when a
+# scenario provides no granular eta' file (model_params noncompliance.eta_file),
+# eta' = (1 - compliance_effect) is applied to every (gtap, region) cell. The
+# haircut is applied to the tariff itself — producing rate (b) that drives the
+# GTAP shock, the USMM impulse, and the post-substitution prices (see
+# src/00a_prepare_rate_inputs.R) — NOT as a separate revenue adjustment. Revenue's
+# old gross-revenue compliance multiplier is therefore dropped whenever
+# noncompliance is active (rate-panel scenarios). Set to 0 to disable the haircut
+# entirely (eta' = 1, b == a) for before/after comparison runs.
 compliance_effect: 0.10
 
 # Income and payroll tax offset: reduction from lower taxable income due to tariff burden
@@ -67,9 +76,3 @@ phase_in:
   2034: 1.00
   2035: 1.00
 
-# -----------------------------------------------------------------------------
-# External Repo Paths
-# -----------------------------------------------------------------------------
-
-# Path to the Tariff-ETRs repository (relative to project root)
-tariff_etrs_path: '../Tariff-ETRs'

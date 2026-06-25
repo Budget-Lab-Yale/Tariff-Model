@@ -189,13 +189,17 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$model_params <- load_model_params(scenario_dir)
 
   # ============================
-  # Tariff-ETRs outputs
+  # Rate-derived inputs
   # ============================
 
-  tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
+  # Step 0a writes all rate-derived matrices under rate_inputs/.
+  if (is.null(inputs$model_params$rate_panel)) {
+    stop('model_params.yaml must have a rate_panel block')
+  }
+  rate_inputs_dir <- file.path('output', scenario, 'rate_inputs')
 
   # ---- Deltas (tariff increases from baseline) ----
-  etr_file <- file.path(tariff_etrs_dir, 'gtap_deltas_by_sector_country.csv')
+  etr_file <- file.path(rate_inputs_dir, 'gtap_deltas_by_sector_country.csv')
   if (!file.exists(etr_file)) {
     stop('ETR delta matrix not found: ', etr_file)
   }
@@ -232,7 +236,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   # ---- Scenario levels (absolute tariff rates) ----
-  levels_file <- file.path(tariff_etrs_dir, 'gtap_levels_by_sector_country.csv')
+  levels_file <- file.path(rate_inputs_dir, 'gtap_levels_by_sector_country.csv')
   if (!file.exists(levels_file)) {
     stop('ETR levels matrix not found: ', levels_file)
   }
@@ -269,7 +273,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
                   nrow(inputs$baseline_levels_matrix)))
 
   # ---- Census-country files (optional passthrough data) ----
-  census_deltas_file <- file.path(tariff_etrs_dir, 'deltas_by_census_country.csv')
+  census_deltas_file <- file.path(rate_inputs_dir, 'deltas_by_census_country.csv')
   if (file.exists(census_deltas_file)) {
     inputs$census_country_deltas <- read_csv(census_deltas_file, show_col_types = FALSE)
     message(sprintf('  Loaded census-country deltas: %d rows',
@@ -278,7 +282,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
     inputs$census_country_deltas <- NULL
   }
 
-  census_levels_file <- file.path(tariff_etrs_dir, 'levels_by_census_country.csv')
+  census_levels_file <- file.path(rate_inputs_dir, 'levels_by_census_country.csv')
   if (file.exists(census_levels_file)) {
     inputs$census_country_levels <- read_csv(census_levels_file, show_col_types = FALSE)
     message(sprintf('  Loaded census-country levels: %d rows',
@@ -299,10 +303,10 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   # ---- BEA-level ETR deltas (for Boston Fed I-O price model) ----
-  bea_deltas_file <- file.path(tariff_etrs_dir, 'bea_deltas_by_commodity.csv')
+  bea_deltas_file <- file.path(rate_inputs_dir, 'bea_deltas_by_commodity.csv')
   if (!file.exists(bea_deltas_file)) {
     stop('BEA deltas file not found: ', bea_deltas_file,
-         '\n  Re-run Tariff-ETRs to generate BEA-level output')
+         '\n  Re-run Step 0a to generate BEA-level output')
   }
   bea_deltas_raw <- read_csv(bea_deltas_file, show_col_types = FALSE)
 
@@ -329,6 +333,97 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # Disaggregate tau_M to detail BEA codes if using detail-level tables
   if (bea_io_level == 'detail') {
     inputs$tau_M <- disaggregate_tau_M(inputs$tau_M, io_data_dir)
+  }
+
+  # ---- (b) eta'-adjusted (noncompliance) artifacts ----
+  # When 00a produced the `_b` files, these drive the GTAP-shifted re-weighting
+  # (post-sub prices), the USMM impulse, and (via the mtax-shocked GTAP run)
+  # revenue. When absent, fall back to (a) so older rate_inputs remain runnable.
+  read_sector_matrix_b <- function(path, label) {
+    raw <- read_csv(path, show_col_types = FALSE)
+    assert_has_columns(raw, 'gtap_code', label)
+    if ('date' %in% names(raw)) {
+      by_date <- raw %>% mutate(date = as.Date(date))
+      flat <- by_date %>% filter(date == inputs$gtap_reference_date) %>% select(-date)
+      list(flat = flat, by_date = by_date)
+    } else {
+      list(flat = raw, by_date = NULL)
+    }
+  }
+
+  etr_b_file    <- file.path(rate_inputs_dir, 'gtap_deltas_by_sector_country_b.csv')
+  levels_b_file <- file.path(rate_inputs_dir, 'gtap_levels_by_sector_country_b.csv')
+  bea_b_file    <- file.path(rate_inputs_dir, 'bea_deltas_by_commodity_b.csv')
+  inputs$noncompliance_active <- all(file.exists(c(etr_b_file, levels_b_file, bea_b_file)))
+
+  if (inputs$noncompliance_active) {
+    em_b <- read_sector_matrix_b(etr_b_file, 'ETR delta matrix (b)')
+    inputs$etr_matrix_b         <- em_b$flat
+    inputs$etr_matrix_by_date_b <- em_b$by_date
+
+    lv_b <- read_sector_matrix_b(levels_b_file, 'ETR levels matrix (b)')
+    inputs$levels_matrix_b         <- lv_b$flat
+    inputs$levels_matrix_by_date_b <- lv_b$by_date
+
+    bea_b_raw <- read_csv(bea_b_file, show_col_types = FALSE)
+    if ('date' %in% names(bea_b_raw)) {
+      inputs$bea_deltas_by_date_b <- bea_b_raw %>% mutate(date = as.Date(date))
+      bea_b_flat <- bea_b_raw %>%
+        filter(date == as.character(inputs$gtap_reference_date)) %>%
+        select(-date)
+    } else {
+      inputs$bea_deltas_by_date_b <- NULL
+      bea_b_flat <- bea_b_raw
+    }
+    inputs$tau_M_b <- setNames(bea_b_flat$etr_delta, bea_b_flat$bea_code)
+    if (bea_io_level == 'detail') {
+      inputs$tau_M_b <- disaggregate_tau_M(inputs$tau_M_b, io_data_dir)
+    }
+    message(sprintf('  Loaded (b) eta\'-adjusted artifacts: noncompliance ACTIVE (tau_M_b mean=%.4f%%)',
+                    mean(inputs$tau_M_b) * 100))
+  } else {
+    inputs$etr_matrix_b            <- inputs$etr_matrix
+    inputs$etr_matrix_by_date_b    <- inputs$etr_matrix_by_date
+    inputs$levels_matrix_b         <- inputs$levels_matrix
+    inputs$levels_matrix_by_date_b <- inputs$levels_matrix_by_date
+    inputs$tau_M_b                 <- inputs$tau_M
+    inputs$bea_deltas_by_date_b    <- inputs$bea_deltas_by_date
+    message('  No (b) artifacts found -> noncompliance INACTIVE (b == a; legacy revenue haircut applies)')
+  }
+
+  # ---- alpha substitution-correction parameters (revenue transition ONLY) ----
+  # Calibrated by the harness (calibrate.R --stage alpha). Consumed ONLY by the
+  # revenue alpha->GTAP transition in 04_calculate_revenue.R: the structural model
+  # (published post-sub ETR, prices, USMM) stays FULL GTAP (alpha = 1). Defaults
+  # (no `substitution` block): alpha = 1, empty passthrough, inactive -> revenue
+  # and every structural output are bit-for-bit unchanged.
+  inputs$alpha_within      <- 1
+  inputs$alpha_between     <- 1
+  inputs$alpha_passthrough <- character(0)
+  inputs$alpha_active      <- FALSE
+  sub_cfg <- inputs$model_params$substitution
+  if (!is.null(sub_cfg) && !is.null(sub_cfg$alpha_file)) {
+    if (!file.exists(sub_cfg$alpha_file)) {
+      stop('substitution.alpha_file not found: ', sub_cfg$alpha_file)
+    }
+    ap <- read_csv(sub_cfg$alpha_file, show_col_types = FALSE)
+    inputs$alpha_within  <- ap$alpha[ap$channel == 'within'][1]
+    inputs$alpha_between <- ap$alpha[ap$channel == 'between'][1]
+    if (is.na(inputs$alpha_within) || is.na(inputs$alpha_between)) {
+      stop('substitution.alpha_file must have within and between channel rows: ',
+           sub_cfg$alpha_file)
+    }
+    if (!is.null(sub_cfg$commodity_passthrough_file)) {
+      pt <- read_csv(sub_cfg$commodity_passthrough_file, show_col_types = FALSE)
+      inputs$alpha_passthrough <- tolower(pt$gtap_code[pt$include])
+    }
+    inputs$alpha_active <- TRUE
+    message(sprintf(paste0('  Loaded alpha params: within=%.4f between=%.4f ',
+                           '(%d passthrough sectors); revenue transition ACTIVE'),
+                    inputs$alpha_within, inputs$alpha_between,
+                    length(inputs$alpha_passthrough)))
+  } else {
+    message('  No substitution.alpha_file -> alpha = 1 (full GTAP; revenue transition INACTIVE)')
   }
 
   # ============================
@@ -371,9 +466,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$qmwreg <- gtap_data$qmwreg
   inputs$qxwreg <- gtap_data$qxwreg
   inputs$sector_outputs <- gtap_data$sector_outputs
-  inputs$imports_by_country <- gtap_data$imports_by_country
   inputs$viws <- gtap_data$viws
-  inputs$vgdp <- gtap_data$vgdp
   inputs$ppm <- gtap_data$ppm
   inputs$ppd <- gtap_data$ppd
   inputs$ppa <- gtap_data$ppa

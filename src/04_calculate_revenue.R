@@ -121,7 +121,24 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   income_effect <- assumptions$income_effect
   phase_in_schedule <- assumptions$phase_in
 
-  message(sprintf('  Using compliance effect: %.1f%%', compliance_effect * 100))
+  # When noncompliance is active, the GTAP shock — and thus the mtax-derived
+  # etr_increase that drives gross_revenue — already reflects rate (b). Applying
+  # the revenue-side compliance haircut again would double-count, so zero it out.
+  # Legacy (inactive) scenarios keep the historical haircut. Bridge scenarios can
+  # opt back into the historical haircut while using a neutral eta file so rates
+  # remain statutory (b == a) but revenue follows the old flat-compliance method.
+  noncompliance_active <- isTRUE(inputs$noncompliance_active)
+  legacy_revenue_haircut <- isTRUE(inputs$model_params$noncompliance$legacy_revenue_haircut)
+  compliance_effect_applied <- if (noncompliance_active && !legacy_revenue_haircut) 0 else compliance_effect
+
+  if (noncompliance_active && legacy_revenue_haircut) {
+    message(sprintf('  Noncompliance active with neutral/bridge override: applying legacy revenue haircut %.1f%%',
+                    compliance_effect * 100))
+  } else if (noncompliance_active) {
+    message('  Noncompliance active: haircut applied upstream via eta\' (revenue compliance_effect = 0)')
+  } else {
+    message(sprintf('  Using compliance effect: %.1f%%', compliance_effect * 100))
+  }
   message(sprintf('  Using income and payroll tax offset: %.1f%%', income_effect * 100))
   message(sprintf('  Using qmwreg: %.2f%%', qmwreg))
   message(sprintf('  Using etr_increase: %.4f (%.2f%%)', etr_increase, etr_increase * 100))
@@ -130,6 +147,26 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   }
   if (refund_2026 > 0) {
     message(sprintf('  Applying CY2026 refund: $%.1fB', refund_2026))
+  }
+
+  # -------------------------------------------------------------------------
+  # Alpha -> GTAP revenue transition (substitution correction)
+  # -------------------------------------------------------------------------
+  # GTAP over-predicts tariff-driven substitution (alpha < 1), so the mtax-based
+  # etr_increase under-states near-term realized collections. We scale it up by
+  # R_alpha = (alpha-corrected post-sub ETR)/(full-GTAP post-sub ETR) in the near
+  # term and converge LINEARLY to full GTAP over 5 fiscal years from anchor_fy:
+  #   etr_increase(FY) = mtax_etr_increase * [1 + phi(FY)*(R_alpha - 1)]
+  # phi = 1 at/before anchor_fy, 0 at anchor_fy+5. R_alpha = 1 (alpha inactive)
+  # makes this an exact no-op, so the structural model and alpha-absent revenue
+  # are bit-for-bit unchanged. (The structural post-sub ETR, prices, and USMM
+  # stay FULL GTAP — alpha lives ONLY here, by design.)
+  R_alpha   <- (if (!is.null(etr_results)) etr_results$R_alpha else NULL) %||% 1
+  anchor_fy <- inputs$model_params$alpha_transition$anchor_fy %||% 2026
+  alpha_phi <- function(fy) pmax(0, pmin(1, 1 - (fy - anchor_fy) / 5))
+  if (abs(R_alpha - 1) > 1e-12) {
+    message(sprintf('  Alpha revenue transition: R_alpha=%.4f, anchor FY%d, 5-yr linear -> GTAP',
+                    R_alpha, anchor_fy))
   }
 
   # -------------------------------------------------------------------------
@@ -179,12 +216,14 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
 
       # Step 2: Calculate total ETR (CBO baseline + policy increase)
       # baseline_etr already exists in CBO data (duties/imports)
-      # Time-varying: use per-FY etr_increase; static: scalar etr_increase
-      total_etr = baseline_etr + if (use_fy_etr) {
+      # Time-varying: use per-FY etr_increase; static: scalar etr_increase.
+      # The policy increase is scaled by the alpha->GTAP transition factor
+      # (1 + phi(FY)*(R_alpha-1)); R_alpha=1 leaves it unchanged.
+      total_etr = baseline_etr + (if (use_fy_etr) {
         fy_etr_vec[as.character(fiscal_year)]
       } else {
         etr_increase
-      },
+      }) * (1 + alpha_phi(fiscal_year) * (R_alpha - 1)),
 
       # Step 3: Calculate new duties
       new_duties = new_imports * total_etr,
@@ -193,7 +232,7 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
       gross_revenue = new_duties - duties_bn,
 
       # Step 5: Behavioral adjustments
-      compliance_adj = gross_revenue * -compliance_effect,
+      compliance_adj = gross_revenue * -compliance_effect_applied,
       income_adj = gross_revenue * -income_effect,
 
       # Step 6: Net revenue
@@ -232,10 +271,12 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
 
     # Parameters used
     params_used = list(
-      compliance_effect = compliance_effect,
+      compliance_effect = compliance_effect_applied,
       income_effect = income_effect,
       qmwreg = qmwreg,
-      etr_increase = etr_increase
+      etr_increase = etr_increase,
+      R_alpha = R_alpha,
+      alpha_anchor_fy = anchor_fy
     )
   )
 

@@ -36,6 +36,13 @@ USMM_VARS <- c('gdpr', 'jpc', 'ruc', 'ehhc', 'rmff')
 # The IRFs are 0 through 2025Q1, shock hits in 2025Q2
 USMM_SHOCK_QUARTER <- 6
 
+# The permanent and temporary IRF families have DIFFERENT native onset quarters:
+# the perm IRFs first respond in 2025Q2 (index 6); the temp IRFs first respond in
+# 2026Q1 (index 9). A component must therefore be re-centered relative to the
+# onset of the family it is drawn from. validate_irf_onsets() (called in
+# load_usmm_irfs) hard-stops if a re-extracted IRF vintage ever breaks these.
+USMM_TEMP_SHOCK_QUARTER <- 9
+
 
 # =============================================================================
 # LOADING
@@ -72,7 +79,55 @@ load_usmm_irfs <- function(usmm_dir = 'resources/usmm') {
 
   message(sprintf('  Loaded USMM IRFs: %d quarters each', nrow(irfs$perm$`2`)))
 
+  validate_irf_onsets(irfs)
+
   return(irfs)
+}
+
+
+#' First quarter index (1-based) at which an IRF becomes materially nonzero
+#'
+#' @param irf_df An IRF tibble (year, quarter, USMM_VARS columns)
+#' @param tol Magnitude below which a response is treated as numerical zero
+#' @return Integer quarter index of the first material response
+first_material_quarter <- function(irf_df, tol = 1e-8) {
+  response_mass <- rowSums(abs(as.matrix(irf_df[, USMM_VARS])))
+  hit <- which(response_mass > tol)
+  if (length(hit) == 0) {
+    stop('IRF has no material response in any quarter')
+  }
+  return(min(hit))
+}
+
+
+#' Assert each IRF family's native onset matches its assumed shock-quarter constant
+#'
+#' The perm and temp IRF families are re-centered using different onset constants
+#' (USMM_SHOCK_QUARTER vs USMM_TEMP_SHOCK_QUARTER). Those constants are only valid
+#' if the loaded IRFs actually first respond at the assumed quarter. This guards
+#' against a silently desynced IRF re-extraction (the failure mode that caused the
+#' temp components to be shifted by the perm onset).
+#'
+#' @param irfs IRF list from load_usmm_irfs()
+#' @return TRUE invisibly; stops on mismatch
+validate_irf_onsets <- function(irfs) {
+  for (sz in names(irfs$perm)) {
+    onset_q <- first_material_quarter(irfs$perm[[sz]])
+    if (onset_q != USMM_SHOCK_QUARTER) {
+      stop(sprintf(
+        'perm%s IRF first responds at quarter index %d, but USMM_SHOCK_QUARTER = %d. The IRF vintage changed; update the constant (and check the temp/perm onset split).',
+        sz, onset_q, USMM_SHOCK_QUARTER))
+    }
+  }
+  for (sz in names(irfs$temp)) {
+    onset_q <- first_material_quarter(irfs$temp[[sz]])
+    if (onset_q != USMM_TEMP_SHOCK_QUARTER) {
+      stop(sprintf(
+        'temp%s IRF first responds at quarter index %d, but USMM_TEMP_SHOCK_QUARTER = %d. The IRF vintage changed; update the constant.',
+        sz, onset_q, USMM_TEMP_SHOCK_QUARTER))
+    }
+  }
+  return(invisible(TRUE))
 }
 
 
@@ -300,8 +355,12 @@ shift_irf <- function(irf_vals, shift) {
 #' Construct composite USMM response from decomposed shocks
 #'
 #' Builds the full macro response by summing:
-#' 1. Permanent component: scaled perm IRF
-#' 2. Intermediate components: either temp IRF or shifted-perm difference
+#' 1. Permanent component: scaled perm IRF (re-centered on USMM_SHOCK_QUARTER)
+#' 2. Intermediate components:
+#'    - non-temp segments: shifted-perm difference (USMM_SHOCK_QUARTER onset)
+#'    - the announced-temporary window (base case only): a single collapsed temp
+#'      impulse, duration-weighted over its segments, re-centered on
+#'      USMM_TEMP_SHOCK_QUARTER (the temp family's native onset)
 #' 3. Refund component: scaled refund IRF
 #'
 #' @param shocks Decomposition from decompose_shocks()
@@ -330,29 +389,58 @@ construct_usmm_response <- function(shocks, irfs, use_temp_irf = TRUE) {
 
   # 2. Intermediate components
   if (nrow(shocks$components) > 0) {
-    for (i in seq_len(nrow(shocks$components))) {
-      comp <- shocks$components[i, ]
-      delta <- comp$delta_pp
+    comps <- shocks$components
 
-      # Quarter shift relative to USMM shock onset (2025Q2 = index 6)
+    # In the base case, the announced-temporary window is modeled with the temp
+    # IRF (expectations channel). decompose_shocks may split that single window
+    # into several schedule segments (e.g. a mid-window step); those segments are
+    # collapsed into ONE temp impulse so the window's temporary response is applied
+    # once, not once per segment (summing un-truncated temp IRFs would double-count
+    # the rise-and-revert dynamics each already embeds). The impulse is sized to the
+    # duration-weighted-average excess over the window and placed at the window
+    # onset. With a single temp segment this reduces exactly to that segment.
+    #
+    # The all-perm variant (use_temp_irf = FALSE) routes every component through
+    # shifted-perm telescoping, which reproduces the stepped path exactly and is
+    # left unchanged.
+    is_temp <- isTRUE(use_temp_irf) & comps$use_temp_irf
+
+    # Non-temp components (and all components in the all-perm variant): shifted-perm
+    #   contribution = perm_irf(t - onset) - perm_irf(t - offset), re-centered on the
+    #   perm family's native onset (USMM_SHOCK_QUARTER).
+    for (i in which(!is_temp)) {
+      comp <- comps[i, ]
       onset_shift <- comp$onset_q - USMM_SHOCK_QUARTER
       offset_shift <- comp$offset_q - USMM_SHOCK_QUARTER
+      perm_irf <- interpolate_irf(irfs$perm, comp$delta_pp, PERM_SIZES)
+      for (var in USMM_VARS) {
+        on_vals <- shift_irf(perm_irf[[var]], onset_shift)
+        off_vals <- shift_irf(perm_irf[[var]], offset_shift)
+        result[[var]] <- result[[var]] + (on_vals - off_vals)
+      }
+    }
 
-      if (isTRUE(comp$use_temp_irf) && use_temp_irf) {
-        # Use temp IRF (expectations channel for announced temporary tariffs)
-        temp_irf <- interpolate_irf(irfs$temp, delta, TEMP_SIZES)
-        for (var in USMM_VARS) {
-          shifted <- shift_irf(temp_irf[[var]], onset_shift)
-          result[[var]] <- result[[var]] + shifted
-        }
-      } else {
-        # Shifted-perm: perm_irf(t - onset) - perm_irf(t - offset)
-        perm_irf <- interpolate_irf(irfs$perm, delta, PERM_SIZES)
-        for (var in USMM_VARS) {
-          on_vals <- shift_irf(perm_irf[[var]], onset_shift)
-          off_vals <- shift_irf(perm_irf[[var]], offset_shift)
-          result[[var]] <- result[[var]] + (on_vals - off_vals)
-        }
+    # Temp window (base case only): a single collapsed impulse via the temp IRF,
+    # re-centered on the temp family's native onset (USMM_TEMP_SHOCK_QUARTER).
+    if (any(is_temp)) {
+      temp_comps <- comps[is_temp, ]
+      durations <- as.numeric(temp_comps$offset_date - temp_comps$onset_date)
+      if (any(durations <= 0)) {
+        stop('USMM temp window has a non-positive-duration component')
+      }
+      wavg_delta <- sum(temp_comps$delta_pp * durations) / sum(durations)
+      window_onset_q <- min(temp_comps$onset_q)
+      onset_shift <- window_onset_q - USMM_TEMP_SHOCK_QUARTER
+
+      if (nrow(temp_comps) > 1) {
+        message(sprintf(
+          '    Collapsed %d temp segments into one temp impulse: %+.2f pp (duration-weighted) at %s',
+          nrow(temp_comps), wavg_delta, format(min(temp_comps$onset_date))))
+      }
+
+      temp_irf <- interpolate_irf(irfs$temp, wavg_delta, TEMP_SIZES)
+      for (var in USMM_VARS) {
+        result[[var]] <- result[[var]] + shift_irf(temp_irf[[var]], onset_shift)
       }
     }
   }
@@ -452,9 +540,18 @@ run_usmm_surrogate <- function(etr_results, inputs) {
   irfs <- inputs$usmm_irfs
   baseline <- irfs$baseline
 
-  # Get pre-sub ETR data for decomposition (raw from Tariff-ETRs, no GTAP scaling)
-  etr_increase_by_date <- etr_results$presub_etr_increase_by_date
-  etr_increase <- etr_results$presub_etr_increase
+  # USMM impulse: the eta'-adjusted (b) rate when noncompliance is active, else the
+  # pre-sub (a) rate (legacy). Both are baseline-weighted, pre-substitution — the
+  # IRFs supply the dynamic macro response, so the impulse must NOT carry GTAP's
+  # substitution (which would double-count). Using (b) here is what deflates the
+  # macro block (GDP/unemployment/PCE) for noncompliance.
+  if (isTRUE(inputs$noncompliance_active)) {
+    etr_increase_by_date <- etr_results$b_etr_increase_by_date
+    etr_increase <- etr_results$b_etr_increase
+  } else {
+    etr_increase_by_date <- etr_results$presub_etr_increase_by_date
+    etr_increase <- etr_results$presub_etr_increase
+  }
 
   # Filter to usmm_dates if specified (keeps decomposition to a few components)
   usmm_dates <- inputs$model_params$usmm_dates

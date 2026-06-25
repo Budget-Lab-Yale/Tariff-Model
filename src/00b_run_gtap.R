@@ -134,8 +134,17 @@ if (!file.exists(gtap_config$gtap_executable)) {
 #'
 #' @param scenario Name of the scenario
 #' @param include_retaliation Include retaliation shocks (default: TRUE)
+#' @param shocks_file_override Path to a specific shocks.txt to use, bypassing
+#'   the flat/reference-date selection logic. Used by the trade-weights driver
+#'   to run GTAP for an arbitrary historical date. (default: NULL)
+#' @param output_subdir Output directory for the GTAP solution, relative to repo
+#'   root. (default: NULL -> 'output/{scenario}/gtap')
+#' @param solution_name Base name for the solution files (.cmf/.sl4/.slc/.sol).
+#'   (default: NULL -> scenario)
 #' @return List with paths to solution files and exit code
-run_gtap <- function(scenario, include_retaliation = TRUE) {
+run_gtap <- function(scenario, include_retaliation = TRUE,
+                     shocks_file_override = NULL, output_subdir = NULL,
+                     solution_name = NULL) {
 
   # Load global GTAP configuration
   gtap_config <- load_gtap_config()
@@ -145,34 +154,29 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
 
   # Paths
   scenario_dir <- file.path('config', 'scenarios', scenario)
-  output_dir <- file.path('output', scenario, 'gtap')
+  output_dir <- output_subdir %||% file.path('output', scenario, 'gtap')
+  solution_name <- solution_name %||% scenario
   template_file <- 'resources/gtap/cmf_template.cmf'
   retaliation_file <- file.path(scenario_dir, 'retaliation', 'shocks.txt')
 
-  # Select shocks file: flat file for static, date subdirectory for time-varying
-  flat_shocks <- file.path('output', scenario, 'tariff_etrs', 'shocks.txt')
-  if (file.exists(flat_shocks)) {
+  # Step 0a writes the shocks source to rate_inputs/. Explicit overrides bypass
+  # this selection.
+  params_check <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
+  if (is.null(params_check$rate_panel)) {
+    stop('model_params.yaml must have a rate_panel block')
+  }
+  rates_dir <- file.path('output', scenario, 'rate_inputs')
+
+  flat_shocks <- file.path(rates_dir, 'shocks.txt')
+  if (!is.null(shocks_file_override)) {
+    shocks_file <- shocks_file_override
+    if (!file.exists(shocks_file)) {
+      stop('Override shocks file not found: ', shocks_file)
+    }
+  } else if (file.exists(flat_shocks)) {
     shocks_file <- flat_shocks
   } else {
-    # Time-varying: look for date subdirectories
-    tariff_etrs_dir <- file.path('output', scenario, 'tariff_etrs')
-    date_dirs <- sort(list.dirs(tariff_etrs_dir, recursive = FALSE, full.names = FALSE))
-    if (length(date_dirs) == 0) {
-      stop('No shocks.txt found (flat or date-subdirectory) in: ', tariff_etrs_dir)
-    }
-    # Use gtap_reference_date from model_params (default: first date)
-    params_check <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
-    ref_date <- params_check$gtap_reference_date %||% date_dirs[1]
-    ref_date <- as.character(ref_date)
-    if (!ref_date %in% date_dirs) {
-      stop('gtap_reference_date "', ref_date, '" not found in: ',
-           paste(date_dirs, collapse = ', '))
-    }
-    shocks_file <- file.path(tariff_etrs_dir, ref_date, 'shocks.txt')
-    if (!file.exists(shocks_file)) {
-      stop('Shocks file not found for reference date: ', shocks_file)
-    }
-    message(sprintf('  Using time-varying shocks for reference date: %s', ref_date))
+    stop('No shocks.txt found in: ', rates_dir)
   }
 
   # Load scenario-specific params (for retaliation flag override)
@@ -190,13 +194,13 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
 
   # Build CMF file
   # Use forward slashes for GEMPACK compatibility
-  solution_path <- normalizePath(file.path(output_dir, scenario), mustWork = FALSE)
+  solution_path <- normalizePath(file.path(output_dir, solution_name), mustWork = FALSE)
   solution_path <- str_replace_all(solution_path, '\\\\', '/')
 
   # Replace all placeholders in CMF template
   cmf <- read_file(template_file) %>%
     str_replace(fixed('{{SOLUTION_FILE}}'), solution_path) %>%
-    str_replace(fixed('{{SCENARIO_NAME}}'), scenario) %>%
+    str_replace(fixed('{{SCENARIO_NAME}}'), solution_name) %>%
     str_replace(fixed('{{GTAP_AUX_DIR}}'), gtap_aux) %>%
     str_replace_all(fixed('{{GTAP_DATA_DIR}}'), gtap_data)
 
@@ -216,7 +220,7 @@ run_gtap <- function(scenario, include_retaliation = TRUE) {
   }
 
   # Write CMF (use absolute path for GTAP)
-  cmf_path <- file.path(output_dir, paste0(scenario, '.cmf'))
+  cmf_path <- file.path(output_dir, paste0(solution_name, '.cmf'))
   write_lines(c(cmf, tariff_shocks), cmf_path)
   cmf_path <- normalizePath(cmf_path)
   message('  CMF written: ', cmf_path)

@@ -1,0 +1,32 @@
+# =============================================================================
+# adcvd_collected.csv — TEMPLATE (curated CBP AD/CVD collected/assessed amounts)
+# =============================================================================
+# Rename to resources/adcvd_collected.csv once populated. code/adcvd_strip.R
+# reads it (skipping these '#' comment lines) and, when wired in, removes AD/CVD
+# from the collected side before eta calibration. Until a non-comment data row
+# exists, load_adcvd_collected() returns NULL and the pipeline is unchanged.
+#
+# WHAT TO PUT HERE (coarse is expected — there is no HTS/country AD/CVD
+# collection breakdown; see code/adcvd_strip.R header + eta_external_data_resources.md §2):
+#   - Aggregate / by-partner / by-program AD/CVD cash deposits collected or
+#     assessed, from CBP trade statistics (cbp.gov/newsroom/stats/trade) or the
+#     CBP ACE AD/CVD module. Use COLLECTED if available, else assessed/due.
+#   - Map CBP's country/program labels to partner_group (utils.R PARTNER_LEVELS,
+#     EXACT strings): China, Canada, Mexico, EU, Japan, "S. Korea", UK, ROW.
+#     Korea is "S. Korea" (with the space) — "SKorea" will match no cells.
+#
+# COLUMNS (blank year_month or hs2 = "spread" — see adcvd_strip.R):
+#   partner_group  one of PARTNER_LEVELS
+#   year_month     "YYYY-MM", or blank to spread an annual figure across the window
+#   hs2            2-digit chapter, or blank to spread across the partner's trade
+#   adcvd_usd      AD/CVD dollars (NOT $M) — IMDB cal_dut_mo is in dollars
+#
+# ILLUSTRATIVE rows below are COMMENTED OUT and use PLACEHOLDER magnitudes — they
+# show the format only and are NOT real AD/CVD figures. Do not uncomment until
+# replaced with sourced CBP values.
+#   China,,,12000000000        # $12B AD/CVD, all China trade, spread over window + chapters
+#   China,,72,3500000000       # $3.5B concentrated in HS72 steel
+#   EU,,,800000000             # $0.8B EU, spread
+#   Mexico,2025-09,,460000000  # one month, all Mexico chapters
+# =============================================================================
+partner_group,year_month,hs2,adcvd_usd

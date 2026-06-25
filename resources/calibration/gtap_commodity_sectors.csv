@@ -1,0 +1,11 @@
+gtap_code,description,category,include
+coa,Coal,energy,TRUE
+oil,Oil (crude),energy,TRUE
+gas,Gas,energy,TRUE
+p_c,Petroleum and coal products (refined),energy,TRUE
+oxt,Other extraction (minerals),mineral_candidate,FALSE
+nmm,Mineral products nec,mineral_candidate,FALSE
+pdr,Paddy rice,bulk_ag_candidate,FALSE
+wht,Wheat,bulk_ag_candidate,FALSE
+gro,Cereal grains nec,bulk_ag_candidate,FALSE
+osd,Oil seeds,bulk_ag_candidate,FALSE
