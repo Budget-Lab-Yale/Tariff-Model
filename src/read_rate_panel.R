@@ -29,6 +29,14 @@ library(tidyverse)
 resolve_rate_panel_root <- function(rate_panel) {
   env_root <- Sys.getenv('TARIFF_RATE_TRACKER_ROOT', unset = NA_character_)
   if (!is.na(env_root) && nzchar(env_root)) return(env_root)
+  # Production root from the interface config (config/interfaces/output_roots.yaml),
+  # so BOTH the model run and the standalone calibration harness resolve the tracker
+  # bundle without a per-scenario root. Falls back to the scenario's own root.
+  roots_file <- 'config/interfaces/output_roots.yaml'
+  if (file.exists(roots_file)) {
+    prod <- yaml::read_yaml(roots_file)$production
+    if (!is.null(prod)) return(file.path(prod, 'model_data', 'Tariff-Rate-Tracker'))
+  }
   rate_panel$root
 }
 
