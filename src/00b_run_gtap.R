@@ -193,8 +193,11 @@ run_gtap <- function(scenario, include_retaliation = TRUE,
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
   # Build CMF file
-  # Use forward slashes for GEMPACK compatibility
-  solution_path <- normalizePath(file.path(output_dir, solution_name), mustWork = FALSE)
+  # Use forward slashes for GEMPACK compatibility. Absolutize via the (already
+  # created) output_dir: normalizePath() leaves a non-existent leaf path relative
+  # on Linux (it only absolutizes it on Windows), which breaks GEMPACK's Solution
+  # file create when it runs from gtap_work_dir.
+  solution_path <- file.path(normalizePath(output_dir, mustWork = TRUE), solution_name)
   solution_path <- str_replace_all(solution_path, '\\\\', '/')
 
   # Replace all placeholders in CMF template
@@ -230,11 +233,19 @@ run_gtap <- function(scenario, include_retaliation = TRUE,
   map_file_abs <- normalizePath(map_file, mustWork = TRUE)
   output_dir_abs <- normalizePath(output_dir, mustWork = TRUE)
 
-  # Run GTAP (from work directory for relative paths in CMF)
+  # Run GTAP from a PER-RUN isolated work dir. GEMPACK writes scratch files
+  # (gpxx*.log, gdata.upd, SUMMARY.har, *.cdk, ...) into the cwd with FIXED names,
+  # so two GTAP processes sharing one work dir clobber each other's intermediates —
+  # which surfaces as bogus "Failed Reusing pivots" / "set_header_data" fatal errors
+  # rather than a clean message. Key the dir by solution name + PID so concurrent
+  # Slurm jobs and same-session multi-solves each get their own cwd. Cleaned up on
+  # exit (the solution files are written to output_dir via absolute paths).
   message('  Running GTAP...')
+  run_work_dir <- file.path(gtap_work, paste0(solution_name, '_', Sys.getpid()))
+  dir.create(run_work_dir, recursive = TRUE, showWarnings = FALSE)
   old_wd <- getwd()
-  setwd(gtap_work)
-  on.exit(setwd(old_wd), add = TRUE)
+  setwd(run_work_dir)
+  on.exit({ setwd(old_wd); unlink(run_work_dir, recursive = TRUE) }, add = TRUE)
 
   result <- system2(
     gtap_exe,

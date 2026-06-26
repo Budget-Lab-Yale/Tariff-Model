@@ -213,7 +213,7 @@ build_imdb_actuals_panel <- function(scenario, refresh_imdb = FALSE, reuse_rates
     # Vintage sidecar (manifest.json at the bundle vintage dir; JSON is valid
     # YAML). Stamped into eta_summary.csv by calibrate_eta so every result
     # records the tracker publish that produced it.
-    vintage_dir <- file.path(rate_panel$root, rate_panel$vintage %||% 'latest')
+    vintage_dir <- file.path(resolve_rate_panel_root(rate_panel), rate_panel$vintage %||% 'latest')
     tracker_vintage <- NA_character_
     mf <- file.path(vintage_dir, 'manifest.json')
     if (file.exists(mf) && requireNamespace('yaml', quietly = TRUE)) {

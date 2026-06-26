@@ -1,0 +1,29 @@
+---
+# Budget Lab interface versions: this model's output version, plus the upstream
+# models it depends on (with the default vintage/scenario to consume). A scenario
+# may override the tracker vintage/scenario in its own model_params.yaml
+# rate_panel block; otherwise these defaults apply. Every run stamps the resolved
+# dependency vintages into dependencies.csv beside its outputs.
+
+#---------------
+# Model version
+#---------------
+
+Tariff-Model:
+  type: model_data
+  version: 1
+
+#---------------------
+# Dependency versions
+#---------------------
+
+# The tariff-rate-tracker bundle (codebase 1) is the model's primary input. Its
+# on-disk layout differs from the standard model_data/<Model>/v<version>/<vintage>
+# scheme — it publishes <root>/<vintage>/{actual|scenarios/<name>} with a dated
+# vintage id (YYYY-MM-DD-HH) and a manifest.json. `version` here tracks the
+# tracker's manifest schema_version, recorded for traceability in dependencies.csv.
+Tariff-Rate-Tracker:
+  type: model_data
+  version: 2
+  default_vintage: '2026-06-25-14'
+  default_id: actual

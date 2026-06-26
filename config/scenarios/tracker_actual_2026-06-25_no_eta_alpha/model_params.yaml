@@ -1,12 +1,11 @@
 # =============================================================================
-# Model Parameters: tracker_actual_2026-06-23_no_eta_alpha
+# Model Parameters: tracker_actual_2026-06-25_no_eta_alpha
 # =============================================================================
-# Bridge scenario: 2026-06-23 actual/current-law policy with eta neutralized
+# Bridge scenario: 2026-06-25 actual/current-law policy with eta neutralized
 # and alpha substitution correction disabled.
 
 rate_panel:
-  root: 'C:/Users/jar335/Documents/Interfaces/model_data/tariff-rate-tracker'
-  vintage: '2026-06-23-10'
+  vintage: '2026-06-25-14'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
