@@ -42,6 +42,15 @@ docs/distribution_implementation_plan.md
 
 # Local machine config
 config/gtap_config.yaml
+config/interfaces/output_roots.yaml
+
+# GTAP/GEMPACK scratch files that leak into the working dir
+gpxx*.log
+*.ascii
+
+# Slurm run logs + personal submit scripts (kept locally for HPC runs)
+slurm_*.log
+*.sbatch
 
 # Saved webpages
 reports/State of U.S. Tariffs_*
