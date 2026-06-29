@@ -179,6 +179,16 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   if (use_fy_etr) {
     fiscal_years <- cbo$fiscal_year
     fy_etr_vec <- compute_fy_weighted_etr_increase(etr_increase_by_date, fiscal_years)
+    # Guard the named-vector lookup used below in total_etr: a missing FY name
+    # (or an NA value) would otherwise propagate silently into net_revenue and
+    # the 10-year sum.
+    fy_lookup <- fy_etr_vec[as.character(fiscal_years)]
+    if (anyNA(fy_lookup)) {
+      bad_fy <- fiscal_years[is.na(fy_lookup)]
+      stop('No per-FY etr_increase for fiscal year(s): ',
+           paste(bad_fy, collapse = ', '),
+           ' (compute_fy_weighted_etr_increase returned NA/missing)')
+    }
     message('  Time-varying: using per-FY day-weighted etr_increase')
     for (fy in fiscal_years) {
       val <- fy_etr_vec[as.character(fy)]

@@ -461,8 +461,11 @@ write_outputs <- function(results, scenario) {
     )
     pdl <- bind_rows(baseline_row, pdl)
 
-    # Expand to daily frequency (fill-forward) through end of last valid_until
-    last_date <- as.Date('2026-12-31')
+    # Expand to daily frequency (fill-forward) through the end of the calendar
+    # year containing the last policy date. Derived from the data so vintages
+    # past 2026 aren't silently truncated.
+    last_year <- as.integer(format(max(pdl$date), '%Y'))
+    last_date <- as.Date(sprintf('%d-12-31', last_year))
     daily_dates <- tibble(date = seq.Date(min(pdl$date), last_date, by = 'day'))
     daily_etr <- daily_dates %>%
       left_join(pdl, by = 'date') %>%
