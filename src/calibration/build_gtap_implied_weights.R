@@ -262,7 +262,7 @@ build_gtap_implied_weights <- function(scenario, months = NULL, period_average =
   # Goods grid the model uses downstream (45 goods x 8 partners).
   goods <- tolower(read_csv(GOODS_GRID_FILE, show_col_types = FALSE)[[1]])
 
-  out_root  <- file.path('output', 'calibration', scenario)
+  out_root  <- calibration_dir(scenario)
   gtap_root <- file.path(out_root, 'gtap')
   dir.create(gtap_root, showWarnings = FALSE, recursive = TRUE)
 

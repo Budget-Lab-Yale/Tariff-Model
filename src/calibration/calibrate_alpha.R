@@ -35,8 +35,7 @@ source('src/calibration/calibration_helpers.R')
 
 TM_HS6_GTAP_CROSSWALK    <- 'resources/rate_aggregation/hs6_gtap_crosswalk.csv'
 GTAP_COMMODITY_SECTORS   <- 'resources/calibration/gtap_commodity_sectors.csv'
-IMDB_2024_FILE           <- file.path('output', 'calibration', '_imdb',
-                                      'imdb_2024_hs10_country.csv')
+IMDB_2024_FILE           <- file.path(imdb_cache_dir(), 'imdb_2024_hs10_country.csv')
 
 EPS               <- 1e-6
 MIN_GTAP_LOGSHIFT <- 1e-3

@@ -19,10 +19,10 @@ gtap:
 refund_2026: 166.0
 
 noncompliance:
-  eta_file: 'output/calibration/tracker_actual_2026-06-25/eta_by_partner_gtap.csv'
+  eta_file: 'tracker_actual_2026-06-25/eta_by_partner_gtap.csv'
 
 substitution:
-  alpha_file: 'output/calibration/tracker_actual_2026-06-25/alpha/alpha_parameters.csv'
+  alpha_file: 'tracker_actual_2026-06-25/alpha/alpha_parameters.csv'
   commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
 
 calibration:

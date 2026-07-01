@@ -154,7 +154,7 @@ run_gtap <- function(scenario, include_retaliation = TRUE,
 
   # Paths
   scenario_dir <- file.path('config', 'scenarios', scenario)
-  output_dir <- output_subdir %||% file.path('output', scenario, 'gtap')
+  output_dir <- if (is.null(output_subdir)) file.path(run_scenario_dir(scenario), 'gtap') else output_subdir
   solution_name <- solution_name %||% scenario
   template_file <- 'resources/gtap/cmf_template.cmf'
   retaliation_file <- file.path(scenario_dir, 'retaliation', 'shocks.txt')
@@ -165,18 +165,20 @@ run_gtap <- function(scenario, include_retaliation = TRUE,
   if (is.null(params_check$rate_panel)) {
     stop('model_params.yaml must have a rate_panel block')
   }
-  rates_dir <- file.path('output', scenario, 'rate_inputs')
-
-  flat_shocks <- file.path(rates_dir, 'shocks.txt')
   if (!is.null(shocks_file_override)) {
     shocks_file <- shocks_file_override
     if (!file.exists(shocks_file)) {
       stop('Override shocks file not found: ', shocks_file)
     }
-  } else if (file.exists(flat_shocks)) {
-    shocks_file <- flat_shocks
   } else {
-    stop('No shocks.txt found in: ', rates_dir)
+    # A normal model run reads the flat shocks from this run's rate_inputs dir.
+    rates_dir <- file.path(run_scenario_dir(scenario), 'rate_inputs')
+    flat_shocks <- file.path(rates_dir, 'shocks.txt')
+    if (file.exists(flat_shocks)) {
+      shocks_file <- flat_shocks
+    } else {
+      stop('No shocks.txt found in: ', rates_dir)
+    }
   }
 
   # Load scenario-specific params (for retaliation flag override)

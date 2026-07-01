@@ -467,7 +467,7 @@ load_eta_prime <- function(model_params) {
          'Run the calibration harness or point the scenario at an existing eta schedule.')
   }
 
-  eta_file <- nc$eta_file
+  eta_file <- resolve_calibration_path(nc$eta_file)
   if (!file.exists(eta_file)) {
     stop('noncompliance.eta_file not found: ', eta_file)
   }
@@ -576,8 +576,8 @@ prepare_rate_inputs <- function(scenario) {
   rate_panel <- resolve_rate_panel(rate_panel)
   gtap_reference_date <- as.Date(model_params$gtap_reference_date)
 
-  out_dir <- file.path('output', scenario, 'rate_inputs')
-  baseline_dir <- file.path('output', scenario, 'baseline')
+  out_dir <- file.path(run_scenario_dir(scenario), 'rate_inputs')
+  baseline_dir <- file.path(run_scenario_dir(scenario), 'baseline')
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   dir.create(baseline_dir, showWarnings = FALSE, recursive = TRUE)
 

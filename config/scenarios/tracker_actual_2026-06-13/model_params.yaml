@@ -23,7 +23,7 @@ gtap:
 # `Rscript calibrate.R tracker_actual_2026-06-13 --stage panel` then `--stage eta`
 # before this scenario resolves.
 noncompliance:
-  eta_file: 'output/calibration/tracker_actual_2026-06-13/eta_by_partner_gtap.csv'
+  eta_file: 'tracker_actual_2026-06-13/eta_by_partner_gtap.csv'
 
 # alpha substitution-correction (calibrate.R --stage alpha). Consumed ONLY by the
 # revenue alpha->GTAP transition (04_calculate_revenue.R); the structural model
@@ -32,7 +32,7 @@ noncompliance:
 # on the alpha-corrected value and converges linearly to full GTAP over 5 fiscal
 # years from alpha_transition.anchor_fy (default 2026).
 substitution:
-  alpha_file: 'output/calibration/tracker_actual_2026-06-13/alpha/alpha_parameters.csv'
+  alpha_file: 'tracker_actual_2026-06-13/alpha/alpha_parameters.csv'
   commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
 
 # Calibration window. period_avg spans Jun 2025 - Feb 2026; 2026-03 is the held-out

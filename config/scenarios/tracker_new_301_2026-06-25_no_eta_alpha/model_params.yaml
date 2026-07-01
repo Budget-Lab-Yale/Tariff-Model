@@ -18,7 +18,7 @@ gtap:
 refund_2026: 166.0
 
 noncompliance:
-  eta_file: 'output/calibration/neutral/eta_zero_by_partner_gtap.csv'
+  eta_file: 'neutral/eta_zero_by_partner_gtap.csv'
   legacy_revenue_haircut: true
 
 calibration:

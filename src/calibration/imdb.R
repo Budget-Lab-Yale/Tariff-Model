@@ -17,7 +17,7 @@ suppressPackageStartupMessages({
 
 # Shared (scenario-independent) IMDB cache: the ZIPs are immutable Census bulk
 # files, so one cache serves every scenario.
-IMDB_CACHE_DIR <- file.path('output', 'calibration', '_imdb')
+IMDB_CACHE_DIR <- imdb_cache_dir()
 IMDB_RAW       <- file.path(IMDB_CACHE_DIR, 'zips')
 dir.create(IMDB_RAW, showWarnings = FALSE, recursive = TRUE)
 

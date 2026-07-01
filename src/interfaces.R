@@ -105,7 +105,7 @@ git_commit <- function() {
 #' @param markup_assumption, bea_io_level Run options (recorded in the manifest)
 #' @param write_local Publish to the local root instead of production
 #' @return Invisibly, the vintage root (or NULL if skipped)
-publish_run <- function(scenario, vintage, resolved_rate_panel, results_dir,
+publish_run <- function(scenario, vintage, resolved_rate_panel,
                         markup_assumption = NA, bea_io_level = NA,
                         write_local = FALSE, cfg = read_interface_config()) {
 
@@ -115,10 +115,10 @@ publish_run <- function(scenario, vintage, resolved_rate_panel, results_dir,
     return(invisible(NULL))
   }
 
+  # Step 10 already wrote the result CSVs straight into scenario_dir (it is the
+  # run output root), so there is nothing to copy — only the lineage to stamp.
   scenario_dir <- file.path(vintage_root, scenario)
   dir.create(scenario_dir, recursive = TRUE, showWarnings = FALSE)
-  result_files <- list.files(results_dir, full.names = TRUE)
-  file.copy(result_files, scenario_dir, overwrite = TRUE)
 
   dep <- cfg$versions[['Tariff-Rate-Tracker']]
   deps <- tibble(

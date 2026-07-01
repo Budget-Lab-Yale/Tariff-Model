@@ -196,7 +196,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   if (is.null(inputs$model_params$rate_panel)) {
     stop('model_params.yaml must have a rate_panel block')
   }
-  rate_inputs_dir <- file.path('output', scenario, 'rate_inputs')
+  rate_inputs_dir <- file.path(run_scenario_dir(scenario), 'rate_inputs')
 
   # ---- Deltas (tariff increases from baseline) ----
   etr_file <- file.path(rate_inputs_dir, 'gtap_deltas_by_sector_country.csv')
@@ -257,7 +257,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   }
 
   # ---- Baseline levels (pre-existing tariff rates, always static) ----
-  baseline_levels_file <- file.path('output', scenario, 'baseline',
+  baseline_levels_file <- file.path(run_scenario_dir(scenario), 'baseline',
                                      'gtap_levels_by_sector_country.csv')
   if (!file.exists(baseline_levels_file)) {
     stop('Baseline levels matrix not found: ', baseline_levels_file)
@@ -291,7 +291,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
     inputs$census_country_levels <- NULL
   }
 
-  baseline_census_file <- file.path('output', scenario, 'baseline',
+  baseline_census_file <- file.path(run_scenario_dir(scenario), 'baseline',
                                      'levels_by_census_country.csv')
   if (file.exists(baseline_census_file)) {
     inputs$baseline_census_country_levels <- read_csv(baseline_census_file,
@@ -403,10 +403,11 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   inputs$alpha_active      <- FALSE
   sub_cfg <- inputs$model_params$substitution
   if (!is.null(sub_cfg) && !is.null(sub_cfg$alpha_file)) {
-    if (!file.exists(sub_cfg$alpha_file)) {
-      stop('substitution.alpha_file not found: ', sub_cfg$alpha_file)
+    alpha_file <- resolve_calibration_path(sub_cfg$alpha_file)
+    if (!file.exists(alpha_file)) {
+      stop('substitution.alpha_file not found: ', alpha_file)
     }
-    ap <- read_csv(sub_cfg$alpha_file, show_col_types = FALSE)
+    ap <- read_csv(alpha_file, show_col_types = FALSE)
     inputs$alpha_within  <- ap$alpha[ap$channel == 'within'][1]
     inputs$alpha_between <- ap$alpha[ap$channel == 'between'][1]
     if (is.na(inputs$alpha_within) || is.na(inputs$alpha_between)) {
@@ -445,7 +446,7 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
   # GTAP outputs (from solution files)
   # ============================
 
-  gtap_solution_dir <- file.path('output', scenario, 'gtap')
+  gtap_solution_dir <- file.path(run_scenario_dir(scenario), 'gtap')
   gtap_file_prefix <- scenario
 
   if (!dir.exists(gtap_solution_dir)) {
