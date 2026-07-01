@@ -459,9 +459,15 @@ calculate_etr <- function(inputs) {
   b_etr_increase <- b_pre_sub_etr / 100
 
   results <- list(
-    # Main ETR results (as percentages) - goods-weighted for display
-    pre_sub_increase = pre_sub_etr,
-    pre_sub_all_in = pre_sub_all_in * 100,
+    # Main ETR results (as percentages) - goods-weighted for display.
+    # Pre-sub is reported eta'-adjusted (the b_* values): noncompliance applies to
+    # the mechanical rate too, matching the eta'-adjusted pre-sub PRICE, so pre-sub
+    # is not the lone statutory holdout while GTAP and everything downstream run
+    # eta'-adjusted. b_* == a when noncompliance is inactive, so this is a no-op for
+    # legacy / _no_eta_alpha runs. (Statutory pre_sub_etr / pre_sub_all_in remain
+    # above as the delta-check diagnostics; presim_country* below stay statutory.)
+    pre_sub_increase = b_pre_sub_etr,
+    pre_sub_all_in = b_all_in * 100,
     pe_postsub_increase = post_sub_etr,
     pe_postsub_all_in = post_sub_all_in * 100,
     # Baseline ETR computed from levels (as percentage)

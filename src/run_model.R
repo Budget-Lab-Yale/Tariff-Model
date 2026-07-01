@@ -137,9 +137,13 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   compute_all_prices <- function(ma, matrices) {
     ppa_usa <- inputs$ppa[, 'usa']
 
-    # Pre-substitution
+    # Pre-substitution. Uses the eta'-adjusted (b) tariff vector: noncompliance
+    # applies to the mechanical price effect too, so pre-sub is not the lone
+    # statutory holdout while GTAP (and everything downstream of it) is shocked
+    # eta'-adjusted. tau_M_b == tau_M when noncompliance is inactive, so this is a
+    # no-op for legacy / _no_eta_alpha runs.
     presub <- compute_io_prices(
-      tau_M = inputs$tau_M,
+      tau_M = inputs$tau_M_b,
       B_MD = matrices$B_MD,
       leontief_domestic = inputs$bea_leontief_domestic,
       omega_M = matrices$omega_M,
