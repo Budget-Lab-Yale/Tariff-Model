@@ -18,6 +18,7 @@ suppressPackageStartupMessages({
 # Source helper modules
 source('src/helpers.R')
 source('src/interfaces.R')
+source('src/paths.R')
 source('src/00a_prepare_rate_inputs.R')
 source('src/00b_run_gtap.R')
 source('src/01_load_inputs.R')
@@ -65,6 +66,17 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   message(sprintf('Run vintage: %s | tracker dependency: %s / %s\n',
                   run_vintage, resolved_rate_panel$vintage,
                   resolved_rate_panel$tracker_scenario))
+
+  # Fix this run's output root on the shared interface tree; every pipeline stage
+  # writes under it (never into the repo checkout). See src/paths.R.
+  output_root <- tariff_output_root(run_vintage, write_local = write_local, cfg = interface_cfg)
+  if (is.null(output_root)) {
+    stop('No output root configured in config/interfaces/output_roots.yaml; the ',
+         'model writes its outputs to the shared model_data interface tree.')
+  }
+  set_run_output_root(output_root)
+  dir.create(run_scenario_dir(scenario), recursive = TRUE, showWarnings = FALSE)
+  message(sprintf('Output: %s\n', run_scenario_dir(scenario)))
 
   #---------------------------
   # Step 0a: Prepare rate inputs
@@ -125,9 +137,13 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
   compute_all_prices <- function(ma, matrices) {
     ppa_usa <- inputs$ppa[, 'usa']
 
-    # Pre-substitution
+    # Pre-substitution. Uses the eta'-adjusted (b) tariff vector: noncompliance
+    # applies to the mechanical price effect too, so pre-sub is not the lone
+    # statutory holdout while GTAP (and everything downstream of it) is shocked
+    # eta'-adjusted. tau_M_b == tau_M when noncompliance is inactive, so this is a
+    # no-op for legacy / _no_eta_alpha runs.
     presub <- compute_io_prices(
-      tau_M = inputs$tau_M,
+      tau_M = inputs$tau_M_b,
       B_MD = matrices$B_MD,
       leontief_domestic = inputs$bea_leontief_domestic,
       omega_M = matrices$omega_M,
@@ -331,7 +347,6 @@ run_scenario <- function(scenario, markup_assumption = 'constant_dollar',
     scenario            = scenario,
     vintage             = run_vintage,
     resolved_rate_panel = resolved_rate_panel,
-    results_dir         = file.path('output', scenario, 'results'),
     markup_assumption   = markup_assumption,
     bea_io_level        = inputs$bea_io_level,
     write_local         = write_local,

@@ -1,12 +1,15 @@
 # =============================================================================
-# Model Parameters: tracker_new_301_2026-06-25
+# Model Parameters: tracker_actual_2026-07-01
 # =============================================================================
-# 2026-06-25 tracker vintage, scenario where Section 122 expires and is replaced
-# with new forced-labor and other Section 301 actions.
+# 2026-07-01 clean-sweep rerun on current master (post PR #9), actual/current-law
+# path where Section 122 expires. Inputs are held identical to tracker_actual_2026-06-25
+# (same 2026-06-25-14 tracker vintage, same calibration window); eta/alpha are
+# freshly recalibrated on current master into model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/.
+# Only the code version and the output label differ from the 06-25 run.
 
 rate_panel:
   vintage: '2026-06-25-14'
-  tracker_scenario: 'new_301'
+  tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
 
@@ -19,10 +22,10 @@ gtap:
 refund_2026: 166.0
 
 noncompliance:
-  eta_file: 'tracker_actual_2026-06-25/eta_by_partner_gtap.csv'
+  eta_file: 'tracker_actual_2026-07-01/eta_by_partner_gtap.csv'
 
 substitution:
-  alpha_file: 'tracker_actual_2026-06-25/alpha/alpha_parameters.csv'
+  alpha_file: 'tracker_actual_2026-07-01/alpha/alpha_parameters.csv'
   commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
 
 calibration:

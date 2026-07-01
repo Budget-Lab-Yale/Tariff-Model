@@ -32,9 +32,10 @@ options(dplyr.summarise.inform = FALSE)
 # Calibration-owned resources moved verbatim from tariff-etr-adj/resources/.
 CALIB_RES_DIR <- 'resources/calibration'
 
-# Per-scenario calibration output root (gitignored). Helper for stage modules.
+# Per-scenario calibration output root on the shared interface tree (see
+# src/paths.R). Helper for stage modules.
 calib_output_dir <- function(scenario) {
-  file.path('output', 'calibration', scenario)
+  calibration_dir(scenario)
 }
 
 # ---------------------------------------------------------------------------

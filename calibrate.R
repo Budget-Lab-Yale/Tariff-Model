@@ -68,6 +68,10 @@ if ('--stage' %in% args) {
   if (idx < length(args)) stage <- args[idx + 1]
 }
 
+# Calibration artifacts resolve to the shared model_data interface tree (never
+# the repo checkout). See src/paths.R (calibration_dir / imdb_cache_dir).
+source('src/paths.R')
+
 run_gtap_weights <- function() {
   use_eta        <- !('--no-eta' %in% args)
   force_resolve  <- '--force-resolve' %in% args

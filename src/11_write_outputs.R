@@ -58,7 +58,7 @@ build_bea_commodity_table <- function(bea_prices_vec, bea_pce_weights, io_data_d
 #' @return Invisibly returns the output directory path
 write_outputs <- function(results, scenario) {
 
-  output_dir <- file.path('output', scenario, 'results')
+  output_dir <- run_scenario_dir(scenario)
 
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)

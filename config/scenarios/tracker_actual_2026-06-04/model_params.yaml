@@ -25,13 +25,13 @@ gtap:
 # previously drew from tariff-etr-adj). Drives the eta'-adjusted (b) rate fed to
 # GTAP, prices, USMM, and revenue.
 noncompliance:
-  eta_file: 'output/calibration/tracker_actual_2026-06-13/eta_by_partner_gtap.csv'
+  eta_file: 'tracker_actual_2026-06-13/eta_by_partner_gtap.csv'
 
 # alpha substitution-correction. Consumed ONLY by the revenue alpha->GTAP
 # transition (04_calculate_revenue.R); structural model stays full GTAP. Reuses
 # the canonical 06-13-vintage alpha params (within~0.66, between~0.29 PROVISIONAL).
 substitution:
-  alpha_file: 'output/calibration/tracker_actual_2026-06-13/alpha/alpha_parameters.csv'
+  alpha_file: 'tracker_actual_2026-06-13/alpha/alpha_parameters.csv'
   commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
 
 # Calibration-harness window (src/calibration). period_avg spans the calibration
