@@ -23,10 +23,15 @@
 #
 # Usage:
 #   Rscript src/weighted_avg_2025_prices.R <scenario> --vintage <id> \
-#     [--markup <type>] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--write-local]
+#     [--markup <type>] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--out <path>] [--write-local]
 #
 # Defaults: markup = constant_dollar (matches run.R), start = 2025-04-02,
 #           end = 2025-12-31.
+#
+# Besides the console report, writes a summary CSV (one row per basket, with the
+# aggregate/direct/supply-chain pre-sub price effects) to --out, defaulting to
+# <scenario dir>/weighted_avg_2025_prices.csv in the interface tree. The eta-on
+# (b) aggregate is the Figure-4 "modeling updates" (bar 4) input.
 #
 # SCHEMA NOTE: 00a now writes the time-varying delta file with a single `date`
 # column (no valid_from/valid_until). Regime intervals are reconstructed from
@@ -56,6 +61,7 @@ markup_assumption <- 'constant_dollar'
 start_date <- '2025-04-02'
 end_date <- '2025-12-31'
 write_local <- FALSE
+out_file <- NA_character_
 
 i <- 1
 while (i <= length(args)) {
@@ -68,6 +74,8 @@ while (i <= length(args)) {
     start_date <- args[i + 1]; i <- i + 2
   } else if (a == '--end' && i < length(args)) {
     end_date <- args[i + 1]; i <- i + 2
+  } else if (a == '--out' && i < length(args)) {
+    out_file <- args[i + 1]; i <- i + 2
   } else if (a == '--write-local') {
     write_local <- TRUE; i <- i + 1
   } else if (!startsWith(a, '--')) {
@@ -104,6 +112,12 @@ if (!dir.exists(rate_inputs_dir)) {
        ' --vintage ', vintage, ').')
 }
 message(sprintf('Rate inputs: %s', rate_inputs_dir))
+
+# Default the summary CSV next to the run's other outputs in the interface tree
+# (never a repo-local dir); override with --out.
+if (is.na(out_file)) {
+  out_file <- file.path(run_scenario_dir(scenario), 'weighted_avg_2025_prices.csv')
+}
 
 # ==== Global assumptions + I-O level =========================================
 
@@ -171,9 +185,12 @@ day_weight_tau_M <- function(delta_file, label) {
     label, nrow(weighted), length(dates), covered_days, TOTAL_DAYS, baseline_days,
     mean(weighted$weighted_delta) * 100))
 
+  mean_delta_pct <- mean(weighted$weighted_delta) * 100
   tau_M <- setNames(weighted$weighted_delta, weighted$bea_code)
   if (bea_io_level == 'detail') tau_M <- disaggregate_tau_M(tau_M, io_data_dir)
-  tau_M
+  list(tau_M = tau_M, mean_delta_pct = mean_delta_pct,
+       n_commodities = nrow(weighted), n_regime_dates = length(dates),
+       covered_days = covered_days, baseline_days = baseline_days)
 }
 
 # ==== Pre-sub price effect for a tau_M (single markup, or averaged) ==========
@@ -216,14 +233,16 @@ baskets <- list(
 
 message('\nDay-weighting tariff deltas over the window...')
 results <- list()
+basket_diag <- list()
 for (b in baskets) {
-  tau_M <- day_weight_tau_M(file.path(rate_inputs_dir, b$file), b$label)
-  if (is.null(tau_M)) {
+  dw <- day_weight_tau_M(file.path(rate_inputs_dir, b$file), b$label)
+  if (is.null(dw)) {
     message(sprintf('  [%s] %s not present -- skipped', b$label, b$file))
     next
   }
   message(sprintf('\n--- Pricing basket: %s ---', b$label))
-  results[[b$key]] <- compute_presub(tau_M)
+  results[[b$key]] <- compute_presub(dw$tau_M)
+  basket_diag[[b$key]] <- dw
 }
 
 if (length(results) == 0) {
@@ -266,3 +285,26 @@ for (i in seq_len(nrow(top_cats))) {
                   row$sr_price_effect, row$pce_category, row$nipa_line, row$pce_share))
 }
 message('\n=============================================================================')
+
+# ==== Write summary CSV ======================================================
+# One row per basket, self-describing (scenario/vintage/window/markup on each row).
+# The eta-on (b) aggregate_pp is the Figure-4 "modeling updates" (bar 4) input.
+basket_name <- c(a = 'statutory', b = 'eta_adjusted')
+summary_rows <- do.call(rbind, lapply(baskets, function(b) {
+  r <- results[[b$key]]; d <- basket_diag[[b$key]]
+  if (is.null(r)) return(NULL)
+  data.frame(
+    scenario = scenario, vintage = vintage,
+    window_start = start_date, window_end = end_date, markup = markup_assumption,
+    basket = unname(basket_name[[b$key]]), eta_on = (b$key == 'b'),
+    aggregate_pp = r$aggregate * 100,
+    direct_pp = r$direct_aggregate * 100,
+    supply_chain_pp = r$supply_chain_aggregate * 100,
+    mean_weighted_delta_pct = d$mean_delta_pct,
+    n_regime_dates = d$n_regime_dates,
+    stringsAsFactors = FALSE
+  )
+}))
+dir.create(dirname(out_file), recursive = TRUE, showWarnings = FALSE)
+write_csv(summary_rows, out_file)
+message(sprintf('Wrote summary CSV: %s', out_file))
