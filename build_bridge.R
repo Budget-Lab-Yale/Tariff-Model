@@ -19,20 +19,64 @@
 # Runs 0 & 1 are April-8-rate runs that CANNOT be regenerated on current code
 # (the old Tariff-ETRs rate path is gone; no April tracker vintage exists), so
 # they are pinned here as constants transcribed from the 2026-06-23 build's
-# key_results.csv. Runs 2 & 3 (June rates) are read from output/<scenario>/ for
-# the requested vintage. Passing vintage 2026-06-23 pulls runs 2 & 3 from the
-# pinned appendix too, reproducing the published table as a correctness check.
+# key_results.csv. Runs 2 & 3 (June rates) are read from the shared interface tree
+# at <root>/model_data/Tariff-Model/v<ver>/<interface-vintage>/<scenario>/. Passing
+# vintage 2026-06-23 pulls runs 2 & 3 from the pinned appendix too, reproducing the
+# published table as a correctness check.
 #
 # Usage:
-#   Rscript build_bridge.R [vintage]        # default 2026-07-01 (reads runs 2&3 from disk)
+#   Rscript build_bridge.R [label] --interface-vintage <V> [--local]
+#       label (default 2026-07-01) is the scenario-name suffix + report label;
+#       <V> is the value passed to run.R --vintage for runs 2 & 3.
 #   Rscript build_bridge.R 2026-06-23       # reproduce the published table from the appendix
 #
 # Writes reports/tariff_decomposition_bridge_<vintage>.{html,csv} and prints a
 # console summary. Revenue holds refunds fixed at $166B in every scenario.
 # =============================================================================
 
+# `vintage` is the SCENARIO-NAME suffix + report label (e.g. 2026-07-01), NOT the
+# interface-tree publish vintage. Runs 2 & 3 are read from the shared interface
+# tree at --interface-vintage (the value passed to run.R --vintage); that path
+# differs from the scenario label, so the two are separate arguments.
 args <- commandArgs(trailingOnly = TRUE)
-vintage <- if (length(args) >= 1) args[1] else '2026-07-01'
+vintage <- '2026-07-01'
+iface_vintage <- NA_character_
+write_local <- FALSE
+got_positional <- FALSE
+i <- 1
+while (i <= length(args)) {
+  a <- args[i]
+  if (a == '--interface-vintage' && i < length(args)) {
+    iface_vintage <- args[i + 1]; i <- i + 2
+  } else if (a == '--local') {
+    write_local <- TRUE; i <- i + 1
+  } else if (!startsWith(a, '--')) {
+    if (!got_positional) { vintage <- a; got_positional <- TRUE }
+    i <- i + 1
+  } else {
+    i <- i + 1
+  }
+}
+
+if (is.na(iface_vintage) && vintage != '2026-06-23') {
+  stop('--interface-vintage <V> is required to read runs 2 & 3 from the interface tree ',
+       '(the value you passed to run.R --vintage). Only vintage 2026-06-23 reproduces ',
+       'from the pinned appendix without reading disk.')
+}
+
+# Resolve the interface-tree root where runs 2 & 3 were published. Mirrors
+# tariff_output_root() in src/interfaces.R, read directly from config so this stays
+# a dependency-free base-R script. NULL for the 2026-06-23 appendix reproduction.
+read_root <- NULL
+if (!is.na(iface_vintage)) {
+  roots <- yaml::read_yaml('config/interfaces/output_roots.yaml')
+  versions <- yaml::read_yaml('config/interfaces/interface_versions.yaml')
+  root <- if (write_local) roots$local else roots$production
+  if (is.null(root)) stop('No output root configured in config/interfaces/output_roots.yaml')
+  ver <- versions[['Tariff-Model']]$version
+  if (is.null(ver)) ver <- 1L
+  read_root <- file.path(root, 'model_data', 'Tariff-Model', paste0('v', ver), iface_vintage)
+}
 
 # --- display metrics: key in key_results.csv -> label + kind (pct|usd|bil) ----
 metrics <- data.frame(
@@ -96,10 +140,13 @@ paths <- list(actual = 'Current-law path (Section 122 expires)',
 
 # --- fetch one run's metric vector: pinned anchors, or read from disk ----------
 read_key_results <- function(scenario) {
-  f <- file.path('output', scenario, 'results', 'key_results.csv')
+  # Runs publish key_results.csv straight into the scenario dir in the interface
+  # tree (11_write_outputs.R), NOT a repo-local output/.../results/ path.
+  f <- file.path(read_root, scenario, 'key_results.csv')
   if (!file.exists(f)) {
     stop('missing key_results for run: ', f,
-         '\n  (run the scenario, or use vintage 2026-06-23 to build from the appendix)')
+         '\n  (run the scenario at --interface-vintage ', iface_vintage,
+         ', or use vintage 2026-06-23 to build from the pinned appendix)')
   }
   d <- read.csv(f, stringsAsFactors = FALSE)
   stats::setNames(as.numeric(d$value), d$metric)
@@ -210,7 +257,7 @@ render_html <- function(vintage) {
   src_note <- if (vintage == '2026-06-23')
     'All four runs from the pinned 2026-06-23 build appendix (reproduction / correctness check).'
   else
-    sprintf('Runs 0 &amp; 1 pinned from the April-8 appendix (cannot be regenerated on current code); runs 2 &amp; 3 read from output/tracker_*_%s/ (2026-06-25-14 tracker vintage).', vintage)
+    sprintf('Runs 0 &amp; 1 pinned from the April-8 appendix (cannot be regenerated on current code); runs 2 &amp; 3 read from the interface tree at v-vintage %s, scenarios tracker_*_%s (2026-06-25-14 tracker vintage).', iface_vintage, vintage)
   panels <- paste0(sapply(names(paths), function(p) render_panel_html(p, build_panel(p, vintage))),
                    collapse = '\n')
   css <- '
