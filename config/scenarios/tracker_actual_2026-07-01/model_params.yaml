@@ -1,0 +1,44 @@
+# =============================================================================
+# Model Parameters: tracker_actual_2026-07-01
+# =============================================================================
+# 2026-07-01 clean-sweep rerun on current master (post PR #9), actual/current-law
+# path where Section 122 expires. Inputs are held identical to tracker_actual_2026-06-25
+# (same 2026-06-25-14 tracker vintage, same calibration window); eta/alpha are
+# freshly recalibrated on current master into output/calibration/tracker_actual_2026-07-01/.
+# Only the code version and the output label differ from the 06-25 run.
+
+rate_panel:
+  vintage: '2026-06-25-14'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state, matching the prior tracker reference convention.
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'output/calibration/tracker_actual_2026-07-01/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'output/calibration/tracker_actual_2026-07-01/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'
