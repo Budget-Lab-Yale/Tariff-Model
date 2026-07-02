@@ -1,0 +1,25 @@
+---
+# Dashboard scenario set for update_dashboard.R.
+#
+# The State of Tariffs dashboard (hosted in budget-lab-interactives) ships a
+# fixed set of model scenarios. Tab 3 ("default scenario") uses the single
+# `default: true` scenario; Tab 4 ("alternatives") stacks every scenario listed
+# here and computes deltas against the default. Adding a scenario at a later
+# launch is a config edit only — no code change.
+#
+# Each `id` must be a scenario directory published under the interface-tree
+# vintage passed to update_dashboard.R (i.e. <root>/model_data/Tariff-Model/
+# v<version>/<vintage>/<id>/). `label`/`short_label` are copied into the
+# manifest and consumed by the dashboard front-end.
+#
+# Validation (read_dashboard_config): ids unique, exactly one default: true.
+
+scenarios:
+  - id: tracker_actual_2026-07-01
+    label: 'Current law (Section 122 expires)'
+    short_label: 'Current law'
+    default: true
+  - id: tracker_new_301_2026-07-01
+    label: 'New Section 301 actions (Section 122 replaced)'
+    short_label: 'New 301'
+    default: false

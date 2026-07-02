@@ -46,6 +46,7 @@ GTAP/GEMPACK is Windows-only; on the HPC it runs under Wine via Slurm — see
 config/
   global_assumptions.yaml
   gtap_config.yaml          # GTAP/GEMPACK paths (gitignored; see .example)
+  dashboard.yaml            # dashboard scenario set (id/label/default) for update_dashboard.R
   interfaces/
     interface_versions.yaml # this model's version + upstream tracker dependency
     output_roots.yaml       # production (shared) + local (scratch) roots
@@ -60,6 +61,7 @@ resources/
   calibration/              # eta/alpha calibration inputs (treasury revenue, etc.)
 
 calibrate.R                 # standalone eta/alpha calibration CLI (NOT part of run_model.R)
+update_dashboard.R          # standalone dashboard-data export CLI (NOT part of run_model.R)
 
 src/
   run_model.R
@@ -74,6 +76,7 @@ src/
   05a_usmm_surrogate.R
   05_calculate_macro.R
   06_calculate_sectors.R
+  13_export_dashboard.R     # per-figure dashboard CSV exporters (consumed by update_dashboard.R)
   calibration/              # IMDB panel, eta, gtap-weights, alpha stages
 ```
 
