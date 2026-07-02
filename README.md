@@ -60,8 +60,22 @@ The entrypoint is `run.R`, which runs the pipeline orchestrated by
 | 10 | `11_write_outputs.R` | Writes result CSVs to `output/<scenario>/results/` |
 | 11 | `run_model.R` + `interfaces.R` | Publishes results to the shared interface tree with a dependency stamp |
 
-(`src/12_export_excel.R` builds report-workbook tables from saved outputs as a
-separate, optional step.)
+### Dashboard data export (standalone, downstream of published runs)
+
+The State of Tariffs report is an interactive dashboard (hosted in the
+`budget-lab-interactives` repo). This model builds only the data side:
+`update_dashboard.R` reads the published scenarios listed in
+`config/dashboard.yaml` at one interface vintage and writes per-figure
+long-format `data.csv` files (plus `manifest.json` + `dependencies.csv`) under
+`<root>/model_data/Tariff-Model/v<version>/<vintage>/dashboard/`, for hand-copy
+into the interactives repo via PR. It is a separate step from `run.R`.
+
+```bash
+Rscript update_dashboard.R --interface-vintage <V> [--write-local]
+```
+
+All logic lives in `src/13_export_dashboard.R`. (This replaced the retired
+`12_export_excel.R` / `update_state_of_tariffs.R` Excel data-download pipeline.)
 
 ### Calibration (standalone, upstream of a run)
 
