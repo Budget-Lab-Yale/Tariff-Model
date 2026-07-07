@@ -387,12 +387,29 @@ build_etr_by_country <- function(outputs) {
 
 build_consumer_prices <- function(outputs) {
   prices <- outputs$pce_major_category_prices
-  prices %>%
+  cat_rows <- prices %>%
     arrange(desc(pre_sub)) %>%
     transmute(major_category, group = top_level,
               presub = pre_sub, postsub = pe_postsub) %>%
     pivot_longer(c(presub, postsub), names_to = 'substitution', values_to = 'value') %>%
     transmute(category = major_category, value, group, substitution)
+
+  # Overall PCE price increase as a 'Total' bar (plan: "total bars at very top").
+  # Sourced from key_results so it equals the headline shown on summary-statistics;
+  # group = 'Total' lets the front-end delineate it from the category bars.
+  kr <- outputs$key_results %>% select(metric, value) %>% deframe()
+  need <- c('pre_sub_price_increase', 'pe_postsub_price_increase')
+  miss <- setdiff(need, names(kr))
+  if (length(miss) > 0) stop('consumer-prices total: missing key_results metric(s): ',
+                             paste(miss, collapse = ', '))
+  total_rows <- tibble(
+    category     = 'Total',
+    group        = 'Total',
+    substitution = c('presub', 'postsub'),
+    value        = c(kr[['pre_sub_price_increase']], kr[['pe_postsub_price_increase']])
+  )
+
+  bind_rows(total_rows, cat_rows)
 }
 
 
@@ -401,15 +418,27 @@ build_distribution <- function(outputs, concept) {
   col <- switch(concept, pct = 'pct_of_income', dollars = 'cost_per_hh',
                 stop('build_distribution: unknown concept "', concept, '"'))
 
+  # All-household 'Total' burden, computed from the same deciles shown (plan:
+  # toggleable total). Deciles are equal-population, so the population figure is
+  # the aggregate over deciles: dollars = mean per-hh cost (equals the headline
+  # per_hh_cost); pct = aggregate cost / aggregate income.
+  overall <- function(df) {
+    switch(concept,
+      dollars = mean(df$cost_per_hh),
+      pct     = sum(df$cost_per_hh) / sum(df$income) * 100)
+  }
+
   one <- function(df, sub) {
     if (nrow(df) != 10L) stop('distribution (', sub, '): expected 10 deciles, got ', nrow(df))
-    df %>%
+    deciles <- df %>%
       arrange(decile) %>%
       # Burden is reported as a negative magnitude (sign convention normalised
       # with -abs(), matching the retired build_f5).
       transmute(category = as.character(decile),
                 value = -abs(.data[[col]]),
                 substitution = sub)
+    total <- tibble(category = 'Total', value = -abs(overall(df)), substitution = sub)
+    bind_rows(deciles, total)
   }
 
   bind_rows(

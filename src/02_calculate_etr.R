@@ -348,6 +348,23 @@ calculate_etr <- function(inputs) {
                   post_sub_all_in * 100, delta_check_post * 100))
 
   # -------------------------------------------------------------------------
+  # Per-(partner x GTAP) eta diagnostic (reconciles to the pre-sub all-in ETR)
+  # -------------------------------------------------------------------------
+  # Surfaced for the blog's per-category statutory-vs-realized figure: it uses the
+  # SAME levels_matrix / levels_matrix_b and import_baseline_dollars behind the
+  # pre_sub_all_in numbers above, so the figure's economy-wide line ties to the
+  # published statutory -> eta'-adjusted step by construction.
+  tracker_vintage <- {
+    v <- inputs$model_params$rate_panel$vintage
+    if (is.null(v)) NA_character_ else as.character(v)
+  }
+  eta_diagnostic <- build_eta_diagnostic(
+    inputs$levels_matrix, inputs$levels_matrix_b,
+    import_baseline_dollars, viws_baseline,
+    tracker_vintage = tracker_vintage
+  )
+
+  # -------------------------------------------------------------------------
   # Time-varying: per-date ETR scaling
   # -------------------------------------------------------------------------
 
@@ -499,7 +516,9 @@ calculate_etr <- function(inputs) {
     presim_country_levels = presim_levels_country,
     postsim_country_levels = postsim_levels_country,
     # Per-date all-in levels (NULL for static scenarios)
-    per_date_levels = per_date_levels
+    per_date_levels = per_date_levels,
+    # Per-(partner x GTAP) eta diagnostic (reconciles to pre-sub all-in ETR)
+    eta_diagnostic = eta_diagnostic
   )
 
   message(sprintf('  Goods-weighted pre-sub ETR (a): %.2f%%', pre_sub_etr))
@@ -539,4 +558,91 @@ calculate_weighted_etr <- function(data) {
   overall_etr <- sum(imports * etrs) / total_imports
 
   return(overall_etr)
+}
+
+
+# =============================================================================
+# Per-(partner x GTAP) eta diagnostic
+# =============================================================================
+
+#' Per-(partner x GTAP) eta diagnostic that reconciles to the pre-sub all-in ETR.
+#'
+#' The downstream per-category statutory-vs-realized figure needs, for each
+#' (trading partner x GTAP sector) cell, the trade value, the statutory tariff
+#' revenue, and the noncompliance wedge eta, so it can import-weight the gap
+#' between the statutory and eta'-adjusted ETR. Those columns are exactly the
+#' per-cell decomposition of pre_sub_all_in: each cell is weighted by the SAME
+#' GTAP baseline import dollars used in calculate_country_etrs, so by construction
+#'   sum(statrev) / sum(trade_value) = pre_sub_all_in (statutory, a)
+#'   sum(realrev) / sum(trade_value) = pre_sub_all_in (eta'-adjusted, b)
+#' i.e. the figure's economy-wide line lands on the published statutory -> realized
+#' step.
+#'
+#' realrev (realized / eta'-adjusted revenue) is carried EXPLICITLY rather than
+#' reconstructed as (1 - eta)*statrev. The reconstruction silently drops cells
+#' whose statutory rate is 0 but eta'-adjusted rate is not (a tariff cut with
+#' partial pass-through: statrev = 0, so no eta recovers a positive realized), which
+#' left the realized aggregate ~0.006pp low. Carry realrev and the b side ties out.
+#'
+#' `eta` here is the all-in LEVEL wedge (1 - level_b/level_a), a display convenience
+#' (use realrev, not (1 - eta)*statrev, for the realized aggregate). Cells with no
+#' tariff (level_a == 0) get eta = 0; when noncompliance is inactive
+#' levels_matrix_b == levels_matrix, so eta == 0 and realrev == statrev everywhere.
+#'
+#' The partner axis is the model's 8 ETR columns (COUNTRY_CONFIG suffixes:
+#' chn, ca, mx, uk, jp, eu, row, fta). Korea is inside `fta` here -- the slim
+#' eta_by_partner_gtap.csv breaks it out, but the pre-sub ETR weighting does not,
+#' so splitting it would break reconciliation.
+#'
+#' @param levels_matrix           (a) statutory all-in levels (gtap_code + country
+#'   columns, pp) at the reference date.
+#' @param levels_matrix_b         (b) eta'-adjusted all-in levels, same shape.
+#' @param import_baseline_dollars Baseline import-$ matrix [sector x country] --
+#'   the exact pre-sub ETR weights.
+#' @param viws_baseline           Baseline VIWS matrix; its rows intersected with
+#'   the import-dollar rows define the goods-sector universe (matches
+#'   calculate_country_etrs).
+#' @param tracker_vintage         Optional; stamped as a column when non-NA.
+#' @return Long tibble (partner_group, gtap_code, trade_value, statrev, realrev,
+#'   eta [, tracker_vintage]); goods cells with positive trade only.
+build_eta_diagnostic <- function(levels_matrix, levels_matrix_b,
+                                 import_baseline_dollars, viws_baseline,
+                                 tracker_vintage = NA_character_) {
+
+  sectors <- intersect(rownames(viws_baseline), rownames(import_baseline_dollars))
+  if (length(sectors) == 0) stop('build_eta_diagnostic: no goods sectors to weight')
+
+  lvl <- function(m, col) as.numeric(setNames(m[[col]], m$gtap_code)[sectors])
+
+  rows <- lapply(seq_len(nrow(COUNTRY_CONFIG)), function(i) {
+    etr_col  <- COUNTRY_CONFIG$etr[i]    # levels_matrix column (china ... ftrow)
+    viws_col <- COUNTRY_CONFIG$viws[i]   # import-dollar column (same set)
+    la <- lvl(levels_matrix,   etr_col)
+    lb <- lvl(levels_matrix_b, etr_col)
+    # Weight EXACTLY as calculate_country_etrs does for the pre-sub ETR: baseline
+    # import dollars count only where baseline VIWS > 0 (its ratio gate zeroes the
+    # rest). Matching the gate keeps the cell universe + weights identical, so the
+    # sums tie to pre_sub_all_in (statutory and eta'-adjusted) to the last digit.
+    w  <- as.numeric(import_baseline_dollars[sectors, viws_col])
+    w  <- if_else(as.numeric(viws_baseline[sectors, viws_col]) > 0, w, 0)
+    tibble(
+      partner_group = COUNTRY_CONFIG$suffix[i],
+      gtap_code     = sectors,
+      trade_value   = w,
+      statrev       = la / 100 * w,   # statutory revenue: statutory rate x trade
+      realrev       = lb / 100 * w,   # realized (eta'-adjusted) revenue
+      eta           = if_else(la > 0, 1 - lb / la, 0)
+    )
+  })
+
+  out <- bind_rows(rows) %>%
+    filter(trade_value > 0) %>%
+    arrange(partner_group, gtap_code)
+
+  if (anyNA(out[c('trade_value', 'statrev', 'realrev', 'eta')])) {
+    stop('build_eta_diagnostic: NA in trade_value/statrev/realrev/eta ',
+         '(a gtap sector missing from a levels matrix?)')
+  }
+  if (!is.na(tracker_vintage)) out$tracker_vintage <- tracker_vintage
+  out
 }

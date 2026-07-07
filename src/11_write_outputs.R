@@ -491,6 +491,20 @@ write_outputs <- function(results, scenario) {
                     nrow(results$inputs$etr_matrix)))
   }
 
+  # ============================
+  # Eta diagnostic (per partner x GTAP; reconciles to pre-sub all-in ETR)
+  # ============================
+  # trade_value + statutory revenue + eta per (partner x gtap) cell, so a
+  # downstream consumer can import-weight the statutory-vs-realized ETR gap and
+  # tie the economy-wide line to the published pre-sub statutory -> eta'-adjusted
+  # step. Weighted by the same baseline import dollars behind pre_sub_all_in.
+  if (!is.null(results$etr$eta_diagnostic)) {
+    write_csv(results$etr$eta_diagnostic,
+              file.path(output_dir, 'eta_by_partner_gtap_diagnostic.csv'))
+    message(sprintf('    eta_by_partner_gtap_diagnostic.csv (%d partner x gtap cells)',
+                    nrow(results$etr$eta_diagnostic)))
+  }
+
   message(sprintf('  Done. All outputs written to %s/', output_dir))
 
   invisible(output_dir)

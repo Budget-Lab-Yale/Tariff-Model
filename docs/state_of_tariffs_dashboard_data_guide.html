@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tariffs Dashboard — Data Guide</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1b19; --muted:#5c584f; --faint:#8b867d;
+    --line:#e7e3db; --navy:#23335a; --navy-soft:#eef1f7; --code:#2b2a27;
+    --warn:#b45309; --warn-bg:#fbf1e3; --ok:#1f7a4d;
+    --q:#6b3fa0; --q-bg:#f2ecfa;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto}
+  header.top{padding:52px 0 18px;border-bottom:2px solid var(--ink)}
+  .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--navy);font-weight:650}
+  h1{font-size:30px;line-height:1.15;margin:.3em 0 .15em;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:15px;font-style:italic;max-width:64ch}
+  h2{font-size:20px;margin:44px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+  h3{font-size:15.5px;margin:26px 0 4px;letter-spacing:-.005em}
+  p{margin:.6em 0}
+  a{color:var(--navy)}
+  code{font-family:var(--mono);font-size:.87em;background:#f1efe9;padding:1px 5px;border-radius:5px;color:var(--code);word-break:break-word}
+  ul{margin:.5em 0;padding-left:22px} li{margin:.5em 0}
+  pre{background:#1f1e1c;color:#e9e6df;border-radius:11px;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+  .tldr{background:var(--navy-soft);border-left:4px solid var(--navy);border-radius:0 10px 10px 0;padding:14px 18px;margin:20px 0}
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:16px 0}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f4f2ec;font-weight:650;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  tbody tr:last-child td{border-bottom:none}
+  td code,th code{font-size:.9em}
+  /* tab section headers */
+  .tab-h{display:flex;align-items:baseline;gap:12px;margin:56px 0 6px;padding-top:22px;border-top:2px solid var(--ink)}
+  .tab-h .num{flex:none;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:#fff;background:var(--navy);border-radius:6px;padding:4px 9px;position:relative;top:-3px}
+  .tab-h h2{border:none;padding:0;margin:0;font-size:22px}
+  .tab-intro{color:var(--muted);font-size:14.5px}
+  /* data-file mapping callout */
+  .data{background:var(--navy-soft);border-left:4px solid var(--navy);border-radius:0 10px 10px 0;
+    padding:9px 14px;margin:6px 0 12px;font-size:13.5px}
+  .data .lbl{display:inline-block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--navy);font-weight:700;margin-right:8px}
+  /* amber gap / caveat */
+  .note{background:var(--warn-bg);border-left:4px solid var(--warn);border-radius:0 10px 10px 0;padding:11px 15px;margin:10px 0;font-size:13.5px}
+  .note .lbl{font-weight:700;color:var(--warn)}
+  /* purple open-question */
+  .q{background:var(--q-bg);border-left:4px solid var(--q);border-radius:0 10px 10px 0;padding:12px 16px;margin:16px 0;font-size:14px}
+  .q .lbl{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--q);font-weight:700;margin-bottom:3px}
+  /* placeholder / to-write */
+  .stub{color:var(--faint);font-style:italic}
+  .tk{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--warn);
+    background:var(--warn-bg);border:1px solid #ecd9b6;border-radius:5px;padding:0 6px;vertical-align:1px}
+  .ok{color:var(--ok);font-weight:650}
+  .foot{margin-top:56px;padding-top:14px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">Tariff Model · Reference</div>
+  <h1>Tariffs Dashboard — Data Guide</h1>
+  <p class="lede">This document describes the proposed tariff dashboard webpage design and defines the structure for the underlying data.</p>
+</header>
+
+<h2>Underlying data</h2>
+<pre>&lt;root&gt;/model_data/Tariff-Model/v&lt;version&gt;/&lt;vintage&gt;/dashboard/
+  manifest.json
+  dependencies.csv
+  data/
+    statutory-rates/&lt;slug&gt;/data.csv
+    default-scenario/&lt;slug&gt;/data.csv
+    alternative-scenarios/&lt;slug&gt;/data.csv</pre>
+<p><code>&lt;root&gt;</code> is the shared production tree; <code>&lt;vintage&gt;</code> is a Tariff-Model publish timestamp (e.g. <code>2026070114</code>). The Johns supply this filepath for Sylva.</p>
+<p>Every <code>data.csv</code> is long-format.</p>
+<p><b><code>manifest.json</code></b> — the only place that says which scenario is the default. It has a <code>scenarios</code> array copied from <code>config/dashboard.yaml</code>, each with an <code>id</code>, <code>label</code>, <code>short_label</code>, and <code>default: true/false</code>. It also records <code>tracker_vintage</code> (which tracker data the run used), <code>git_commit</code>, and <code>published_at</code>. The individual <code>data.csv</code> files in <code>default-scenario/</code> do not carry a scenario id column (you need the manifest to know which scenario they came from).</p>
+<p><b><code>dependencies.csv</code></b> — describes the upstream interface it consumed (Tariff-Model itself + Tariff-Rate-Tracker). For recordkeeping purposes only.</p>
+
+<h2>Recurring columns</h2>
+<div class="tw">
+<table>
+<thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>time</code></td><td>ISO date, line charts only</td></tr>
+<tr><td><code>category</code></td><td>bar/table row label (already human-readable, e.g. "China", "Agriculture")</td></tr>
+<tr><td><code>series</code></td><td>sub-line or sub-bar label within a category/time (e.g. "Pre-substitution")</td></tr>
+<tr><td><code>value</code></td><td>the number. Percent unless a figure says otherwise (see <code>unit</code> on summary-statistics)</td></tr>
+<tr><td><code>substitution</code></td><td><code>presub</code> / <code>postsub</code> — pre- vs post-substitution estimate</td></tr>
+<tr><td><code>dimension</code></td><td><code>sector</code> / <code>country</code> — the Figure 4/5 toggle, <code>gdp-by-category</code> only</td></tr>
+<tr><td><code>scenario</code></td><td>model scenario id — present on <code>statutory-rates</code> and <code>alternative-scenarios</code> figures only</td></tr>
+<tr><td><code>measure</code></td><td><code>level</code> / <code>delta_vs_default</code> — the levels-vs-deltas toggle, <code>alternative-scenarios</code> only</td></tr>
+<tr><td><code>projected</code></td><td>0/1 — drives the grey "future projections" band, <code>statutory-rates</code> only</td></tr>
+<tr><td><code>country_code</code> / <code>category_code</code> / <code>gtap_code</code></td><td>machine key behind the display <code>category</code>, for stable joins/colors</td></tr>
+</tbody>
+</table>
+</div>
+<p>Everything is validated on write (no NAs, no non-finite values, required columns present) — if a figure looks wrong, it's wrong in the model output, not a frontend parsing issue.</p>
+
+
+<div class="tab-h"><span class="num">Tab 1</span><h2>Introduction</h2></div>
+<p>Intro + outline of dashboard, and changes since last update.</p>
+<div class="q">
+  <span class="lbl">Question for Sylva</span>
+  No data files. Words only. How best should we produce text for this piece? (All the text, really.) Like should the text itself be in the underlying data interface? In sharepoint? How do we think about that part of this?
+</div>
+
+
+<div class="tab-h"><span class="num">Tab 2</span><h2>Daily Statutory Rates</h2></div>
+<p class="tab-intro">All four figures are daily line charts under <code>statutory-rates/</code>, styled after the <a href="https://budgetlab.yale.edu/research/introducing-tariff-rate-tracker-open-source-tool-daily-effective-tariff-rates">tariff-rate-tracker blog</a>: dashed vertical lines at major tariff policy changes, and a grey band over future projections.</p>
+<p>The grey band is driven by the <code>projected</code> column (0/1) — shade any date where <code>projected == 1</code>. Every figure also carries a <code>scenario</code> column (see Recurring columns).</p>
+<div class="note"><span class="lbl">Gap.</span> The dashed policy-change lines have no data file today; that needs a small new CSV (date + label) that doesn't exist yet. <span class="tk">TK</span></div>
+
+<h3>Overall</h3>
+<div class="data"><span class="lbl">Data</span><code>statutory-rates/daily-rate-overall</code> — <code>series</code>: <code>total</code>, <code>additional</code>.</div>
+
+<h3>By Authority</h3>
+<div class="data"><span class="lbl">Data</span><code>statutory-rates/daily-rate-by-authority</code> — <code>series</code>: <code>base</code>, <code>section_232</code>, <code>section_301</code>, <code>ieepa</code>, <code>fentanyl</code>, <code>section_122</code>, <code>section_201</code>, <code>other</code>.</div>
+
+<h3>By Trading Partner</h3>
+<div class="data"><span class="lbl">Data</span><code>statutory-rates/daily-rate-by-country</code> — <code>series</code>: display name; <code>country_code</code>: group key (China / Canada / Mexico / EU / Japan / UK / free-trade partners / rest-of-world).</div>
+
+<h3>By Product</h3>
+<div class="data"><span class="lbl">Data</span><code>statutory-rates/daily-rate-by-category</code> — <code>series</code>: GTAP sector description; <code>gtap_code</code>: key.</div>
+
+
+<div class="tab-h"><span class="num">Tab 3</span><h2>Projected Tariff Effects: Default Policy Scenario</h2></div>
+<p class="tab-intro">These figures follow <a href="https://budgetlab.yale.edu/research/state-us-tariffs-april-8-2026">The State of US Tariffs, April 8 2026</a>. All show the single default scenario (per <code>manifest.json</code>), under <code>default-scenario/</code>.</p>
+
+<h3>Overview</h3>
+<p class="stub">Some text.</p>
+
+<h3>Summary of results <span style="color:var(--faint);font-weight:400">(Table 1 from above)</span></h3>
+<p>Pre- and post-substitution.</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/summary-statistics</code> — 12 fixed metrics. Columns <code>series</code> (carries the "Pre-substitution" / "Post-substitution" split), <code>unit</code> (pct/usd/usd_bn/pp), <code>metric</code>.</div>
+
+<h3>ETRs <span style="color:var(--faint);font-weight:400">(Table 2 from above)</span></h3>
+<p>Pre- and post-substitution, by country, with a total row.</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/etr-by-country</code> — <code>substitution</code> = the pre/post split; <code>category</code> = country. <b>The total row is already present</b> as <code>country_code == 'total'</code>.</div>
+
+<h3>Consumer prices across PCE categories <span style="color:var(--faint);font-weight:400">(Figure 7 from above)</span></h3>
+<p>Pre- and post-substitution, by PCE spending category, with total bars at the very top.</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/consumer-prices</code> — <code>substitution</code> = pre/post; <code>category</code> = PCE category; <code>group</code> = Durable goods / Nondurable goods / Services. <b>The total is included</b> as the <code>category == 'Total'</code> row (also <code>group == 'Total'</code>) — the overall PCE price increase, matching the headline on summary-statistics. Render it as the top bars.</div>
+
+<h3>Distribution of household income, by decile, as a share of ATT income <span style="color:var(--faint);font-weight:400">(Figure 6 from above)</span></h3>
+<p>Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/distribution-pct-income</code> — <code>category</code> = decile <code>"1"</code>–<code>"10"</code> plus a <code>"Total"</code> row (all-household burden, aggregate cost ÷ aggregate income); <code>substitution</code> = pre/post; <code>value</code> already negative (burden convention). Render <code>category == 'Total'</code> as the toggleable total.</div>
+
+<h3>Distribution of household income, by decile, in 2025 dollars <span style="color:var(--faint);font-weight:400">(Figure 6 from above)</span></h3>
+<p>Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/distribution-dollars</code> — same shape as above, dollar units; the <code>"Total"</code> row is the average household cost (matches the per-household cost on summary-statistics).</div>
+
+<h3>US Real GDP effects <span style="color:var(--faint);font-weight:400">(Figure 3 from above)</span></h3>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/real-gdp</code> — line chart. 44 rows, 2025Q1–2035Q4, mid-quarter dates in <code>time</code>.</div>
+
+<h3>US Real GDP effect, by category <span style="color:var(--faint);font-weight:400">(Figures 4 and 5 from above)</span></h3>
+<p>Toggle by Sector or by Country group. Move the total category to the far left and give it a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/gdp-by-category</code> — <code>dimension</code> = the Sector/Country toggle (<code>sector</code> / <code>country</code>); <code>category_code</code> = key. <b>The total for each side is already included</b> (<code>overall_gdp</code> for sectors, <code>world</code> for countries) — filter it out and render it separately on the far left.</div>
+
+<h3>Estimated Revenue Effect <span style="color:var(--faint);font-weight:400">(Table 3 from above)</span></h3>
+<p>A bar graph with two sets of bars, dynamic and conventional. Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/revenue-by-year</code> — <code>series</code> = <code>conventional</code> / <code>dynamic</code> (the two sets of bars); <code>category</code> = fiscal year string. <b>The "total" is already present</b> as the <code>category == 'Total'</code> row — render it separately for the toggle.</div>
+
+
+<div class="tab-h"><span class="num">Tab 4</span><h2>Projected Tariff Effects: Alternative Policy Scenarios</h2></div>
+<p class="tab-intro">Same 8 figures as Tab 3, under <code>alternative-scenarios/</code>, but every row is stacked across <b>all</b> scenarios in <code>config/dashboard.yaml</code> and tagged with two extra columns:</p>
+<ul>
+  <li><code>scenario</code> — which policy scenario the row belongs to.</li>
+  <li><code>measure</code> — <code>level</code> / <code>delta_vs_default</code>, the toggle between showing 1) <code>level</code>, i.e., each scenario's own effects relative to the January 2025 baseline, and 2) <code>delta_vs_default</code>, the "delta" or incremental effect relative to the default scenario.</li>
+</ul>
+
+<h3>Overview</h3>
+<p class="stub">Some text.</p>
+
+<h3>Summary of results</h3>
+<p>Same as Tab 3, but add super-columns for scenarios.</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/summary-statistics</code> — same columns as Tab 3, plus <code>scenario</code> (the super-columns) and <code>measure</code>.</div>
+
+<h3>ETRs by Scenario</h3>
+<p>Switch from the by-country break-out to switching between countries, with rows = scenarios. (Best for comparison.)</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/etr-by-country</code> — <b class="ok">no new data needed.</b> Same file as Tab 3's ETR figure with <code>scenario</code>/<code>measure</code> added; just pivot it: pick one <code>country_code</code>, put <code>scenario</code> on the rows instead of country on the x-axis.</div>
+
+<h3>Consumer prices across PCE categories</h3>
+<p>Same as Tab 3, but add super-columns for scenarios.</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/consumer-prices</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>. Includes the <code>category == 'Total'</code> row, as in Tab 3.</div>
+
+<h3>Distribution of household income, by decile, as a share of ATT income</h3>
+<p>Same as Tab 3, with bars for different scenarios. Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/distribution-pct-income</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>. Includes the <code>"Total"</code> row, as in Tab 3.</div>
+
+<h3>Distribution of household income, by decile, in 2025 dollars</h3>
+<p>Same as Tab 3, with bars for different scenarios. Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/distribution-dollars</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>. Includes the <code>"Total"</code> row, as in Tab 3.</div>
+
+<h3>US Real GDP effects, by year</h3>
+<p>Same as Tab 3, with lines for different scenarios.</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/real-gdp</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>.</div>
+
+<h3>US Real GDP effect, by category</h3>
+<p>Same as Tab 3, with bars for different scenarios. Toggle by Sector or by Country group. Move the total category to the far left and give it a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/gdp-by-category</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>. <code>dimension</code> toggle and included total rows work exactly as in Tab 3.</div>
+
+<h3>Estimated Revenue Effects</h3>
+<p>Two figures on the page, one dynamic and one conventional, with bars for different scenarios. Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
+<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/revenue-by-year</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>. For the two figures, split on the <code>series</code> column. The <code>category == 'Total'</code> row is already present for the toggle.</div>
+
+
+<div class="tab-h"><span class="num">Tab 5</span><h2>Methodology</h2></div>
+<p class="stub">Some text. <span class="tk">TK</span></p>
+
+<div class="foot">Companion to <code>docs/state_of_tariffs_dashboard_data_guide.md</code> — the Markdown is the source of truth; this page mirrors it.</div>
+
+</div>
+</body>
+</html>
