@@ -1,13 +1,12 @@
 # =============================================================================
 # Model Parameters: tracker_actual_2026-07-01_no_eta_alpha
 # =============================================================================
-# Bridge scenario (2026-07-01 clean-sweep rerun on current master): 2026-06-25-14
-# tracker vintage, actual/current-law policy with eta neutralized and alpha
-# substitution correction disabled. Inputs identical to
-# tracker_actual_2026-06-25_no_eta_alpha; only the code version and output label differ.
+# Bridge scenario: actual/current-law policy with eta neutralized and alpha
+# substitution correction disabled. On 2026-07-13 the rate panel was advanced to
+# the 2026-07-01-16 tracker vintage (was 2026-06-25-14).
 
 rate_panel:
-  vintage: '2026-06-25-14'
+  vintage: '2026-07-01-16'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
