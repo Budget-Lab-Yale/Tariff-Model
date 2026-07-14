@@ -100,13 +100,14 @@ AUTHORITY_SERIES <- tribble(
   'etr_other',       'other'
 )
 
-# Twelve curated summary-statistics metrics. `source` = 'key' (key_results.csv,
+# Thirteen curated summary-statistics metrics. `source` = 'key' (key_results.csv,
 # looked up by `key`) or 'sector' (sector_effects.csv, overall_gdp). Values are
 # already in the stated unit; nothing is rescaled.
 SUMMARY_METRICS <- tribble(
-  ~metric,                ~category,                 ~series,             ~unit,    ~source, ~key,
-  'etr_presub_level',     'Effective tariff rate',   'Pre-substitution',  'pct',    'key',   'pre_sub_all_in_etr',
-  'etr_postsub_level',    'Effective tariff rate',   'Post-substitution', 'pct',    'key',   'pe_postsub_all_in_etr',
+  ~metric,                ~category,                 ~series,                          ~unit,    ~source, ~key,
+  'etr_statutory_level',  'Tariff rate',             'Average statutory rate',         'pct',    'key',   'statutory_all_in_etr',
+  'etr_presub_level',     'Tariff rate',             'Effective rate, pre-substitution',  'pct', 'key',   'pre_sub_all_in_etr',
+  'etr_postsub_level',    'Tariff rate',             'Effective rate, post-substitution', 'pct', 'key',   'pe_postsub_all_in_etr',
   'revenue_conventional', 'Revenue (10-year)',       'Conventional',      'usd_bn', 'key',   'conventional_revenue_10yr',
   'revenue_dynamic',      'Revenue (10-year)',       'Dynamic',           'usd_bn', 'key',   'dynamic_revenue_10yr',
   'price_presub',         'Consumer price increase', 'Pre-substitution',  'pct',    'key',   'pre_sub_price_increase',
@@ -362,7 +363,7 @@ build_summary_stats <- function(outputs) {
   if (length(missing) > 0) {
     stop('summary-statistics: missing metric(s): ', paste(missing, collapse = ', '))
   }
-  if (nrow(res) != 12L) stop('summary-statistics: expected 12 metrics, got ', nrow(res))
+  if (nrow(res) != 13L) stop('summary-statistics: expected 13 metrics, got ', nrow(res))
 
   res %>% transmute(category, series, value, unit, metric)
 }
@@ -592,7 +593,8 @@ gtap_sector_labels <- function() {
   gs
 }
 
-#' Build a long tracker-daily figure for overall / by_authority / by_category.
+#' Build a long tracker-daily figure for overall / by_authority / by_category /
+#' by_hs (HS-based product breakdown).
 #' Returns time, series, value(+gtap_code for category), projected. `scenario`
 #' is added by the caller.
 build_daily_rates <- function(daily_dir, which) {
@@ -657,6 +659,21 @@ build_daily_rates <- function(daily_dir, which) {
     labelled %>%
       transmute(time = as.Date(date), series, value = weighted_etr * 100,
                 gtap_code, projected = flag_projected(revision))
+
+  } else if (which == 'by_hs') {
+    path <- file.path(daily_dir, 'daily_by_hs.csv')
+    if (!file.exists(path)) stop('tracker daily file not found: ', path)
+    # HS-based product breakdown (Budget Lab Tariff HS Aggregation). Unlike the
+    # GTAP by_category file, the tracker keys this on a stable category_code +
+    # category_label and emits one clean row per (date, category) -- no
+    # upper/lower-case dup to collapse and no external label join. The
+    # 'unclassified' residual (HS ch 98-99) carries essentially no weight; it is
+    # kept as-is. Defensive NA-rate drop mirrors by_category.
+    read_csv(path, show_col_types = FALSE) %>%
+      filter(!is.na(weighted_etr)) %>%
+      transmute(time = as.Date(date), series = category_label,
+                value = weighted_etr * 100, category_code,
+                projected = flag_projected(revision))
 
   } else {
     stop('build_daily_rates: unknown which "', which, '"')
@@ -774,6 +791,8 @@ export_statutory_tab <- function(deps_tbl, tracker_vintage, dashboard_root,
                tab, 'daily-rate-by-country', dashboard_root, 'line')
   write_figure(gather_series(function(d) build_daily_rates(d, 'by_category')),
                tab, 'daily-rate-by-category', dashboard_root, 'line')
+  write_figure(gather_series(function(d) build_daily_rates(d, 'by_hs')),
+               tab, 'daily-rate-by-hs', dashboard_root, 'line')
 }
 
 

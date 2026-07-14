@@ -485,6 +485,10 @@ calculate_etr <- function(inputs) {
     # above as the delta-check diagnostics; presim_country* below stay statutory.)
     pre_sub_increase = b_pre_sub_etr,
     pre_sub_all_in = b_all_in * 100,
+    # (a) applied-statutory all-in level (non-eta-adjusted): baseline + statutory
+    # delta, baseline-weighted. Surfaced for the summary table's statutory row;
+    # equals pre_sub_all_in (b) when noncompliance is inactive.
+    statutory_all_in = pre_sub_all_in * 100,
     pe_postsub_increase = post_sub_etr,
     pe_postsub_all_in = post_sub_all_in * 100,
     # Baseline ETR computed from levels (as percentage)
