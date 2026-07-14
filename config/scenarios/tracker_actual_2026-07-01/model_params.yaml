@@ -9,7 +9,7 @@
 # the swap isolates the tracker-data change downstream.
 
 rate_panel:
-  vintage: '2026-07-13-20'
+  vintage: '2026-07-14-16'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'

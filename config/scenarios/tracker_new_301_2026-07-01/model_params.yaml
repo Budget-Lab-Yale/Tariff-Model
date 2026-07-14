@@ -9,7 +9,7 @@
 # (model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/), not refit.
 
 rate_panel:
-  vintage: '2026-07-13-20'
+  vintage: '2026-07-14-16'
   tracker_scenario: 'new_301'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
