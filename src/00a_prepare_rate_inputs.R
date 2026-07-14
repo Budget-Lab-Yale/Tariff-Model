@@ -256,6 +256,110 @@ apply_prefix_rate_fallback <- function(frame, rate_slice, col, label, prefix_len
   out %>% select(-prefix, -fallback_rate, -min_rate, -max_rate)
 }
 
+# Historical (non-tip) slices may carry some prefix-fallback value (older HTS
+# suffix vintages differ from the tip weight base). This is the value-weighted
+# ceiling on that fallback; the tip slice tolerates NONE. Placeholder pending the
+# rollout A/B — tighten once the historical method-tier tables are reviewed.
+RATE_COVERAGE_HISTORICAL_MAX_FALLBACK_PCT <- 15
+
+#' Classify each weighted (hts10, cty_code) pair's FINEST resolving tier against a
+#' rate slice: exact 10-digit, then HS8/HS6/HS4/HS2 prefix, then country-global,
+#' then unresolved. Mirrors apply_prefix_rate_fallback's cascade so the reported
+#' tier is the one the fallback actually used.
+#'
+#' @param frame weights joined to the rate (`col` non-NA == exact match).
+#' @param rate_slice the (hts10, cty_code, rate_total) slice being matched against.
+#' @return character vector of tier labels, one per row of `frame`.
+.rate_coverage_tiers <- function(frame, rate_slice, col) {
+  tier <- rep(NA_character_, nrow(frame))
+  tier[!is.na(frame[[col]])] <- 'exact'
+  for (L in c(8L, 6L, 4L, 2L)) {
+    need <- is.na(tier)
+    if (!any(need)) break
+    slice_keys <- unique(paste0(substr(rate_slice$hts10, 1, L), '\t', rate_slice$cty_code))
+    key <- paste0(substr(frame$hts10, 1, L), '\t', frame$cty_code)
+    tier[need & key %in% slice_keys] <- paste0('hs', L)
+  }
+  need <- is.na(tier)
+  if (any(need)) {
+    tier[need & frame$cty_code %in% unique(rate_slice$cty_code)] <- 'country_global'
+  }
+  tier[is.na(tier)] <- 'unresolved'
+  tier
+}
+
+#' Coverage guard (corrected direction): measure the import-VALUE share that gets
+#' an EXACT rate before any prefix fallback, and gate on the fallback share.
+#'
+#' Replaces the old near-tautological "matched pairs / total pairs" ratio. A TIP
+#' slice (weights are keyed to the tip panel) must be ~100% exact — ANY prefix
+#' fallback is a weights/panel vintage skew and hard-fails. Historical slices are
+#' allowed fallback up to a policy threshold. Unresolved (no rate at any tier)
+#' always hard-fails. Emits a per-tier dollar breakdown + the top fallback HS2
+#' chapters / countries / sample codes.
+#'
+#' @param frame weights left-joined to the rate (`col` present where exact).
+#' @param rate_slice the slice being matched (for prefix membership).
+#' @param col 'level' (scenario) or 'base_level' (baseline).
+#' @param label human label for messages.
+#' @param is_tip TRUE for the tip snapshot date (hard-fail on any fallback).
+#' @param threshold_pct historical fallback ceiling (value-weighted %).
+enforce_rate_coverage <- function(frame, rate_slice, col, label, is_tip,
+                                  threshold_pct = RATE_COVERAGE_HISTORICAL_MAX_FALLBACK_PCT) {
+  total_v <- sum(frame$imports)
+  tier <- .rate_coverage_tiers(frame, rate_slice, col)
+  tv <- tibble(tier = tier, imports = frame$imports,
+               hts10 = frame$hts10, cty_code = frame$cty_code)
+  by_tier <- tv %>%
+    group_by(tier) %>%
+    summarise(n_pairs = n(), value = sum(imports), .groups = 'drop') %>%
+    mutate(pct = 100 * value / max(total_v, 1))
+  tier_val <- function(t) sum(by_tier$value[by_tier$tier == t])
+  exact_pct <- 100 * tier_val('exact') / max(total_v, 1)
+  fallback_pct <- 100 - exact_pct
+  slice_kind <- if (is_tip) 'TIP' else 'historical'
+
+  message(sprintf('  [coverage %s/%s] exact %.3f%% of $ | fallback %.3f%%',
+                  label, slice_kind, exact_pct, fallback_pct))
+  for (t in c('exact', 'hs8', 'hs6', 'hs4', 'hs2', 'country_global', 'unresolved')) {
+    r <- by_tier[by_tier$tier == t, ]
+    if (nrow(r) > 0 && r$value > 0) {
+      message(sprintf('      %-15s %7d pairs  $%8.2fB  %6.3f%%',
+                      t, r$n_pairs, r$value / 1e9, r$pct))
+    }
+  }
+  fb <- tv %>% filter(tier != 'exact')
+  if (nrow(fb) > 0) {
+    top_hs2 <- fb %>% mutate(hs2 = substr(hts10, 1, 2)) %>% group_by(hs2) %>%
+      summarise(v = sum(imports), .groups = 'drop') %>% arrange(desc(v)) %>% head(3)
+    top_cty <- fb %>% group_by(cty_code) %>% summarise(v = sum(imports), .groups = 'drop') %>%
+      arrange(desc(v)) %>% head(3)
+    message('      top HS2: ', paste(sprintf('%s ($%.2fB)', top_hs2$hs2, top_hs2$v / 1e9), collapse = ', '))
+    message('      top cty: ', paste(sprintf('%s ($%.2fB)', top_cty$cty_code, top_cty$v / 1e9), collapse = ', '))
+    message('      sample : ', paste(head(unique(fb$hts10), 5), collapse = ', '))
+  }
+
+  unresolved_v <- tier_val('unresolved')
+  if (unresolved_v > 0) {
+    stop(sprintf(paste0('[coverage %s] %d weighted pair(s) ($%.2fB) resolve to NO rate at any tier ',
+                        '— would silently understate the rollup.'),
+                 label, sum(tier == 'unresolved'), unresolved_v / 1e9), call. = FALSE)
+  }
+  if (is_tip) {
+    if (fallback_pct > 1e-9) {
+      stop(sprintf(paste0('[coverage %s] TIP slice requires ~100%% exact coverage but %.3f%% of ',
+                          'weighted $ fell to a prefix fallback. Weights are keyed to the tip panel; ',
+                          'a non-exact tip means a weights/panel vintage skew. See the per-tier ',
+                          'breakdown above.'), label, fallback_pct), call. = FALSE)
+    }
+  } else if (fallback_pct > threshold_pct) {
+    stop(sprintf(paste0('[coverage %s] historical slice prefix fallback is %.3f%% of weighted $ ',
+                        '(> %.1f%% policy threshold). Investigate the crosswalk coverage.'),
+                 label, fallback_pct, threshold_pct), call. = FALSE)
+  }
+  invisible(by_tier)
+}
+
 # =============================================================================
 # Core aggregation
 # =============================================================================
@@ -265,9 +369,15 @@ apply_prefix_rate_fallback <- function(frame, rate_slice, col, label, prefix_len
 #' @param scenario_slice Static panel at the date (hts10, cty_code, rate_total)
 #' @param baseline_slice Static baseline panel (hts10, cty_code, rate_total)
 #' @param resources Output of load_aggregation_resources()
+#' @param is_tip TRUE when scenario_slice is the tip snapshot date (weights are
+#'   keyed to the tip panel, so the coverage guard hard-fails on ANY prefix
+#'   fallback). Historical dates gate on a value-weighted threshold instead.
+#' @param check_baseline run the coverage guard on the baseline slice too (the
+#'   baseline is date-invariant, so callers check it once).
 #'
 #' @return Tibble: hts10, cty_code, gtap_code, partner, eta_group, imports, level, delta
-build_pair_frame <- function(scenario_slice, baseline_slice, resources) {
+build_pair_frame <- function(scenario_slice, baseline_slice, resources,
+                             is_tip = FALSE, check_baseline = TRUE) {
 
   scenario_levels <- scenario_slice %>% select(hts10, cty_code, level = rate_total)
   baseline_levels <- baseline_slice %>% select(hts10, cty_code, base_level = rate_total)
@@ -279,6 +389,15 @@ build_pair_frame <- function(scenario_slice, baseline_slice, resources) {
   frame <- resources$weights %>%
     left_join(scenario_levels, by = c('hts10', 'cty_code')) %>%
     left_join(baseline_levels, by = c('hts10', 'cty_code'))
+
+  # Coverage guard (corrected direction) — BEFORE the prefix fallback fills the
+  # gaps, so it measures true exact coverage. Tip: any fallback hard-fails.
+  enforce_rate_coverage(frame, scenario_slice, 'level', 'scenario', is_tip = is_tip)
+  if (check_baseline) {
+    # The baseline reference date is historical by construction (pre-Trump base),
+    # so it is never the tip slice.
+    enforce_rate_coverage(frame, baseline_slice, 'base_level', 'baseline', is_tip = FALSE)
+  }
 
   frame <- frame %>%
     apply_prefix_rate_fallback(scenario_slice, 'level', 'scenario', 8) %>%
@@ -584,6 +703,12 @@ prepare_rate_inputs <- function(scenario) {
   # ---- inputs ----
   resources <- load_aggregation_resources(rate_panel)
 
+  # Vintage assertion: the weights MUST be keyed to the same tip revision the
+  # bundle manifest records (weights hts_vintage == manifest actual tip revision,
+  # and the manifest weights.path resolves to the file we read). Guards against
+  # the weights/panel vintage skew that understates the statutory rate.
+  assert_weights_vintage(rate_panel)
+
   # eta' noncompliance factors: applied statutory (a) -> eta'-adjusted (b).
   # Missing eta calibration fails loudly; uncovered eta cells pass through at 1.
   global_assumptions <- yaml::read_yaml('config/global_assumptions.yaml')
@@ -630,13 +755,21 @@ prepare_rate_inputs <- function(scenario) {
   bea_by_date    <- list();  bea_by_date_b  <- list()
   ref_partner_gtap <- NULL;  ref_partner_gtap_b <- NULL
 
+  # The tip snapshot date carries the weights' HTS-identity universe, so its
+  # coverage must be exact; earlier dates are historical. Check the (date-
+  # invariant) baseline coverage once, on the first date processed.
+  tip_date <- max(snapshot_dates)
+  first_date <- min(snapshot_dates)
+
   for (d in as.list(snapshot_dates)) {
     slice <- if (use_snapshots) {
       read_rate_snapshot(rate_panel, rate_panel$tracker_scenario, d)
     } else {
       slice_panel_at(scenario_panel, d)
     }
-    pairs   <- build_pair_frame(slice, baseline_slice, resources)
+    pairs   <- build_pair_frame(slice, baseline_slice, resources,
+                                is_tip = (d == tip_date),
+                                check_baseline = (d == first_date))
     pairs_b <- apply_eta_prime(pairs, eta_prime, default_eta,
                                verbose = (d == gtap_reference_date))
 
