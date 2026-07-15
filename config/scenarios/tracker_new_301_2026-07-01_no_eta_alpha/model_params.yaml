@@ -2,11 +2,11 @@
 # Model Parameters: tracker_new_301_2026-07-01_no_eta_alpha
 # =============================================================================
 # Bridge scenario: new_301 policy with eta neutralized and alpha substitution
-# correction disabled. On 2026-07-13 the rate panel was advanced to the
-# 2026-07-13-20 tracker vintage (was 2026-07-01-16; -20 is the -13 rebuild adding the HS product breakdown).
+# correction disabled. The rate panel was advanced 2026-07-13-20 -> 2026-07-14-20
+# -> 2026-07-15-13 (484f per-interval import weights).
 
 rate_panel:
-  vintage: '2026-07-14-20'
+  vintage: '2026-07-15-13'
   tracker_scenario: 'new_301'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
