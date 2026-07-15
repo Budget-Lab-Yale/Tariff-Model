@@ -3,13 +3,13 @@
 # =============================================================================
 # Scenario where Section 122 expires and is replaced with new forced-labor and
 # other Section 301 actions. Originally a 2026-07-01 clean-sweep rerun on current
-# master (post PR #9); on 2026-07-13 the rate panel was advanced to the
-# 2026-07-13-13 tracker vintage (was 2026-07-01-16). eta/alpha REUSE the actual
-# basket calibration fit on the prior 2026-06-25-14 basket
-# (model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/), not refit.
+# master (post PR #9); the rate panel was advanced through 2026-07-13-20 and, on
+# 2026-07-14, to the 2026-07-14-20 tracker vintage (484f per-interval import
+# weights). eta/alpha REUSE the actual scenario's calibration, refit against the
+# 2026-07-14-20 basket (model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/).
 
 rate_panel:
-  vintage: '2026-07-13-13'
+  vintage: '2026-07-14-20'
   tracker_scenario: 'new_301'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
