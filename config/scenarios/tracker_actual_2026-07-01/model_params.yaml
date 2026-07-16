@@ -3,14 +3,14 @@
 # =============================================================================
 # Actual/current-law path where Section 122 expires. Originally a 2026-07-01
 # clean-sweep rerun on current master (post PR #9); the rate panel was advanced
-# through 2026-07-13-20, on 2026-07-14 to 2026-07-14-20, and on 2026-07-15 to the
-# 2026-07-15-13 tracker vintage (484f per-interval import weights; fixes recent
-# end-2026 revisions/boundary snapshots). eta/alpha are REFIT against this basket
+# through 2026-07-14-20 and 2026-07-15-13 (484f per-interval import weights) to
+# the 2026-07-16-09 tracker vintage (adds a weighted_etr_new daily column;
+# snapshots/weights identical to 2026-07-15-13). eta/alpha are REFIT against this basket
 # (model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/) so the 484f
 # weight correction flows through the calibrated noncompliance/substitution params.
 
 rate_panel:
-  vintage: '2026-07-15-13'
+  vintage: '2026-07-16-09'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
