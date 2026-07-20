@@ -2,11 +2,12 @@
 # Model Parameters: tracker_actual_2026-07-01_no_eta_alpha
 # =============================================================================
 # Bridge scenario: actual/current-law policy with eta neutralized and alpha
-# substitution correction disabled. On 2026-07-13 the rate panel was advanced to
-# the 2026-07-13-20 tracker vintage (was 2026-07-01-16; -20 is the -13 rebuild adding the HS product breakdown).
+# substitution correction disabled. The rate panel was advanced 2026-07-14-20 ->
+# 2026-07-15-13 -> 2026-07-16-09 (484f per-interval import weights; the 07-16
+# vintage only adds a weighted_etr_new daily column, snapshots unchanged).
 
 rate_panel:
-  vintage: '2026-07-14-20'
+  vintage: '2026-07-16-09'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'

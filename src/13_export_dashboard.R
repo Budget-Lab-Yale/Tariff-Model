@@ -601,12 +601,16 @@ build_daily_rates <- function(daily_dir, which) {
   if (which == 'overall') {
     path <- file.path(daily_dir, 'daily_overall.csv')
     if (!file.exists(path)) stop('tracker daily file not found: ', path)
+    # `new_tariffs` = weighted_etr_new, the tariffs imposed since the 2025-01-01
+    # baseline (0 on the baseline date). This replaces weighted_etr_additional
+    # (above-MFN), which the front-end mislabeled as "above baseline"; requires
+    # tracker vintage >= 2026-07-16-09.
     read_csv(path, show_col_types = FALSE) %>%
       transmute(time = as.Date(date),
                 total = weighted_etr * 100,
-                additional = weighted_etr_additional * 100,
+                new_tariffs = weighted_etr_new * 100,
                 projected = flag_projected(revision)) %>%
-      pivot_longer(c(total, additional), names_to = 'series', values_to = 'value') %>%
+      pivot_longer(c(total, new_tariffs), names_to = 'series', values_to = 'value') %>%
       select(time, series, value, projected)
 
   } else if (which == 'by_authority') {
