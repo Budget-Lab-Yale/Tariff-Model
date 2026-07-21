@@ -1,0 +1,44 @@
+# =============================================================================
+# Model Parameters: tracker_no_s338_2026-07-21
+# =============================================================================
+# "Actual ex Section 338" path: the 2026-07-21-08 actual basket with the new
+# Section 338 tariff actions removed (tracker series scenarios/no_s338). New
+# scenario introduced alongside the late-July announcements. eta/alpha REUSE the
+# actual scenario's calibration, refit against the 2026-07-21-08 basket
+# (model_data/Tariff-Model/calibration/tracker_actual_2026-07-21/).
+
+rate_panel:
+  vintage: '2026-07-21-08'
+  tracker_scenario: 'no_s338'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state, matching the prior tracker reference convention.
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-07-21/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-07-21/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'
