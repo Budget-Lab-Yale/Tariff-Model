@@ -87,15 +87,22 @@ ETR_COUNTRY_NAMES <- tribble(
   'all', 'Total'
 )
 
-# daily_by_authority etr_* column -> series label
+# daily_by_authority etr_* column -> series label. Multiple columns may map to the
+# same series (they are summed): etr_s301br (a Section 301 sub-action) folds into
+# section_301. etr_s338 surfaces Section 338 as its own bucket. Both were added to
+# the tracker's daily_by_authority after the initial mapping was written; the
+# by_authority builder now sums by series so the stacked buckets reconcile to the
+# overall ETR.
 AUTHORITY_SERIES <- tribble(
   ~col,              ~series,
   'etr_base',        'base',
   'etr_232',         'section_232',
   'etr_301',         'section_301',
+  'etr_s301br',      'section_301',
   'etr_ieepa',       'ieepa',
   'etr_fentanyl',    'fentanyl',
   'etr_s122',        'section_122',
+  'etr_s338',        'section_338',
   'etr_section_201', 'section_201',
   'etr_other',       'other'
 )
@@ -625,6 +632,8 @@ build_daily_rates <- function(daily_dir, which) {
                 across(all_of(AUTHORITY_SERIES$col), ~ .x * 100)) %>%
       pivot_longer(all_of(AUTHORITY_SERIES$col), names_to = 'col', values_to = 'value') %>%
       left_join(AUTHORITY_SERIES, by = 'col') %>%
+      group_by(time, series, projected) %>%
+      summarise(value = sum(value), .groups = 'drop') %>%
       select(time, series, value, projected)
 
   } else if (which == 'by_category') {
