@@ -1,5 +1,13 @@
 # Tracker bug report: new-301 duties attributed to `base` in `daily_by_authority`
 
+> **RESOLVED upstream 2026-07-21.** The tracker republished
+> `scenarios/new_301/daily/daily_by_authority.csv` in place (same vintage
+> `2026-07-21-08`). The +3.0pp new-301 increment is now booked to `etr_301`
+> (`section_301` = 4.651pp at tip), `etr_base` is back to the current-law level
+> (1.224pp), and the authority buckets sum to 12.787pp = the overall ETR.
+> Verified in the rebuilt dashboard (`2026-07-21-08-484f`, 13:43). Kept for the
+> record; the analysis below describes the pre-fix state.
+
 **Bundle:** Tariff-Rate-Tracker vintage `2026-07-21-08`
 **Series:** `scenarios/new_301`
 **File:** `scenarios/new_301/daily/daily_by_authority.csv`
