@@ -65,29 +65,64 @@ assert_has_columns <- function(data, required_cols, context = NULL) {
 # MACRO HELPERS
 # =============================================================================
 
+#' First calendar quarter strictly after a reference date
+#'
+#' Returns the year/quarter of the first quarter that begins after `ref_date`.
+#' Used to anchor the USMM->GTAP blend to "the future" relative to the run: the
+#' quarters already realized (up to and including the quarter containing today)
+#' stay on the near-term USMM path, and only genuinely forward quarters transition
+#' toward the GTAP long-run equilibrium.
+#'
+#' @param ref_date Reference date (default: the system date at call time)
+#' @return List with integer `year` and `quarter`
+first_quarter_after <- function(ref_date = Sys.Date()) {
+  y <- as.integer(format(ref_date, '%Y'))
+  q <- lubridate::quarter(ref_date)
+  if (q == 4L) {
+    list(year = y + 1L, quarter = 1L)
+  } else {
+    list(year = y, quarter = as.integer(q) + 1L)
+  }
+}
+
+
 #' Blend USMM quarterly GDP deviations into a GTAP long-run target
 #'
-#' Applies the shared linear blend used across macro reporting:
-#' 2025Q1 starts at the raw USMM deviation, then over 16 quarters the deviation
-#' transitions linearly to the GTAP long-run GDP effect. Quarters before 2025Q1
-#' are left unblended.
+#' Applies the shared linear blend used across macro reporting: the blend starts
+#' at the raw USMM deviation, then over 16 quarters the deviation transitions
+#' linearly to the GTAP long-run GDP effect. Quarters before the blend start are
+#' left unblended (pure USMM).
+#'
+#' The blend start defaults to the first quarter AFTER the current system date
+#' (via first_quarter_after()). Anchoring to the run date rather than a fixed
+#' 2025Q1 keeps already-realized quarters purely on the USMM path, so scenarios
+#' that differ only in future (e.g. next-year) policy no longer have that policy's
+#' long-run GTAP effect bled back into past/near-term quarters.
 #'
 #' @param year Integer vector of calendar years
 #' @param quarter Integer vector of calendar quarters (1-4)
 #' @param raw_deviation Numeric vector of raw USMM GDP deviations in percent
 #' @param gtap_long_run_gdp Scalar GTAP long-run GDP effect in percent; NULL
 #'   returns raw_deviation unchanged
-#' @param blend_start_year Start year for the blend window (default: 2025)
-#' @param blend_start_quarter Start quarter for the blend window (default: 1)
+#' @param blend_start_year Start year for the blend window (default: NULL ->
+#'   first_quarter_after(Sys.Date())$year)
+#' @param blend_start_quarter Start quarter for the blend window (default: NULL ->
+#'   first_quarter_after(Sys.Date())$quarter)
 #' @param blend_horizon_quarters Number of quarters until pure GTAP LR (default: 16)
 #' @return Numeric vector of blended GDP deviations in percent
 blend_usmm_gdp_deviation <- function(year, quarter, raw_deviation,
                                      gtap_long_run_gdp = NULL,
-                                     blend_start_year = 2025L,
-                                     blend_start_quarter = 1L,
+                                     blend_start_year = NULL,
+                                     blend_start_quarter = NULL,
                                      blend_horizon_quarters = 16L) {
   if (is.null(gtap_long_run_gdp)) {
     return(raw_deviation)
+  }
+
+  if (is.null(blend_start_year) || is.null(blend_start_quarter)) {
+    start <- first_quarter_after()
+    blend_start_year <- blend_start_year %||% start$year
+    blend_start_quarter <- blend_start_quarter %||% start$quarter
   }
 
   q_index <- (year - blend_start_year) * 4 + (quarter - blend_start_quarter)

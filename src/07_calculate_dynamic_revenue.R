@@ -46,7 +46,7 @@ calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL) {
     )
 
   # Apply linear blend from USMM to GTAP over 16 quarters
-  # q_index = quarters since 2025Q1 (0-based)
+  # q_index = quarters since the blend start (first quarter after today, 0-based)
   # blend_weight = max(0, 1 - q_index / 16)
   # level_deviation = blend_weight * usmm_dev + (1 - blend_weight) * gtap_long_run_gdp
   if (!is.null(gtap_long_run_gdp)) {
