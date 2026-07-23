@@ -120,6 +120,7 @@ build_imdb_actuals_panel <- function(scenario, refresh_imdb = FALSE, reuse_rates
 
   scenario_dir <- file.path('config', 'scenarios', scenario)
   model_params <- yaml::read_yaml(file.path(scenario_dir, 'model_params.yaml'))
+  set_calib_window(model_params)   # window from the scenario's calibration: block
   rate_panel <- model_params$rate_panel
   if (is.null(rate_panel)) {
     stop('model_params.yaml must have a rate_panel block (root, vintage, tracker_scenario, ...)')

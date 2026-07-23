@@ -39,26 +39,61 @@ calib_output_dir <- function(scenario) {
 }
 
 # ---------------------------------------------------------------------------
-# Analysis window (verbatim from tariff-etr-adj/code/utils.R)
+# Analysis window (config-driven; defaults reproduce the shipped IEEPA window)
 # ---------------------------------------------------------------------------
-# Etas are calibrated on June 2025 - Feb 2026 (the post-ramp IEEPA window).
-# March 2026 (post-SCOTUS / Section 122) is pulled and held out purely to
-# score out-of-sample error for the bias-variance figure.
-# NOTE: the calibration window is [TRAIN_LO, TEST_YM); TRAIN_HI is a label only
-# (log/figure subtitles) and must equal the month immediately before TEST_YM.
-TRAIN_LO <- '2025-06'
-TRAIN_HI <- '2026-02'
-TEST_YM  <- '2026-03'
-stopifnot('TRAIN_HI must be the month immediately before TEST_YM' =
-            format(as.Date(paste0(TEST_YM, '-01')) - 1, '%Y-%m') == TRAIN_HI)
+# Etas are calibrated on [TRAIN_LO, TEST_YM); TEST_YM (the month after the train
+# window) is held out for OOS error. TRAIN_HI is a label = the month immediately
+# before TEST_YM. The descriptive ladder pulls months from LADDER_LO; months in
+# [LADDER_LO, TRAIN_LO) are tagged period == "pre" and excluded from calibration.
+#
+# These are DEFAULTS. A scenario overrides the window through its
+# model_params.yaml `calibration:` block (window_start / window_end and,
+# optionally, test_month / ladder_start) via set_calib_window() below -- so the
+# window has ONE source of truth, shared with the gtap-weights stage (which
+# already reads the same block). A scenario with a missing or partial
+# calibration block reproduces the historical window bit-for-bit, so the
+# reproduction gate (tests/fixtures/eta_golden/) is unaffected by this change.
+DEFAULT_TRAIN_LO  <- '2025-06'
+DEFAULT_TRAIN_HI  <- '2026-02'
+DEFAULT_LADDER_LO <- '2025-01'
 
-# The descriptive ETR-ladder figures span a WIDER window than the calibration:
-# they show monthly statutory-vs-actual ETRs from LADDER_LO onward, while etas
-# are still calibrated only on [TRAIN_LO, TEST_YM). Months in [LADDER_LO,
-# TRAIN_LO) are pulled and tagged period == "pre" in the panel -- they feed the
-# ladder ONLY and are excluded from every calibration step (tr keeps just the
-# "train" rows). Must be <= TRAIN_LO.
-LADDER_LO <- '2025-01'
+# Mutable window globals, initialised to the defaults; set_calib_window() resets
+# them from a scenario's calibration block before each stage runs.
+TRAIN_LO  <- DEFAULT_TRAIN_LO
+TRAIN_HI  <- DEFAULT_TRAIN_HI
+TEST_YM   <- '2026-03'
+LADDER_LO <- DEFAULT_LADDER_LO
+
+# The month after `ym` (both "YYYY-MM").
+next_month <- function(ym) {
+  format(seq(as.Date(paste0(ym, '-01')), by = 'month', length.out = 2)[2], '%Y-%m')
+}
+
+#' Resolve the calibration window from a scenario and set the module-global
+#' window constants (TRAIN_LO / TRAIN_HI / TEST_YM / LADDER_LO).
+#'
+#' @param scenario_or_params Either a scenario name (reads its model_params.yaml)
+#'   or an already-parsed model_params list.
+#' Every key falls back to its shipped default; TEST_YM defaults to the month
+#' after window_end. A scenario with no `calibration:` block therefore reproduces
+#' the historical window exactly. This is the single source of truth the panel,
+#' eta, and alpha stages share with build_gtap_implied_weights.
+set_calib_window <- function(scenario_or_params) {
+  mp <- if (is.character(scenario_or_params)) {
+    yaml::read_yaml(file.path('config', 'scenarios', scenario_or_params, 'model_params.yaml'))
+  } else scenario_or_params
+  cw <- mp$calibration %||% list()
+  TRAIN_LO  <<- cw$window_start %||% DEFAULT_TRAIN_LO
+  TRAIN_HI  <<- cw$window_end   %||% DEFAULT_TRAIN_HI
+  TEST_YM   <<- cw$test_month   %||% next_month(TRAIN_HI)
+  LADDER_LO <<- cw$ladder_start %||% DEFAULT_LADDER_LO
+  stopifnot(
+    'TRAIN_HI must be the month immediately before TEST_YM' =
+      format(as.Date(paste0(TEST_YM, '-01')) - 1, '%Y-%m') == TRAIN_HI,
+    'LADDER_LO must be <= TRAIN_LO' = LADDER_LO <= TRAIN_LO)
+  invisible(list(train_lo = TRAIN_LO, train_hi = TRAIN_HI,
+                 test_ym = TEST_YM, ladder_lo = LADDER_LO))
+}
 
 # EB shrinkage for the full-interaction spec: kappa = KAPPA_FRAC * mean
 # statutory revenue per cell (cells with less revenue shrink harder).

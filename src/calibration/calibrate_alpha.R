@@ -46,6 +46,7 @@ MIN_GTAP_LOGSHIFT <- 1e-3
 #' @return Invisibly, the alpha_parameters.csv path (NULL if GTAP weights absent).
 calibrate_alpha <- function(scenario) {
 
+  set_calib_window(scenario)   # window from the scenario's calibration: block
   out_root  <- calib_output_dir(scenario)
   panel_dir <- file.path(out_root, 'panel')
   alpha_dir <- file.path(out_root, 'alpha')

@@ -41,6 +41,7 @@ TM_HS6_GTAP_CROSSWALK <- 'resources/rate_aggregation/hs6_gtap_crosswalk.csv'
 #' @return Invisibly, the deliverable path.
 calibrate_eta <- function(scenario) {
 
+  set_calib_window(scenario)   # window from the scenario's calibration: block
   out_root  <- calib_output_dir(scenario)
   panel_dir <- file.path(out_root, 'panel')
   dir.create(out_root, showWarnings = FALSE, recursive = TRUE)
