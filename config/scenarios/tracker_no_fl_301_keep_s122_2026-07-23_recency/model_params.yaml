@@ -1,0 +1,49 @@
+# =============================================================================
+# Model Parameters: tracker_no_fl_301_keep_s122_2026-07-23_recency
+# =============================================================================
+# Recency-weighted variant of tracker_no_fl_301_keep_s122_2026-07-23 (tracker
+# series scenarios/no_fl_301_keep_s122, 2026-07-23-19 vintage). eta/alpha REUSE
+# the recency actual's calibration (tracker_actual_2026-07-23_recency). See that
+# scenario's header for the extended window + Census->Treasury wedge methodology.
+
+rate_panel:
+  vintage: '2026-07-23-19'
+  tracker_scenario: 'no_fl_301_keep_s122'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state, matching the prior tracker reference convention.
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-07-23_recency/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-07-23_recency/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-04'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'
+    - '2026-04'
+    - '2026-05'
+  recency:
+    enabled: true
+    half_life_months: 6
+    treasury_clean_through: '2026-02'

@@ -1,0 +1,65 @@
+# =============================================================================
+# Model Parameters: tracker_actual_2026-07-23_recency
+# =============================================================================
+# Recency-weighted calibration variant of tracker_actual_2026-07-23 (same
+# 2026-07-23-19 actual basket). Two differences from the flat sibling:
+#
+#   1. Extended window. Train runs 2025-06..2026-04 with a held-out OOS test of
+#      2026-05 -- i.e. it uses all import actuals we have (IMDB through May),
+#      instead of stopping at March.
+#   2. Recency weighting. Months are exponentially down-weighted by age
+#      (6-month half-life) in both the eta shape/level fit and the alpha baskets,
+#      so the most recent months drive the calibration.
+#
+# Treasury customs-duty collections are trustworthy only through 2026-02: IEEPA
+# refunds drag the collected rate down thereafter (Mar-26 prints 7.3% vs a
+# ~10.5% run-rate). So the LEVEL for 2026-03..2026-05 is imputed from a
+# Census->Treasury wedge -- rho_bar * Census calculated-ETR, where rho_bar is the
+# clean-month (<= 2026-02) ratio of formal-entry Treasury to Census -- keeping the
+# level on the same refund-free, formal-entry basis as the eta contract. See
+# src/calibration/{build_imdb_actuals_panel,calibrate_eta}.R.
+#
+# eta/alpha are refit for THIS scenario (tracker_actual_2026-07-23_recency);
+# the panel stage folds in the April/May IMDB months (--refresh-imdb).
+
+rate_panel:
+  vintage: '2026-07-23-19'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state, matching the prior tracker reference convention.
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-07-23_recency/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-07-23_recency/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-04'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'
+    - '2026-04'
+    - '2026-05'
+  recency:
+    enabled: true
+    half_life_months: 6
+    treasury_clean_through: '2026-02'
