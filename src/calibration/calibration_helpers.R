@@ -64,6 +64,46 @@ TRAIN_HI  <- DEFAULT_TRAIN_HI
 TEST_YM   <- '2026-03'
 LADDER_LO <- DEFAULT_LADDER_LO
 
+# ---------------------------------------------------------------------------
+# Recency weighting + Census->Treasury wedge (config-driven; OFF by default)
+# ---------------------------------------------------------------------------
+# A scenario may opt into recency-weighted calibration through a
+# `calibration.recency:` block:
+#   recency:
+#     enabled: true
+#     half_life_months: 6         # exp decay; weight = 0.5^(months_before_latest/HL)
+#     treasury_clean_through: '2026-02'   # last month Treasury collections are
+#                                         # trusted; later months' LEVEL is imputed
+#                                         # as rho_bar * Census calculated-ETR
+#                                         # (rho_bar = clean-month Treasury/Census).
+# When disabled (the default, and for every existing scenario), the panel gains
+# no month_weight column and the eta/alpha stages fall back to the shipped
+# unweighted pooling + raw Treasury target -- so the reproduction gate is
+# bit-for-bit unaffected.
+RECENCY_ENABLED        <- FALSE
+RECENCY_HALFLIFE       <- NA_real_
+TREASURY_CLEAN_THROUGH <- NA_character_
+# Tariff-era lower bound for the clean Treasury months that anchor the wedge.
+# Decoupled from TRAIN_LO so a short (e.g. last-3-months) window can still anchor
+# rho on the earlier clean months. Defaults to TRAIN_LO (no change for windows
+# that begin in the clean era).
+WEDGE_ANCHOR_START     <- NA_character_
+
+#' Exponential recency weights over a set of "YYYY-MM" months.
+#' weight_m = 0.5 ^ (months_before_latest_m / half_life), normalised to mean 1
+#' (normalisation is cosmetic -- every downstream use is a ratio -- but keeps the
+#' weights interpretable as "relative to an average month").
+month_recency_weights <- function(yms, half_life, latest = max(yms)) {
+  stopifnot(is.finite(half_life), half_life > 0)
+  mnum <- function(ym) {
+    d <- as.Date(paste0(ym, '-01')); 12L * as.integer(format(d, '%Y')) +
+      as.integer(format(d, '%m'))
+  }
+  gap <- mnum(latest) - mnum(yms)                 # >= 0; 0 for the latest month
+  w   <- 0.5 ^ (gap / half_life)
+  tibble::tibble(year_month = yms, recency_weight = w / mean(w))
+}
+
 # The month after `ym` (both "YYYY-MM").
 next_month <- function(ym) {
   format(seq(as.Date(paste0(ym, '-01')), by = 'month', length.out = 2)[2], '%Y-%m')
@@ -87,12 +127,24 @@ set_calib_window <- function(scenario_or_params) {
   TRAIN_HI  <<- cw$window_end   %||% DEFAULT_TRAIN_HI
   TEST_YM   <<- cw$test_month   %||% next_month(TRAIN_HI)
   LADDER_LO <<- cw$ladder_start %||% DEFAULT_LADDER_LO
+
+  rc <- cw$recency %||% list()
+  RECENCY_ENABLED        <<- isTRUE(rc$enabled)
+  RECENCY_HALFLIFE       <<- if (RECENCY_ENABLED) as.numeric(rc$half_life_months %||% 6) else NA_real_
+  TREASURY_CLEAN_THROUGH <<- if (RECENCY_ENABLED) as.character(rc$treasury_clean_through %||% TRAIN_HI) else NA_character_
+  WEDGE_ANCHOR_START     <<- if (RECENCY_ENABLED) as.character(rc$wedge_anchor_start %||% TRAIN_LO) else NA_character_
+
   stopifnot(
     'TRAIN_HI must be the month immediately before TEST_YM' =
       format(as.Date(paste0(TEST_YM, '-01')) - 1, '%Y-%m') == TRAIN_HI,
-    'LADDER_LO must be <= TRAIN_LO' = LADDER_LO <= TRAIN_LO)
+    'LADDER_LO must be <= TRAIN_LO' = LADDER_LO <= TRAIN_LO,
+    'recency.treasury_clean_through must be <= TRAIN_HI' =
+      !RECENCY_ENABLED || TREASURY_CLEAN_THROUGH <= TRAIN_HI)
   invisible(list(train_lo = TRAIN_LO, train_hi = TRAIN_HI,
-                 test_ym = TEST_YM, ladder_lo = LADDER_LO))
+                 test_ym = TEST_YM, ladder_lo = LADDER_LO,
+                 recency_enabled = RECENCY_ENABLED,
+                 recency_halflife = RECENCY_HALFLIFE,
+                 treasury_clean_through = TREASURY_CLEAN_THROUGH))
 }
 
 # EB shrinkage for the full-interaction spec: kappa = KAPPA_FRAC * mean

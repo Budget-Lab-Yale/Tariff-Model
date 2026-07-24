@@ -55,9 +55,13 @@ calibrate_eta <- function(scenario) {
   # ---------------------------------------------------------------------------
   msg('[1] Loading panel...')
   panel <- readRDS(file.path(panel_dir, 'panel.rds'))
-  rev   <- read_csv(file.path(panel_dir, 'revenue_monthly.csv'),
-                    col_types = cols(year_month = col_character(),
-                                     .default = col_double()))
+  rev_ct <- if (RECENCY_ENABLED) {
+    cols(year_month = col_character(), treasury_status = col_character(),
+         .default = col_double())
+  } else {
+    cols(year_month = col_character(), .default = col_double())
+  }
+  rev   <- read_csv(file.path(panel_dir, 'revenue_monthly.csv'), col_types = rev_ct)
 
   rates_meta_csv <- file.path(panel_dir, 'statutory_rates_meta.csv')
   TRACKER_VINTAGE <- if (file.exists(rates_meta_csv)) {
@@ -78,12 +82,68 @@ calibrate_eta <- function(scenario) {
   rev              <- dm$rev
   deminimis_active <- dm$active
 
+  # Recency weighting: scale the calibration weight columns by the per-month
+  # decay weight AFTER the AD/CVD + de-minimis strips (which inject absolute
+  # Treasury dollars and must see raw values). Applied to the WHOLE panel so the
+  # shape fit (tr/te), the k-solve, and the [B] partner x GTAP aggregation are all
+  # weighted consistently. No `month_weight` column -> no-op (shipped path).
+  # Recency: capture the monthly Census aggregate (post-strip, formal-entry)
+  # from the RAW panel BEFORE scaling -- census_val is used as a clean size weight
+  # for the level target; scaling first would fold month_weight into it and
+  # double-count recency (recency^2) in the pooled Treasury target.
+  census_agg <- if (RECENCY_ENABLED) {
+    panel %>%
+      filter(con_val_mo > 0) %>%
+      summarise(census_dut = sum(cal_dut_mo), census_val = sum(con_val_mo),
+                .by = year_month) %>%
+      mutate(census_etr = census_dut / census_val)
+  } else NULL
+
+  if ('month_weight' %in% names(panel)) {
+    panel <- mutate(panel, across(c(con_val_mo, cal_dut_mo, imports),
+                                  ~ .x * month_weight))
+    msg('    recency weighting applied to panel (month_weight %.3f..%.3f)',
+        min(panel$month_weight), max(panel$month_weight))
+  }
+
   tr <- filter(panel, period == 'train')
   te <- filter(panel, period == 'test')
 
-  rev_tr <- filter(rev, year_month >= TRAIN_LO, year_month != TEST_YM)
-  treas_train_etr <- sum(rev_tr$customs_duties) / sum(rev_tr$imports_value)
-  treas_test_etr  <- rev$treas_etr[rev$year_month == TEST_YM]
+  if (RECENCY_ENABLED) {
+    # Census->Treasury wedge on the STRIPPED (formal-entry) Treasury: for the
+    # clean/observed months rho = Treasury_ETR / Census_ETR; the refund-distorted
+    # or unreleased months take rho_bar * Census_ETR as their level.
+    rev <- rev %>%
+      left_join(select(census_agg, year_month, census_etr, census_val),
+                by = 'year_month')
+    # Anchor the wedge on the TARIFF-ERA clean months only (>= TRAIN_LO): the
+    # pre-window ramp months have a different, noisy Census/Treasury relationship
+    # (e.g. Mar-2025 ratio 0.64) that must not bias rho for the current regime.
+    clean <- filter(rev, treasury_status == 'observed', year_month >= WEDGE_ANCHOR_START,
+                    is.finite(treas_etr), is.finite(census_etr), census_etr > 0)
+    if (nrow(clean) == 0) stop('recency: no clean Treasury months to anchor the wedge')
+    rho_bar <- weighted.mean(clean$treas_etr / clean$census_etr, w = clean$census_val)
+    rev <- rev %>%
+      mutate(target_etr   = if_else(treasury_status == 'observed',
+                                    treas_etr, rho_bar * census_etr),
+             value_weight = census_val)
+    msg('    Census->Treasury wedge rho_bar=%.4f (clean: %s)',
+        rho_bar, paste(clean$year_month, collapse = ','))
+
+    rev_tr <- filter(rev, year_month >= TRAIN_LO, year_month != TEST_YM)
+    lw     <- rev_tr$recency_weight * rev_tr$value_weight
+    treas_train_etr <- sum(lw * rev_tr$target_etr) / sum(lw)
+    treas_test_etr  <- rev$target_etr[rev$year_month == TEST_YM]
+    imp <- filter(rev_tr, treasury_status != 'observed')
+    if (nrow(imp) > 0)
+      msg('    imputed level, train months: %s',
+          paste(sprintf('%s[%s]=%.4f', imp$year_month, imp$treasury_status,
+                        imp$target_etr), collapse = ', '))
+  } else {
+    rev_tr <- filter(rev, year_month >= TRAIN_LO, year_month != TEST_YM)
+    treas_train_etr <- sum(rev_tr$customs_duties) / sum(rev_tr$imports_value)
+    treas_test_etr  <- rev$treas_etr[rev$year_month == TEST_YM]
+  }
   msg('    train cells: %s | test cells: %s',
       format(nrow(tr), big.mark = ','), format(nrow(te), big.mark = ','))
   msg('    Treasury ETR: train(pooled)=%.4f  test(%s)=%.4f',

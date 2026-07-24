@@ -324,23 +324,66 @@ build_imdb_actuals_panel <- function(scenario, refresh_imdb = FALSE, reuse_rates
       format(sum(panel$period == 'train'), big.mark = ','),
       format(sum(panel$period == 'test'), big.mark = ','), 100 * n_rate_match)
 
+  calib_yms <- all_yms[all_yms >= TRAIN_LO]        # train + held-out test month
+
+  # Recency weights ride on the panel as `month_weight` (calibration months only;
+  # pre-window rows get 1 and are dropped before the weighting bites). Consumers
+  # (calibrate_eta / calibrate_alpha) scale their weight columns by it *after*
+  # their own preprocessing; a panel with no such column is untouched.
+  if (RECENCY_ENABLED) {
+    wt <- month_recency_weights(calib_yms, RECENCY_HALFLIFE, latest = TEST_YM)
+    panel <- panel %>%
+      left_join(wt, by = 'year_month') %>%
+      mutate(month_weight = coalesce(recency_weight, 1)) %>%
+      select(-recency_weight)
+    msg('    recency weighting ON (half-life %.1f mo): weight %.3f..%.3f over %s..%s',
+        RECENCY_HALFLIFE, min(wt$recency_weight), max(wt$recency_weight),
+        calib_yms[1], calib_yms[length(calib_yms)])
+  }
+
   panel_path <- file.path(out_dir, 'panel.rds')
   saveRDS(panel, panel_path)
   msg('    -> %s', panel_path)
 
-  # Treasury monthly ETR over the analysis window
-  revenue <- read_csv(treas_src,
-                      col_types = cols(date = col_date(), .default = col_double())) %>%
+  # ---------------------------------------------------------------------------
+  # Treasury monthly ETR (the calibration's LEVEL anchor)
+  # ---------------------------------------------------------------------------
+  treas_raw <- read_csv(treas_src,
+                        col_types = cols(date = col_date(), .default = col_double())) %>%
     mutate(year_month = format(date, '%Y-%m')) %>%
     filter(year_month %in% all_yms) %>%
     transmute(year_month, customs_duties, imports_value,
               treas_etr = customs_duties / imports_value) %>%
     distinct(year_month, .keep_all = TRUE)
 
-  if (!setequal(revenue$year_month, all_yms)) {
-    stop('Treasury revenue missing months: ',
-         paste(setdiff(all_yms, revenue$year_month), collapse = ', '))
+  if (!RECENCY_ENABLED) {
+    # Shipped path: every window month must have real Treasury; target == raw ETR.
+    if (!setequal(treas_raw$year_month, all_yms)) {
+      stop('Treasury revenue missing months: ',
+           paste(setdiff(all_yms, treas_raw$year_month), collapse = ', '))
+    }
+    revenue <- treas_raw
+  } else {
+    # Recency path: one row per calibration month (Census-driven), Treasury joined
+    # where it exists. `treasury_status` marks which months anchor the
+    # Census->Treasury wedge -- computed downstream in calibrate_eta on the
+    # STRIPPED (formal-entry) Treasury so the imputed level matches the eta basis.
+    # Months missing/refund-contaminated are imputed there; here we only flag them.
+    wt <- month_recency_weights(calib_yms, RECENCY_HALFLIFE, latest = TEST_YM)
+    revenue <- tibble(year_month = all_yms) %>%
+      left_join(treas_raw, by = 'year_month') %>%
+      left_join(wt, by = 'year_month') %>%
+      mutate(recency_weight  = coalesce(recency_weight, 0),
+             treasury_status = case_when(
+               year_month <= TREASURY_CLEAN_THROUGH & !is.na(treas_etr) ~ 'observed',
+               !is.na(treas_etr)                                        ~ 'contaminated',
+               TRUE                                                     ~ 'missing')) %>%
+      arrange(year_month)
+    status_win <- filter(revenue, year_month %in% calib_yms) %>% count(treasury_status)
+    msg('    recency revenue: %s',
+        paste(sprintf('%s=%d', status_win$treasury_status, status_win$n), collapse = ' '))
   }
+
   rev_path <- file.path(out_dir, 'revenue_monthly.csv')
   write_csv(revenue, rev_path)
   msg('    -> %s (%d months)', rev_path, nrow(revenue))

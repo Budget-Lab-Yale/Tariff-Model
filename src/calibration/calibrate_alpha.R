@@ -72,6 +72,15 @@ calibrate_alpha <- function(scenario) {
   panel <- readRDS(file.path(panel_dir, 'panel.rds')) %>%
     filter(period %in% c('train', 'test'))
 
+  # Recency weighting: scale con_val (the basket + ladder weight) by the per-month
+  # decay weight so recent months count more in the substitution fit, consistent
+  # with the eta stage. No `month_weight` column -> no-op (shipped path).
+  if ('month_weight' %in% names(panel)) {
+    panel <- mutate(panel, con_val_mo = con_val_mo * month_weight)
+    msg('    recency weighting applied to alpha baskets (month_weight %.3f..%.3f)',
+        min(panel$month_weight), max(panel$month_weight))
+  }
+
   # actual-2024 "before" basket (con_val). Build it from IMDB if not cached.
   if (!file.exists(IMDB_2024_FILE)) {
     msg('    2024 IMDB basket not cached; building from IMDB (12 months)...')
