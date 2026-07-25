@@ -46,6 +46,7 @@ MIN_GTAP_LOGSHIFT <- 1e-3
 #' @return Invisibly, the alpha_parameters.csv path (NULL if GTAP weights absent).
 calibrate_alpha <- function(scenario) {
 
+  set_calib_window(scenario)   # window from the scenario's calibration: block
   out_root  <- calib_output_dir(scenario)
   panel_dir <- file.path(out_root, 'panel')
   alpha_dir <- file.path(out_root, 'alpha')
@@ -70,6 +71,15 @@ calibrate_alpha <- function(scenario) {
 
   panel <- readRDS(file.path(panel_dir, 'panel.rds')) %>%
     filter(period %in% c('train', 'test'))
+
+  # Recency weighting: scale con_val (the basket + ladder weight) by the per-month
+  # decay weight so recent months count more in the substitution fit, consistent
+  # with the eta stage. No `month_weight` column -> no-op (shipped path).
+  if ('month_weight' %in% names(panel)) {
+    panel <- mutate(panel, con_val_mo = con_val_mo * month_weight)
+    msg('    recency weighting applied to alpha baskets (month_weight %.3f..%.3f)',
+        min(panel$month_weight), max(panel$month_weight))
+  }
 
   # actual-2024 "before" basket (con_val). Build it from IMDB if not cached.
   if (!file.exists(IMDB_2024_FILE)) {

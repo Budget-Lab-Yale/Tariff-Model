@@ -15,15 +15,15 @@
 # Validation (read_dashboard_config): ids unique, exactly one default: true.
 
 scenarios:
-  - id: tracker_actual_2026-07-21
+  - id: tracker_actual_2026-07-23
     label: 'Current law (Section 122 expires)'
     short_label: 'Current law'
     default: true
-  - id: tracker_no_s338_2026-07-21
-    label: 'Current law excluding Section 338 actions'
-    short_label: 'Ex Section 338'
+  - id: tracker_no_fl_301_2026-07-23
+    label: 'Excluding new forced-labor Section 301 actions'
+    short_label: 'Ex forced-labor 301'
     default: false
-  - id: tracker_new_301_2026-07-21
-    label: 'New Section 301 actions (Section 122 replaced)'
-    short_label: 'New 301'
+  - id: tracker_no_fl_301_keep_s122_2026-07-23
+    label: 'Excluding forced-labor 301; Section 122 retained'
+    short_label: 'Ex FL-301, keep §122'
     default: false
