@@ -22,11 +22,13 @@ Solution file = {{SOLUTION_FILE}};
 Verbal Description =
 {{SCENARIO_NAME}};
 
-! Solver settings
+! Solver settings. Raised from 2-4-6 steps / 2 subintervals on 2026-09-09: with
+! foreign retaliation shocks added (China ~50 points, Canada steel ~46) the
+! coarse solve failed GEMPACK's accuracy check (E-Accuracy too low, TGFACE).
 Method = Midpoint;
-Steps = 2 4 6;
+Steps = 6 10 14;
 automatic accuracy = no;
-subintervals = 2;
+subintervals = 5;
 
 ! Standard GTAP closure
 Exogenous
