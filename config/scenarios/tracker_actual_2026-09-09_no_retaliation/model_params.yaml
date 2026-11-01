@@ -1,0 +1,28 @@
+# =============================================================================
+# Model Parameters: tracker_actual_2026-09-09_no_retaliation
+# =============================================================================
+# Identical to tracker_actual_2026-09-09 except GTAP runs WITHOUT foreign
+# retaliation on US exports. Comparing the pair isolates the retaliation
+# effect (mainly GDP, exports, sector output; the import ETR, revenue and
+# consumer price paths are unaffected). Shares the actual scenario's eta/alpha
+# calibration, which is itself fit without retaliation.
+
+rate_panel:
+  vintage: '2026-09-09-13'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+gtap_reference_date: '2026-12-04'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-09-09/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-09-09/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
