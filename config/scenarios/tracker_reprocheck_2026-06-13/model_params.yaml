@@ -1,0 +1,43 @@
+# =============================================================================
+# Model Parameters: tracker_reprocheck_2026-06-13
+# =============================================================================
+# THROWAWAY verification scenario: reproduces the committed golden eta fixture
+# (tests/fixtures/eta_golden/2026-06-13-11/) on the CURRENT code, to prove the
+# default (non-recency) calibration path is byte-identical after the recency
+# changes added this session. No `calibration.recency:` block -> old code path.
+# Pinned directly to the fixture bundle vintage 2026-06-13-11 (the pre-existing
+# tracker_actual_2026-06-13 config has a malformed rate_panel block). Safe to
+# delete after the gate runs.
+
+rate_panel:
+  vintage: '2026-06-13-11'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+noncompliance:
+  eta_file: 'tracker_reprocheck_2026-06-13/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_reprocheck_2026-06-13/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'

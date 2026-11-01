@@ -1,14 +1,16 @@
 # =============================================================================
 # Model Parameters: tracker_actual_2026-07-01
 # =============================================================================
-# 2026-07-01 clean-sweep rerun on current master (post PR #9), actual/current-law
-# path where Section 122 expires. Inputs are held identical to tracker_actual_2026-06-25
-# (same 2026-06-25-14 tracker vintage, same calibration window); eta/alpha are
-# freshly recalibrated on current master into model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/.
-# Only the code version and the output label differ from the 06-25 run.
+# Actual/current-law path where Section 122 expires. Originally a 2026-07-01
+# clean-sweep rerun on current master (post PR #9); the rate panel was advanced
+# through 2026-07-14-20 and 2026-07-15-13 (484f per-interval import weights) to
+# the 2026-07-16-09 tracker vintage (adds a weighted_etr_new daily column;
+# snapshots/weights identical to 2026-07-15-13). eta/alpha are REFIT against this basket
+# (model_data/Tariff-Model/calibration/tracker_actual_2026-07-01/) so the 484f
+# weight correction flows through the calibrated noncompliance/substitution params.
 
 rate_panel:
-  vintage: '2026-06-25-14'
+  vintage: '2026-07-16-09'
   tracker_scenario: 'actual'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'

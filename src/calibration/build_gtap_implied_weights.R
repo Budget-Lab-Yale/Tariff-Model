@@ -286,17 +286,25 @@ build_gtap_implied_weights <- function(scenario, months = NULL, period_average =
     shocks_path <- file.path(period_dir, 'shocks.txt')
     write_shocks(shock_frame, shocks_path)
 
-    # 5. run GTAP (cached on .sol/.slc/.sl4)
+    # 5. run GTAP (cached on .sol/.slc/.sl4). The cache is keyed on the exact
+    #    shocks: a sidecar .shockhash records the shocks.txt md5 that produced the
+    #    cached solution, so a changed rate basket under the same scenario/period
+    #    invalidates it rather than silently reusing a stale solve. Absent/stale
+    #    hash -> re-solve; --force-resolve overrides regardless.
     sol_name <- paste0(scenario, '_', P$period)
     sol_base <- file.path(period_dir, sol_name)
+    hash_path   <- paste0(sol_base, '.shockhash')
+    shocks_hash <- unname(tools::md5sum(shocks_path))
     cached <- !force_resolve &&
       file.exists(paste0(sol_base, '.sol')) &&
       file.exists(paste0(sol_base, '.slc')) &&
-      file.exists(paste0(sol_base, '.sl4'))
+      file.exists(paste0(sol_base, '.sl4')) &&
+      file.exists(hash_path) &&
+      identical(readLines(hash_path, warn = FALSE), shocks_hash)
 
     t0 <- Sys.time()
     if (cached) {
-      message('  Reusing cached GTAP solution')
+      message('  Reusing cached GTAP solution (shocks unchanged)')
       paths <- list(sol = paste0(sol_base, '.sol'),
                     slc = paste0(sol_base, '.slc'),
                     sl4 = paste0(sol_base, '.sl4'))
@@ -308,6 +316,9 @@ build_gtap_implied_weights <- function(scenario, months = NULL, period_average =
                         output_subdir        = period_dir,
                         solution_name        = sol_name)
       exit_code <- paths$exit_code %||% 0L
+      # Stamp the shocks fingerprint alongside the fresh solution (run_gtap stops
+      # on a failed solve, so reaching here means the .sol is valid).
+      if (identical(exit_code, 0L)) writeLines(shocks_hash, hash_path)
     }
     solve_secs <- as.numeric(difftime(Sys.time(), t0, units = 'secs'))
 

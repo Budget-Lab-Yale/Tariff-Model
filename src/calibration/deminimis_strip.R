@@ -49,6 +49,12 @@ estimate_deminimis_step <- function(panel, rev) {
   pre  <- gaps %>% filter(year_month >= DEMINIMIS_PRE_LO,
                           year_month <  DEMINIMIS_ONSET)
   post <- gaps %>% filter(year_month >= DEMINIMIS_ONSET)
+  # na.rm tolerates the recency variant, whose imputed months carry NA Treasury
+  # customs_duties (and are excluded from the postal-step estimate). For every
+  # shipped scenario Treasury is complete over the window, so na.rm is a no-op and
+  # the reproduction gate is unaffected. Count only usable (non-NA) months.
+  pre  <- filter(pre,  is.finite(gap))
+  post <- filter(post, is.finite(gap))
   if (nrow(pre) < 2 || nrow(post) < 2)
     return(list(step_usd = NA_real_, pre_gap = NA_real_, post_gap = NA_real_,
                 n_pre = nrow(pre), n_post = nrow(post)))

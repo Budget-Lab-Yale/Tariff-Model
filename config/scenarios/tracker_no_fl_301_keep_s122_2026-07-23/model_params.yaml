@@ -1,0 +1,44 @@
+# =============================================================================
+# Model Parameters: tracker_no_fl_301_keep_s122_2026-07-23
+# =============================================================================
+# "No forced-labor Section 301, Section 122 retained" path against the
+# 2026-07-23-21 vintage (tracker series scenarios/no_fl_301_keep_s122): the
+# no_fl_301 basket but with Section 122 kept in force rather than expiring.
+# eta/alpha REUSE the actual scenario's calibration (tracker_actual_2026-07-23).
+# The recency-weighted sibling is tracker_no_fl_301_keep_s122_2026-07-23_recency.
+
+rate_panel:
+  vintage: '2026-07-23-21'
+  tracker_scenario: 'no_fl_301_keep_s122'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state, matching the prior tracker reference convention.
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-07-23/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-07-23/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'

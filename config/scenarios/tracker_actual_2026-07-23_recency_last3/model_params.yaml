@@ -1,0 +1,46 @@
+# =============================================================================
+# Model Parameters: tracker_actual_2026-07-23_recency_last3
+# =============================================================================
+# EXPERIMENT: steep-recency calibration on essentially only the last three
+# months. Train = 2026-03..2026-04, held-out test = 2026-05 (a 3-month window),
+# with a 1-month half-life so 2026-05 >> 2026-04 >> 2026-03. Answers "what does
+# the compliance gap (eta) look like if we calibrate on the current quarter
+# alone?" -- i.e. whether statutory and actual have diverged recently.
+#
+# All three window months post-date the clean Treasury era, so the level is
+# entirely wedge-imputed; rho is anchored on the tariff-era clean months
+# (wedge_anchor_start 2025-06 .. treasury_clean_through 2026-02), which sit before
+# the window. Calibration-only experiment (panel + eta); not wired for a model run.
+
+rate_panel:
+  vintage: '2026-07-23-19'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+gtap_reference_date: '2026-11-10'
+
+gtap:
+  include_retaliation: false
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-07-23_recency_last3/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-07-23_recency_last3/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  window_start: '2026-03'
+  window_end: '2026-04'
+  months:
+    - '2026-03'
+    - '2026-04'
+    - '2026-05'
+  recency:
+    enabled: true
+    half_life_months: 1
+    treasury_clean_through: '2026-02'
+    wedge_anchor_start: '2025-06'

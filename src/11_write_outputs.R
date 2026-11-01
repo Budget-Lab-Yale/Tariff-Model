@@ -83,6 +83,8 @@ write_outputs <- function(results, scenario) {
       # ETR ((a) pre_sub = applied statutory; (c) pe_postsub = post-sub, post-noncompliance)
       'pre_sub_etr_increase', 'pe_postsub_etr_increase',
       'baseline_etr', 'pre_sub_all_in_etr', 'pe_postsub_all_in_etr',
+      # (a) applied-statutory all-in level (non-eta-adjusted average applied rate)
+      'statutory_all_in_etr',
       # (b) eta'-adjusted statutory diagnostic (noncompliance, pre-substitution)
       'eta_adj_etr_increase', 'eta_adj_all_in_etr',
       # Prices
@@ -104,6 +106,7 @@ write_outputs <- function(results, scenario) {
     value = c(
       results$etr$pre_sub_increase, results$etr$pe_postsub_increase,
       results$etr$baseline_etr, results$etr$pre_sub_all_in, results$etr$pe_postsub_all_in,
+      results$etr$statutory_all_in,
       results$etr$b_increase, results$etr$b_all_in,
       results$prices$pre_sub_price_increase, results$prices$pe_postsub_price_increase,
       results$prices$ge_price_increase,
@@ -122,6 +125,7 @@ write_outputs <- function(results, scenario) {
     unit = c(
       'pct', 'pct',
       'pct', 'pct', 'pct',
+      'pct',
       'pct', 'pct',
       'pct', 'pct', 'pct', 'dollars', 'dollars',
       'pct', 'pct',

@@ -114,6 +114,102 @@ resolve_weights_path <- function(rate_panel) {
   return(hit[1])
 }
 
+#' Resolve the bundle's manifest.json path (vintage root).
+#'
+#' @return Absolute path to <root>/<vintage>/manifest.json, or NULL if the
+#'   vintage root can't be resolved.
+resolve_manifest_path <- function(rate_panel) {
+  root <- resolve_rate_panel_root(rate_panel)
+  if (is.null(root)) return(NULL)
+  file.path(root, rate_panel$vintage %||% 'latest', 'manifest.json')
+}
+
+#' Read the bundle manifest.json (fail loud if absent).
+read_bundle_manifest <- function(rate_panel) {
+  mpath <- resolve_manifest_path(rate_panel)
+  if (is.null(mpath) || !file.exists(mpath)) {
+    stop('Tracker bundle manifest.json not found', if (!is.null(mpath)) paste0(': ', mpath) else '',
+         '\n  The vintage assertion requires the published manifest.', call. = FALSE)
+  }
+  jsonlite::read_json(mpath, simplifyVector = FALSE)
+}
+
+#' Read the single non-NA hts_vintage stamped into the weights file.
+#'
+#' The tracker's import_weights_hs10_country.{parquet,csv.gz} stamps every row
+#' with the tip revision it was keyed to. There must be exactly one non-NA value.
+#'
+#' @return the single hts_vintage (character), or stop() on 0 / >1 distinct.
+read_weights_hts_vintage <- function(weights_path) {
+  hv <- if (str_detect(weights_path, '\\.parquet$')) {
+    if (!requireNamespace('arrow', quietly = TRUE)) {
+      stop('Reading the weights hts_vintage requires the `arrow` package: ', weights_path)
+    }
+    arrow::read_parquet(weights_path, col_select = 'hts_vintage')$hts_vintage
+  } else {
+    read_csv(weights_path, show_col_types = FALSE,
+             col_types = cols(hts_vintage = col_character(),
+                              .default = col_skip()))$hts_vintage
+  }
+  vals <- unique(as.character(hv[!is.na(hv)]))
+  if (length(vals) != 1) {
+    stop(sprintf('Weights file has %d distinct non-NA hts_vintage values (expected exactly 1): %s\n  %s',
+                 length(vals), paste(vals, collapse = ', '), weights_path), call. = FALSE)
+  }
+  vals
+}
+
+#' Assert the weights file is keyed to the SAME tip revision the manifest records.
+#'
+#' Ties three independent facts together so a weights/panel vintage skew (the
+#' root cause of the statutory-rate understatement) can never pass silently:
+#'   1. The manifest's actual-series tip snapshot (max valid_from) carries a
+#'      `revision` (added by the tracker Phase 5 publish).
+#'   2. The weights parquet has exactly one non-NA `hts_vintage`.
+#'   3. (1) == (2), and the manifest's weights.path resolves to the same file
+#'      resolve_weights_path() picks.
+#'
+#' @return invisibly list(tip_revision, hts_vintage, weights_path).
+assert_weights_vintage <- function(rate_panel) {
+  man <- read_bundle_manifest(rate_panel)
+  snaps <- man$series$actual$snapshots
+  if (is.null(snaps) || length(snaps) == 0) {
+    stop('Bundle manifest has no series.actual.snapshots — cannot assert the weights vintage.',
+         call. = FALSE)
+  }
+  vfs <- vapply(snaps, function(s) as.character(s$valid_from %||% NA), character(1))
+  tip <- snaps[[which.max(as.Date(vfs))]]
+  tip_rev <- tip$revision %||% NA_character_
+  if (is.na(tip_rev) || !nzchar(tip_rev)) {
+    stop('Bundle manifest actual-series tip snapshot (valid_from=', tip$valid_from,
+         ') has no `revision`. Republish the tracker vintage with the Phase 5 manifest ',
+         '(every snapshot record must carry its revision).', call. = FALSE)
+  }
+  wpath <- resolve_weights_path(rate_panel)
+  if (is.null(wpath)) {
+    stop('No weights file in the bundle to assert the vintage against.', call. = FALSE)
+  }
+  hv <- read_weights_hts_vintage(wpath)
+  if (!identical(as.character(hv), as.character(tip_rev))) {
+    stop(sprintf(paste0('Weights vintage mismatch: weights hts_vintage = "%s" but the manifest ',
+                        'actual-series tip revision = "%s".\n  weights : %s\n  manifest: %s'),
+                 hv, tip_rev, wpath, resolve_manifest_path(rate_panel)), call. = FALSE)
+  }
+  # The manifest's weights.path must resolve to the file we actually read.
+  man_wpath <- man$weights$path
+  if (!is.null(man_wpath) && nzchar(man_wpath)) {
+    vintage_dir <- file.path(resolve_rate_panel_root(rate_panel), rate_panel$vintage %||% 'latest')
+    resolved_man <- normalizePath(file.path(vintage_dir, man_wpath), mustWork = FALSE)
+    if (!identical(resolved_man, normalizePath(wpath, mustWork = FALSE))) {
+      stop(sprintf(paste0('Manifest weights.path (%s) does not resolve to the weights file ',
+                          'resolve_weights_path() picked (%s).'),
+                   resolved_man, normalizePath(wpath, mustWork = FALSE)), call. = FALSE)
+    }
+  }
+  message(sprintf('  Weights vintage OK: hts_vintage = %s = manifest actual tip revision', tip_rev))
+  invisible(list(tip_revision = tip_rev, hts_vintage = hv, weights_path = wpath))
+}
+
 has_snapshot_series <- function(rate_panel, series) {
   dir.exists(snapshot_dir(rate_panel, series))
 }

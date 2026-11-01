@@ -87,7 +87,7 @@ Some text.
 
 Pre- and post-substitution
 
-`default-scenario/summary-statistics` — 12 fixed metrics. Columns `series` (carries the "Pre-substitution" / "Post-substitution" split), `unit` (pct/usd/usd_bn/pp), `metric`.
+`default-scenario/summary-statistics` — 13 fixed metrics. Columns `series` (e.g. the "Average statutory rate" / "Effective rate, pre-substitution" / "Effective rate, post-substitution" split under the `Tariff rate` category), `unit` (pct/usd/usd_bn/pp), `metric`.
 
 ## ETRs (Table 2 from above)
 
