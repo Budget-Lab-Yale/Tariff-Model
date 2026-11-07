@@ -1,16 +1,19 @@
 # =============================================================================
-# Model Parameters: tracker_no_s232_2026-11-07-13
+# Model Parameters: tracker_no_s301_2026-11-07-14
 # =============================================================================
-# "No Section 232" path: tracker series scenarios/no_232 from the
-# 2026-11-07-13 comparison vintage — Section 232 (metals, autos, derivatives and
-# every other 232 program) removed. The difference against the default isolates
-# the Section 232 actions.
+# "No Section 301" path: tracker series scenarios/no_s301 from the
+# 2026-11-07-14 comparison vintage — the Section 301 actions taken since the
+# January 2025 baseline removed (Brazil final action, forced-labor final action).
+# The legacy China lists stay: they sit inside the January 2025 baseline that
+# the model takes from the actual series, so removing them would net pre-2025
+# revenue out of the increase. The difference against the default isolates the
+# 2025-26 Section 301 actions.
 # Otherwise identical to tracker_actual_2026-11-01-13 (foreign retaliation in
 # GTAP on; eta/alpha REUSE the tracker_actual_2026-11-01-13 calibration).
 
 rate_panel:
-  vintage: '2026-11-07-13'
-  tracker_scenario: 'no_232'
+  vintage: '2026-11-07-14'
+  tracker_scenario: 'no_s301'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
 
