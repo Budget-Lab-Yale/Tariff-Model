@@ -72,3 +72,6 @@ config/scenarios/archive/
 
 # Office temp lock files
 ~$*
+
+# HSUS raw tables (Cambridge license: internal use only; do not commit)
+resources/historical_etr/raw/
