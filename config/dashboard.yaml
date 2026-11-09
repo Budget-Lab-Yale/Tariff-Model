@@ -15,19 +15,19 @@
 # Validation (read_dashboard_config): ids unique, exactly one default: true.
 
 scenarios:
-  - id: tracker_actual_2026-11-07-14
+  - id: tracker_actual_2026-11-09-09
     label: 'Current law (Section 122 expires)'
     short_label: 'Current law'
     default: true
-  - id: tracker_no_s338_2026-11-07-14
+  - id: tracker_no_s338_2026-11-09-09
     label: 'Excluding the Section 338 tariff actions'
     short_label: 'Ex Section 338'
     default: false
-  - id: tracker_no_s301_2026-11-07-14
+  - id: tracker_no_s301_2026-11-09-09
     label: 'Excluding the Section 301 tariff actions'
     short_label: 'Ex Section 301'
     default: false
-  - id: tracker_no_s232_2026-11-07-14
+  - id: tracker_no_s232_2026-11-09-09
     label: 'Excluding the Section 232 tariff actions'
     short_label: 'Ex Section 232'
     default: false

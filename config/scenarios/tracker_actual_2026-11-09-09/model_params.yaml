@@ -1,0 +1,47 @@
+# =============================================================================
+# Model Parameters: tracker_actual_2026-11-09-09
+# =============================================================================
+# Current law on the 2026-11-09-09 dashboard comparison vintage
+# (actual + no_s338 + no_s301 + no_232, tracker master 96f5348: first bundle
+# carrying the Section 232 annex parser fix, tracker PR #43 -- HS 8471 and 72
+# other prefixes no longer tagged Annex I-B from 2026-04-06). Re-pinned from
+# tracker_actual_2026-11-07-14; otherwise identical: retaliation on, eta/alpha REUSE
+# the tracker_actual_2026-11-01-13 calibration (its 2025-06..2026-03 window
+# predates the annex change, so the calibration inputs are unchanged).
+
+rate_panel:
+  vintage: '2026-11-09-09'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# End-2026 policy state. Pinned to the vintage's last policy boundary.
+gtap_reference_date: '2026-12-04'
+
+gtap:
+  include_retaliation: true
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-11-01-13/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-11-01-13/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  include_retaliation: false
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'
