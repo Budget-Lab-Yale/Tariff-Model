@@ -23,6 +23,20 @@ dir.create(IMDB_RAW, showWarnings = FALSE, recursive = TRUE)
 
 IMDB_URL_TEMPLATE <- 'https://www.census.gov/trade/downloads/%s/Merch/im_m/IMDB%s.ZIP'
 
+# Shared Census-IMDB store (Census-IMDB repo): parsed IMP_DETL parquet per
+# month. build_imdb_agg reads a month's parquet from here when present (much
+# faster than downloading + fixed-width-parsing the ZIP), and falls back to the
+# ZIP path otherwise. The store parquet uses the identical fixed-width
+# positions (con_val 74-88, cal_dut 104-118) and latin1 encoding as parse_imdb
+# below, and applying `con_val_mo != 0` reproduces this parser's aggregate
+# exactly -- so calibration numbers are unchanged (verified via
+# check_eta_reproduction.R). Set IMDB_USE_STORE=0 to force the ZIP path.
+IMDB_STORE_DIR <- Sys.getenv('IMDB_STORE_DIR',
+  '/nfs/roberts/project/pi_nrs36/shared/raw_data/Census-IMDB')
+IMDB_USE_STORE <- !identical(Sys.getenv('IMDB_USE_STORE', '1'), '0')
+imdb_store_detail <- function(ym)
+  file.path(IMDB_STORE_DIR, 'detail', paste0('imdb_detail_', ym, '.parquet'))
+
 # Fixed-width spec for IMP_DETL.TXT (positions from tariff-etr-eval; only the
 # fields the calibration needs -- preference/district codes dropped)
 imdb_fwf <- fwf_positions(
@@ -86,6 +100,28 @@ parse_imdb <- function(zip_path) {
 build_imdb_agg <- function(yms) {
   chunks <- vector('list', length(yms)); names(chunks) <- yms
   for (ym in yms) {
+    # Store-first: read the pre-parsed detail parquet when present. Filtering
+    # con_val_mo != 0 restricts to the consumption universe this parser uses,
+    # so the aggregate is identical to the ZIP path.
+    sp <- imdb_store_detail(ym)
+    if (IMDB_USE_STORE && file.exists(sp)) {
+      d <- tryCatch(
+        arrow::read_parquet(sp, col_select = c('hs10', 'cty_code',
+              'year_month', 'con_val_mo', 'cal_dut_mo')) %>%
+          filter(con_val_mo != 0),
+        error = function(e) { msg('    %s: store read ERROR %s', ym,
+                                  conditionMessage(e)); NULL })
+      if (!is.null(d) && nrow(d) > 0) {
+        chunks[[ym]] <- d %>%
+          summarise(con_val_mo = sum(con_val_mo, na.rm = TRUE),
+                    cal_dut_mo = sum(cal_dut_mo, na.rm = TRUE),
+                    .by = c(hs10, cty_code, year_month))
+        msg('    %s: %s cells (store), $%.0fB', ym,
+            format(nrow(chunks[[ym]]), big.mark = ','),
+            sum(chunks[[ym]]$con_val_mo) / 1e9)
+        rm(d); gc(verbose = FALSE); next
+      }
+    }
     zip_path <- get_imdb_zip(ym)
     if (is.null(zip_path)) { msg('    %s: NOT AVAILABLE', ym); next }
     d <- tryCatch(parse_imdb(zip_path), error = function(e) {

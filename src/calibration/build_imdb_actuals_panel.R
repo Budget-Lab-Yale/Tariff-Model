@@ -280,6 +280,60 @@ build_imdb_actuals_panel <- function(scenario, refresh_imdb = FALSE, reuse_rates
          '\n  See resources/calibration/treasury_revenue_SOURCE.md to restore it.')
   }
 
+  # --- Cross-check against the shared Treasury-Fiscal store -------------------
+  # NUMERICALLY INERT BY CONSTRUCTION: this block only reads and logs. It does
+  # not touch treas_src, `revenue`, or anything Section 5 consumes, so it cannot
+  # move panel.rds / revenue_monthly.csv or the golden eta/alpha gate.
+  #
+  # The store does NOT replace the committed snapshot and cannot: `imports_value`
+  # is Census goods imports (Haver TMMCN@USINT), not a Treasury series, and the
+  # fiscaldata MTS API floor is 2015-03 against this snapshot's 1982-01 start.
+  # But Haver FTRU@GOVFIN and MTS net customs receipts are the same underlying
+  # series and agree to the dollar, so the store independently validates the
+  # customs_duties column. This repo keeps its OWN committed copy of the series
+  # (separate from tariff-etr-eval's), so the two can silently drift -- that is
+  # precisely what this catches.
+  #
+  # Store location: TREASURY_DATA_DIR env var, else the cluster default. Set it
+  # to "" to disable.
+  treas_store_dir <- Sys.getenv('TREASURY_DATA_DIR',
+    '/nfs/roberts/project/pi_nrs36/shared/raw_data/Treasury-Fiscal')
+  treas_store_csv <- file.path(treas_store_dir, 'derived',
+                               'customs_duties_monthly.csv')
+  if (nzchar(treas_store_dir) && file.exists(treas_store_csv)) {
+    tryCatch({
+      hav_chk <- read_csv(treas_src, show_col_types = FALSE) %>%
+        transmute(ym = substr(as.character(date), 1, 7),
+                  haver_m = as.numeric(customs_duties))
+      mts_chk <- read_csv(treas_store_csv, show_col_types = FALSE) %>%
+        transmute(ym = substr(as.character(date), 1, 7),
+                  mts_m = as.numeric(customs_duties),
+                  preliminary = as.logical(preliminary))
+      # Unsettled months are expected to disagree with any earlier vintage, so
+      # excluding them keeps the check from crying wolf every month.
+      cmp_chk <- inner_join(hav_chk, mts_chk, by = 'ym') %>%
+        filter(!preliminary, is.finite(haver_m), is.finite(mts_m)) %>%
+        mutate(abs_diff = abs(haver_m - mts_m))
+      if (nrow(cmp_chk) == 0) {
+        msg('    cross-check vs MTS store: no settled overlapping months')
+      } else {
+        w <- cmp_chk[which.max(cmp_chk$abs_diff), ]
+        msg('    cross-check vs MTS store: %d settled months (%s..%s), max |diff| $%.1fM (%s)',
+            nrow(cmp_chk), min(cmp_chk$ym), max(cmp_chk$ym), w$abs_diff, w$ym)
+        # $5M against a ~$20-30B/yr series is far below any real restatement but
+        # well above float noise.
+        if (w$abs_diff > 5)
+          warning('Treasury customs_duties disagrees with the MTS store beyond ',
+                  'tolerance (max $', round(w$abs_diff, 1), 'M at ', w$ym,
+                  '). Is resources/calibration/treasury_revenue.csv stale? ',
+                  'Store: ', treas_store_csv, call. = FALSE, immediate. = TRUE)
+      }
+    }, error = function(e)
+      msg('    cross-check skipped (%s)', conditionMessage(e)))
+  } else {
+    msg('    cross-check skipped (Treasury-Fiscal store not available)')
+  }
+
   # ---------------------------------------------------------------------------
   # 5. Processed panel (verbatim from 01_data.R Section 5)
   # ---------------------------------------------------------------------------

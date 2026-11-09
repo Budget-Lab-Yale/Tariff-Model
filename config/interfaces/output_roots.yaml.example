@@ -4,7 +4,8 @@
 #                here; publish this model's vintages here).
 #   local      : a per-user scratch tree for dev runs (used when the model is run
 #                with write_locally = TRUE).
-# These are machine-specific; edit for your environment. The repo's in-tree
-# output/ dir is still used for working artifacts (rate_inputs, gtap solution).
-local: /nfs/roberts/scratch/pi_nrs36/jar335
+# These are machine-specific; copy to output_roots.yaml and edit for your
+# environment. The repo's in-tree output/ dir is still used for working
+# artifacts (rate_inputs, gtap solution).
+local: /path/to/your/scratch/tariff_model
 production: /nfs/roberts/project/pi_nrs36/shared

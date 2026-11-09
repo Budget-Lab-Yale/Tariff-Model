@@ -201,6 +201,13 @@ interpolate_irf <- function(irf_set, shock_pp, sizes = c(2, 5, 10)) {
       return(result)
     }
   }
+
+  # Every finite shock_pp is covered by the branches above (<= smallest, >=
+  # largest, or one of the adjacent brackets). Falling through means shock_pp is
+  # NA/non-finite or the size grid is malformed; fail loudly rather than return
+  # an implicit NULL that surfaces as a cryptic error downstream.
+  stop(sprintf('shock_pp not bracketed by IRF size grid (shock_pp=%s, sizes=[%s])',
+               shock_pp, paste(sizes, collapse = ', ')))
 }
 
 

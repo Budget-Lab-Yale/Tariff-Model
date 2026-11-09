@@ -683,14 +683,20 @@ build_io_matrices <- function(use_import, use_domestic, industry_output,
   import_totals <- import_lookup[commodity_codes]
   total_use <- total_lookup[commodity_codes]
 
-  # Commodities in use table but not in totals file: fall back to intermediate
-  missing_codes <- commodity_codes[is.na(total_use)]
+  # Commodities in use table but not in totals file: fall back to intermediate.
+  # Use one mask (codes absent from the totals file) for BOTH vectors so the
+  # import and total fallbacks can't diverge on a commodity that is NA in one
+  # totals column but not the other.
+  missing_mask <- !(commodity_codes %in% totals_lookup$bea_code)
+  missing_codes <- commodity_codes[missing_mask]
   if (length(missing_codes) > 0) {
     message(sprintf('    %d commodities not in use totals file, using intermediate-only: %s',
                     length(missing_codes),
                     paste(head(missing_codes, 5), collapse = ', ')))
-    import_totals[is.na(import_totals)] <- rowSums(use_import)[is.na(import_totals)]
-    total_use[is.na(total_use)] <- (rowSums(use_import) + rowSums(use_domestic))[is.na(total_use)]
+    intermediate_import <- rowSums(use_import)
+    intermediate_total <- rowSums(use_import) + rowSums(use_domestic)
+    import_totals[missing_mask] <- intermediate_import[missing_mask]
+    total_use[missing_mask] <- intermediate_total[missing_mask]
   }
   names(import_totals) <- commodity_codes
   names(total_use) <- commodity_codes

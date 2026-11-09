@@ -34,7 +34,7 @@ Every `data.csv` is long-format.
 | `dimension` | `sector` / `country` — the Figure 4/5 toggle, `gdp-by-category` only |
 | `scenario` | model scenario id — present on `statutory-rates` and `alternative-scenarios` figures only |
 | `measure` | `level` / `delta_vs_default` — the levels-vs-deltas toggle, `alternative-scenarios` only |
-| `projected` | 0/1 — drives the grey "future projections" band, `statutory-rates` only |
+| `projected` | 0/1 — 1 for dates after the tracker vintage's as-of date (the YYYY-MM-DD prefix of `tracker_vintage`), i.e. projections of current policy; `statutory-rates` only |
 | `country_code` / `category_code` / `gtap_code` | machine key behind the display `category`, for stable joins/colors |
 
 Everything is validated on write (no NAs, no non-finite values, required columns present) — if a figure looks wrong, it's wrong in the model output, not a frontend parsing issue.
@@ -53,7 +53,7 @@ No data files. Words only. QUESTION FOR SYLVA: How best should we produce text f
 
 All four figures are daily line charts under `statutory-rates/`, styled after the [tariff-rate-tracker blog](https://budgetlab.yale.edu/research/introducing-tariff-rate-tracker-open-source-tool-daily-effective-tariff-rates): dashed vertical lines at major tariff policy changes, and a grey band over future projections.
 
-The grey band is driven by the `projected` column (0/1) — shade any date where `projected == 1`. The dashed policy-change lines have no data file today; that needs a small new CSV (date + label) that doesn't exist yet. TK.
+The grey band covers the dates where `projected == 1`: every date after the tracker vintage's as-of date. (The State of Tariffs tool currently draws it from its own `events.yaml`, starting at the release date, which gives the same range.) The dashed policy-change lines have no data file today; that needs a small new CSV (date + label) that doesn't exist yet. TK.
 
 Every figure also carries a `scenario` column (see Recurring columns).
 

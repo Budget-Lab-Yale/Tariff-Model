@@ -588,8 +588,19 @@ add_scenario_deltas <- function(df, default_id) {
 # Tab 2 tracker daily pass-throughs
 # =============================================================================
 
-#' 0/1 projected flag from a tracker `revision` label (bnd_* / 2026_* = projected)
-flag_projected <- function(revision) as.integer(grepl('^(bnd_|2026_)', revision))
+#' 0/1 projected flag: dates after the tracker vintage's as-of date are
+#' projections of current policy. (Previously keyed on the revision label
+#' (bnd_* / 2026_*), which flagged every 2026 HTS revision and every past policy
+#' boundary as projected once 2026 began.)
+flag_projected <- function(time, as_of) as.integer(time > as_of)
+
+#' As-of date of a tracker vintage: the YYYY-MM-DD prefix of its id
+#' (e.g. '2026-11-01-19' -> 2026-11-01). Fails loudly on any other form.
+tracker_as_of_date <- function(tracker_vintage) {
+  as_of <- as.Date(substr(tracker_vintage, 1, 10), format = '%Y-%m-%d')
+  if (is.na(as_of)) stop('Cannot read an as-of date from tracker vintage "', tracker_vintage, '"')
+  as_of
+}
 
 #' GTAP code -> series description, joined on tolower(gtap_code); 'unmapped' ->
 #' 'Unmapped'. Fails loudly on any other unmatched code.
@@ -604,7 +615,7 @@ gtap_sector_labels <- function() {
 #' by_hs (HS-based product breakdown).
 #' Returns time, series, value(+gtap_code for category), projected. `scenario`
 #' is added by the caller.
-build_daily_rates <- function(daily_dir, which) {
+build_daily_rates <- function(daily_dir, which, as_of) {
   if (which == 'overall') {
     path <- file.path(daily_dir, 'daily_overall.csv')
     if (!file.exists(path)) stop('tracker daily file not found: ', path)
@@ -616,7 +627,7 @@ build_daily_rates <- function(daily_dir, which) {
       transmute(time = as.Date(date),
                 total = weighted_etr * 100,
                 new_tariffs = weighted_etr_new * 100,
-                projected = flag_projected(revision)) %>%
+                projected = flag_projected(time, as_of)) %>%
       pivot_longer(c(total, new_tariffs), names_to = 'series', values_to = 'value') %>%
       select(time, series, value, projected)
 
@@ -628,7 +639,7 @@ build_daily_rates <- function(daily_dir, which) {
     if (length(missing) > 0) stop('daily_by_authority missing etr columns: ',
                                   paste(missing, collapse = ', '))
     raw %>%
-      transmute(time = as.Date(date), projected = flag_projected(revision),
+      transmute(time = as.Date(date), projected = flag_projected(time, as_of),
                 across(all_of(AUTHORITY_SERIES$col), ~ .x * 100)) %>%
       pivot_longer(all_of(AUTHORITY_SERIES$col), names_to = 'col', values_to = 'value') %>%
       left_join(AUTHORITY_SERIES, by = 'col') %>%
@@ -671,7 +682,7 @@ build_daily_rates <- function(daily_dir, which) {
 
     labelled %>%
       transmute(time = as.Date(date), series, value = weighted_etr * 100,
-                gtap_code, projected = flag_projected(revision))
+                gtap_code, projected = flag_projected(time, as_of))
 
   } else if (which == 'by_hs') {
     path <- file.path(daily_dir, 'daily_by_hs.csv')
@@ -686,7 +697,7 @@ build_daily_rates <- function(daily_dir, which) {
       filter(!is.na(weighted_etr)) %>%
       transmute(time = as.Date(date), series = category_label,
                 value = weighted_etr * 100, category_code,
-                projected = flag_projected(revision))
+                projected = flag_projected(time, as_of))
 
   } else {
     stop('build_daily_rates: unknown which "', which, '"')
@@ -716,7 +727,7 @@ country_import_totals <- function(weights_path) {
 #' US self-row (cty 1000) plus zero-trade jurisdictions (North Korea + US
 #' territories); they carry no rate and would otherwise poison the 'row' group.
 #' (Plan sanctioned only cty 1000; this drops all NA weighted_etr — see review.)
-build_daily_by_country <- function(daily_dir, weights_path) {
+build_daily_by_country <- function(daily_dir, weights_path, as_of) {
   path <- file.path(daily_dir, 'daily_by_country.csv')
   if (!file.exists(path)) stop('tracker daily file not found: ', path)
 
@@ -747,7 +758,7 @@ build_daily_by_country <- function(daily_dir, weights_path) {
       .groups = 'drop'
     ) %>%
     mutate(series = unname(PARTNER_GROUP_LABEL[group]),
-           projected = flag_projected(revision))
+           projected = flag_projected(time, as_of))
 
   if (any(is.na(grouped$series))) stop('daily-rate-by-country: unmapped partner group')
 
@@ -786,6 +797,8 @@ export_statutory_tab <- function(deps_tbl, tracker_vintage, dashboard_root,
   message('  Tab 2: statutory-rates')
   tab <- TABS[['statutory']]
   weights_path <- tracker_weights_path(tracker_vintage, cfg)
+  as_of <- tracker_as_of_date(tracker_vintage)
+  message(sprintf('    projected = dates after %s', as_of))
 
   # scenario -> tracker series daily dir (both series stacked with `scenario`)
   gather_series <- function(builder) {
@@ -796,15 +809,15 @@ export_statutory_tab <- function(deps_tbl, tracker_vintage, dashboard_root,
              })
   }
 
-  write_figure(gather_series(function(d) build_daily_rates(d, 'overall')),
+  write_figure(gather_series(function(d) build_daily_rates(d, 'overall', as_of)),
                tab, 'daily-rate-overall', dashboard_root, 'line')
-  write_figure(gather_series(function(d) build_daily_rates(d, 'by_authority')),
+  write_figure(gather_series(function(d) build_daily_rates(d, 'by_authority', as_of)),
                tab, 'daily-rate-by-authority', dashboard_root, 'line')
-  write_figure(gather_series(function(d) build_daily_by_country(d, weights_path)),
+  write_figure(gather_series(function(d) build_daily_by_country(d, weights_path, as_of)),
                tab, 'daily-rate-by-country', dashboard_root, 'line')
-  write_figure(gather_series(function(d) build_daily_rates(d, 'by_category')),
+  write_figure(gather_series(function(d) build_daily_rates(d, 'by_category', as_of)),
                tab, 'daily-rate-by-category', dashboard_root, 'line')
-  write_figure(gather_series(function(d) build_daily_rates(d, 'by_hs')),
+  write_figure(gather_series(function(d) build_daily_rates(d, 'by_hs', as_of)),
                tab, 'daily-rate-by-hs', dashboard_root, 'line')
 }
 
