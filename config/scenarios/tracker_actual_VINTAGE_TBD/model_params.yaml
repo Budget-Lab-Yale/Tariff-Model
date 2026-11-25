@@ -1,0 +1,65 @@
+# =============================================================================
+# Model Parameters: tracker_actual_VINTAGE_TBD
+# =============================================================================
+# Current law (tracker series actual) on the Section 301 excess-capacity comparison vintage.
+#
+# One of four scenarios on the Section 301 excess-capacity comparison vintage
+# (tracker series actual, ec301_proposed, ec301_no_deals, ec301_all_deals). The
+# three ec301 series are current law plus the proposed Section 301 "structural
+# excess capacity" tariffs on 14 economies and the proposed Brazil Section 301
+# change (finished aircraft at 10%), all effective 2027-04-01. The tracker
+# series runs 2025-01-01 to 2027-06-30.
+#
+# The bundle is a validation build, published under
+#   <production>/model_data/Tariff-Rate-Tracker/.validation/s301ec-{codex,fable}/
+# not the production tracker root. The model reaches it only through the
+# TARIFF_RATE_TRACKER_ROOT environment variable, which
+# gempack_linux_run_model_s301ec.sbatch sets. Run without that variable, the
+# model looks in the production root and stops with "No rate panel found".
+#
+# VINTAGE_TBD: replace with the tracker vintage id (YYYY-MM-DD-HH) once the
+# bundle is published, here, in the folder name and in config/dashboard.yaml.
+#
+# Otherwise as tracker_actual_2026-11-09-09: retaliation on; eta/alpha reuse
+# the tracker_actual_2026-11-01-13 calibration (its 2025-06..2026-03 window is
+# unaffected by tariffs that start in 2027).
+
+rate_panel:
+  vintage: 'VINTAGE_TBD'
+  tracker_scenario: 'actual'
+  baseline_date: '2025-01-01'
+  interval_end: 'inclusive'
+
+# Policy state solved in GTAP: the day the excess-capacity tariffs start. All
+# four scenarios use the same date so the scenarios differ from current law
+# only in the proposed tariffs. The date must be the start of a snapshot
+# interval in this series (00a_prepare_rate_inputs.R stops otherwise).
+gtap_reference_date: '2027-04-01'
+
+gtap:
+  include_retaliation: true
+
+refund_2026: 166.0
+
+noncompliance:
+  eta_file: 'tracker_actual_2026-11-01-13/eta_by_partner_gtap.csv'
+
+substitution:
+  alpha_file: 'tracker_actual_2026-11-01-13/alpha/alpha_parameters.csv'
+  commodity_passthrough_file: 'resources/calibration/gtap_commodity_sectors.csv'
+
+calibration:
+  include_retaliation: false
+  window_start: '2025-06'
+  window_end: '2026-02'
+  months:
+    - '2025-06'
+    - '2025-07'
+    - '2025-08'
+    - '2025-09'
+    - '2025-10'
+    - '2025-11'
+    - '2025-12'
+    - '2026-01'
+    - '2026-02'
+    - '2026-03'

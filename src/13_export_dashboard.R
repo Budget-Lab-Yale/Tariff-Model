@@ -104,8 +104,22 @@ AUTHORITY_SERIES <- tribble(
   'etr_s122',        'section_122',
   'etr_s338',        'section_338',
   'etr_section_201', 'section_201',
-  'etr_other',       'other'
+  'etr_other',       'other',
+  'etr_s301ec',      'section_301'
 )
+
+# Columns in AUTHORITY_SERIES that a tracker series may omit. etr_s301ec (the
+# proposed Section 301 excess-capacity tariffs) appears only in series whose
+# rate panel carries rate_s301ec; where absent it contributes zero. It is summed
+# into section_301 on the assumption that the tracker reports it OUTSIDE etr_301,
+# like etr_s301br. If a tracker build instead folds it into etr_301, summing it
+# counts it twice; the reconciliation against daily_overall.csv in
+# build_daily_rates() then stops the export.
+AUTHORITY_OPTIONAL_COLS <- c('etr_s301ec')
+
+# Largest allowed gap (percentage points) between the sum of the stacked
+# authority series and the overall weighted rate on any date.
+AUTHORITY_RECONCILE_TOL_PP <- 1e-6
 
 # Thirteen curated summary-statistics metrics. `source` = 'key' (key_results.csv,
 # looked up by `key`) or 'sector' (sector_effects.csv, overall_gdp). Values are
@@ -635,10 +649,17 @@ build_daily_rates <- function(daily_dir, which, as_of) {
     path <- file.path(daily_dir, 'daily_by_authority.csv')
     if (!file.exists(path)) stop('tracker daily file not found: ', path)
     raw <- read_csv(path, show_col_types = FALSE)
+    for (oc in setdiff(AUTHORITY_OPTIONAL_COLS, names(raw))) raw[[oc]] <- 0
     missing <- setdiff(AUTHORITY_SERIES$col, names(raw))
     if (length(missing) > 0) stop('daily_by_authority missing etr columns: ',
                                   paste(missing, collapse = ', '))
-    raw %>%
+    # A tracker authority column with no dashboard series would otherwise drop
+    # out of the stacked chart without notice.
+    unknown <- setdiff(grep('^etr_', names(raw), value = TRUE), AUTHORITY_SERIES$col)
+    if (length(unknown) > 0) stop('daily_by_authority has etr columns with no dashboard ',
+                                  'series (add them to AUTHORITY_SERIES): ',
+                                  paste(unknown, collapse = ', '))
+    out <- raw %>%
       transmute(time = as.Date(date), projected = flag_projected(time, as_of),
                 across(all_of(AUTHORITY_SERIES$col), ~ .x * 100)) %>%
       pivot_longer(all_of(AUTHORITY_SERIES$col), names_to = 'col', values_to = 'value') %>%
@@ -646,6 +667,28 @@ build_daily_rates <- function(daily_dir, which, as_of) {
       group_by(time, series, projected) %>%
       summarise(value = sum(value), .groups = 'drop') %>%
       select(time, series, value, projected)
+
+    # The stacked series must add up to the overall rate on every date. This
+    # catches an authority column counted twice (e.g. a tracker build that folds
+    # etr_s301ec into etr_301) or one the mapping misses.
+    overall_path <- file.path(daily_dir, 'daily_overall.csv')
+    if (!file.exists(overall_path)) stop('tracker daily file not found: ', overall_path)
+    recon <- out %>%
+      group_by(time) %>%
+      summarise(stacked = sum(value), .groups = 'drop') %>%
+      left_join(read_csv(overall_path, show_col_types = FALSE) %>%
+                  transmute(time = as.Date(date), overall = weighted_etr * 100),
+                by = 'time')
+    if (any(is.na(recon$overall))) stop('daily_by_authority dates missing from ', overall_path)
+    gap <- max(abs(recon$stacked - recon$overall))
+    if (gap > AUTHORITY_RECONCILE_TOL_PP) {
+      worst <- recon[which.max(abs(recon$stacked - recon$overall)), ]
+      stop(sprintf(paste0('daily-rate-by-authority: stacked series sum to %.4f%% but the ',
+                          'overall rate is %.4f%% on %s (%s). Is an authority column counted ',
+                          'twice, e.g. etr_s301ec already inside etr_301?'),
+                   worst$stacked, worst$overall, worst$time, daily_dir))
+    }
+    out
 
   } else if (which == 'by_category') {
     path <- file.path(daily_dir, 'daily_by_category.csv')
