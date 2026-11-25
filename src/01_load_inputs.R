@@ -418,6 +418,21 @@ load_inputs <- function(scenario, bea_io_level_override = NULL,
       pt <- read_csv(sub_cfg$commodity_passthrough_file, show_col_types = FALSE)
       inputs$alpha_passthrough <- tolower(pt$gtap_code[pt$include])
     }
+    # Use the trade mix from the historical calibration for short-run revenue.
+    # Using the scenario solve here would bring future tariffs into past receipts.
+    weights_file <- file.path(dirname(dirname(alpha_file)), 'gtap_implied_weights.csv')
+    if (!file.exists(weights_file)) stop('Missing historical import weights: ', weights_file)
+    historical <- read_csv(weights_file, show_col_types = FALSE) %>%
+      filter(basis == 'period_avg') %>%
+      select(gtap_code, partner, postsim_imports) %>%
+      pivot_wider(names_from = partner, values_from = postsim_imports)
+    imports <- inputs$baselines$import_baseline_dollars
+    assert_has_columns(historical, colnames(imports), weights_file)
+    rows <- match(rownames(imports), historical$gtap_code)
+    if (anyNA(rows)) stop('Missing historical goods in ', weights_file)
+    inputs$historical_viws <- as.matrix(historical[rows, colnames(imports)])
+    rownames(inputs$historical_viws) <- rownames(imports)
+    if (any(!is.finite(inputs$historical_viws))) stop('Invalid historical imports in ', weights_file)
     inputs$alpha_active <- TRUE
     message(sprintf(paste0('  Loaded alpha params: within=%.4f between=%.4f ',
                            '(%d passthrough sectors); revenue transition ACTIVE'),

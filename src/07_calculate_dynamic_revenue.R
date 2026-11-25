@@ -27,14 +27,10 @@ library(tidyverse)
 #' Maps calendar quarters to fiscal years and computes the incremental
 #' growth deviation for each fiscal year.
 #'
-#' Implements linear blend from USMM short-run to GTAP long-run:
-#' Over 16 quarters starting 2025Q1, the level deviation transitions
-#' linearly from the USMM value (weight=1) to the GTAP long-run value (weight=0).
-#'
 #' @param macro Quarterly GDP data with baseline and tariff scenarios
 #' @param gtap_long_run_gdp GTAP long-run US GDP percent change (e.g., -0.31)
 #' @return Data frame with fiscal_year and growth_deviation
-calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL) {
+calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL, timing = NULL) {
 
   # Map calendar quarters to fiscal years
   # FY runs Oct-Sep: Q4 → next FY Q1, Q1-Q3 → same FY
@@ -45,10 +41,6 @@ calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL) {
       raw_level_deviation = 100 * (gdp_tariff / gdp_baseline - 1)
     )
 
-  # Apply linear blend from USMM to GTAP over 16 quarters
-  # q_index = quarters since 2025Q1 (0-based)
-  # blend_weight = max(0, 1 - q_index / 16)
-  # level_deviation = blend_weight * usmm_dev + (1 - blend_weight) * gtap_long_run_gdp
   if (!is.null(gtap_long_run_gdp)) {
     macro_fy <- macro_fy %>%
       mutate(
@@ -56,10 +48,10 @@ calculate_fy_growth_deviations <- function(macro, gtap_long_run_gdp = NULL) {
           year = year,
           quarter = quarter,
           raw_deviation = raw_level_deviation,
-          gtap_long_run_gdp = gtap_long_run_gdp
+          gtap_long_run_gdp = gtap_long_run_gdp, timing = timing
         )
       )
-    message(sprintf('  Applying USMM-GTAP linear blend over 16 quarters (GTAP LR: %.2f%%)',
+    message(sprintf('  Applying USMM-GTAP linear blend (GTAP LR: %.2f%%)',
                     gtap_long_run_gdp))
   } else {
     macro_fy <- macro_fy %>%
@@ -231,7 +223,9 @@ calculate_dynamic_revenue <- function(inputs, revenue_results) {
   # Step 1: Calculate FY growth deviations from USMM
   # -------------------------------------------------------------------------
 
-  fy_growth_dev <- calculate_fy_growth_deviations(macro, gtap_long_run_gdp)
+  fy_growth_dev <- calculate_fy_growth_deviations(
+    macro, gtap_long_run_gdp, inputs$assumptions$long_run_transition
+  )
 
   message('  FY growth deviations (matching Excel AI column):')
   fy_growth_dev %>%

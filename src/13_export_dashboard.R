@@ -33,7 +33,6 @@ suppressPackageStartupMessages({
 })
 
 # interfaces.R  -> read_interface_config(), tariff_model_version(), git_commit()
-# helpers.R     -> blend_usmm_gdp_deviation()
 source('src/interfaces.R')
 source('src/helpers.R')
 
@@ -472,19 +471,13 @@ build_distribution <- function(outputs, concept) {
 
 build_real_gdp_path <- function(outputs) {
   macro <- outputs$macro_quarterly
-  gtap_lr_gdp <- outputs$foreign_gdp %>% filter(region == 'usa') %>% pull(gdp_change_pct)
-  if (length(gtap_lr_gdp) != 1L) stop('real-gdp: could not find foreign_gdp usa row')
-
+  # macro_quarterly already contains the published blended GDP level.
   res <- macro %>%
     filter(year >= 2025) %>%
     arrange(year, quarter) %>%
     mutate(
       time = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),
-      raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
-      value = blend_usmm_gdp_deviation(
-        year = year, quarter = quarter,
-        raw_deviation = raw_deviation, gtap_long_run_gdp = gtap_lr_gdp
-      ),
+      value = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
       series = 'gdp_level'
     )
 

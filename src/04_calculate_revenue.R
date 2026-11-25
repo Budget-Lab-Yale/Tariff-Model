@@ -5,13 +5,15 @@
 # This module calculates conventional tariff revenue based on:
 # - CBO baseline imports and duties (from resources/baselines/)
 # - GTAP qmwreg (percent change in imports from tariffs)
-# - Phase-in schedule (from global assumptions)
-# - ETR increase (calculated from GTAP postsim vs baseline)
+# - long_run_transition (from global assumptions): GTAP weight w by quarter
+# - Short-run rate (each date's rates on the historical import mix) and
+#   long-run rate (GTAP postsim vs baseline), blended day by day
 # - Behavioral adjustments (compliance effect, income and payroll tax offset)
 #
 # Key formula:
-#   New Imports = Baseline × (1 - phase_in) + phase_in × Baseline × (1 + qmwreg/100)
-#   New Duties = New Imports × Total ETR
+#   New Imports (per day) = Baseline × (1 + w × qmwreg/100)
+#   Policy rate (per day) = (1 - w) × short-run rate + w × long-run rate
+#   New Duties = sum over the fiscal year's days of New Imports × Total ETR
 #   Gross Revenue = New Duties - Baseline Duties
 #   Net Revenue = Gross Revenue × (1 - compliance_effect - income_effect)
 #
@@ -19,64 +21,33 @@
 
 library(tidyverse)
 
-#' Compute FY-weighted average etr_increase from time-varying date schedule
-#'
-#' For each fiscal year (Oct 1 – Sep 30), computes a day-weighted average
-#' etr_increase using step-function logic:
-#' - Before the first date: etr_increase = 0
-#' - Each date's etr_increase applies from that date until the next date
-#' - After the last date: last etr_increase continues
-#'
-#' @param etr_increase_by_date Tibble with date and etr_increase columns
-#' @param fiscal_years Integer vector of fiscal years to compute
-#'
-#' @return Named numeric vector keyed by fiscal year (as character)
-compute_fy_weighted_etr_increase <- function(etr_increase_by_date, fiscal_years) {
-
-  # Sort by date
-  schedule <- etr_increase_by_date %>%
-    arrange(date)
-
-  dates <- schedule$date
-  increases <- schedule$etr_increase
-
-  result <- numeric(length(fiscal_years))
-  names(result) <- as.character(fiscal_years)
-
-  for (fy in fiscal_years) {
-    # FY runs from Oct 1 of prior CY to Sep 30 of FY year
-    fy_start <- as.Date(paste0(fy - 1, '-10-01'))
-    fy_end <- as.Date(paste0(fy, '-09-30'))
-    fy_days <- as.integer(fy_end - fy_start) + 1L
-
-    # Build intervals within this FY
-    # Breakpoints are: fy_start, any schedule dates within [fy_start, fy_end], fy_end+1
-    breakpoints <- c(fy_start, dates[dates > fy_start & dates <= fy_end], fy_end + 1L)
-    breakpoints <- sort(unique(breakpoints))
-
-    weighted_sum <- 0
-
-    for (i in seq_len(length(breakpoints) - 1)) {
-      interval_start <- breakpoints[i]
-      interval_end <- breakpoints[i + 1] - 1L
-      n_days <- as.integer(interval_end - interval_start) + 1L
-
-      # Find active etr_increase: latest schedule date <= interval_start
-      # If before first date, use first regime (tariffs were already active)
-      active_idx <- which(dates <= interval_start)
-      if (length(active_idx) == 0) {
-        active_etr <- increases[1]
-      } else {
-        active_etr <- increases[max(active_idx)]
-      }
-
-      weighted_sum <- weighted_sum + active_etr * n_days
-    }
-
-    result[as.character(fy)] <- weighted_sum / fy_days
+# A dated policy starts on its first date. Undated rates describe a static regime.
+revenue_rate_on <- function(dates, schedule, static_rate) {
+  if (is.null(schedule)) {
+    if (length(static_rate) != 1L || !is.finite(static_rate)) stop('Missing revenue rate')
+    return(rep(static_rate, length(dates)))
   }
+  schedule <- arrange(schedule, date)
+  if (!nrow(schedule) || anyNA(schedule$date) || anyDuplicated(schedule$date) ||
+      any(!is.finite(schedule$etr_increase))) stop('Invalid dated revenue rates')
+  c(0, schedule$etr_increase)[1L + findInterval(dates, schedule$date)]
+}
 
-  return(result)
+# Average collections over the days in each fiscal year. Applying the rates
+# before averaging gives an April tariff only its actual days in FY 2027.
+fiscal_year_revenue_rates <- function(years, etr_results, long_rate, qmwreg, timing) {
+  dates <- seq(as.Date(sprintf('%d-10-01', min(years) - 1L)),
+               as.Date(sprintf('%d-09-30', max(years))), by = 'day')
+  short <- revenue_rate_on(dates, etr_results$short_run_etr_by_date,
+                           etr_results$short_run_etr_increase)
+  long <- revenue_rate_on(dates, etr_results$etr_increase_by_date, long_rate)
+  weight <- long_run_weight(year(dates), quarter(dates), timing)
+  tibble(fiscal_year = year(dates) + (month(dates) >= 10),
+         weight = weight, imports_ratio = 1 + weight * qmwreg / 100,
+         rate = (1 - weight) * short + weight * long) %>%
+    group_by(fiscal_year) %>%
+    summarise(phase_in = mean(weight), policy_rate = weighted.mean(rate, imports_ratio),
+              imports_ratio = mean(imports_ratio), .groups = 'drop')
 }
 
 
@@ -86,7 +57,7 @@ compute_fy_weighted_etr_increase <- function(etr_increase_by_date, fiscal_years)
 #'   - baselines$cbo: CBO baseline imports, duties, and baseline_etr
 #'   - qmwreg: GTAP import change percentage
 #'   - etr_increase: GTAP-derived ETR increase from new tariff policy
-#'   - assumptions: Global assumptions (phase_in, compliance_effect, etc.)
+#'   - assumptions: Global assumptions (long_run_transition, compliance_effect, etc.)
 #' @param etr_results Results from calculate_etr() (optional, contains etr_increase_by_date for time-varying)
 #'
 #' @return List containing revenue estimates by year and 10-year totals
@@ -119,7 +90,6 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
 
   compliance_effect <- assumptions$compliance_effect
   income_effect <- assumptions$income_effect
-  phase_in_schedule <- assumptions$phase_in
 
   # When noncompliance is active, the GTAP shock — and thus the mtax-derived
   # etr_increase that drives gross_revenue — already reflects rate (b). Applying
@@ -150,90 +120,21 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
   }
 
   # -------------------------------------------------------------------------
-  # Alpha -> GTAP revenue transition (substitution correction)
-  # -------------------------------------------------------------------------
-  # GTAP over-predicts tariff-driven substitution (alpha < 1), so the mtax-based
-  # etr_increase under-states near-term realized collections. We scale it up by
-  # R_alpha = (alpha-corrected post-sub ETR)/(full-GTAP post-sub ETR) in the near
-  # term and converge LINEARLY to full GTAP over 5 fiscal years from anchor_fy:
-  #   etr_increase(FY) = mtax_etr_increase * [1 + phi(FY)*(R_alpha - 1)]
-  # phi = 1 at/before anchor_fy, 0 at anchor_fy+5. R_alpha = 1 (alpha inactive)
-  # makes this an exact no-op, so the structural model and alpha-absent revenue
-  # are bit-for-bit unchanged. (The structural post-sub ETR, prices, and USMM
-  # stay FULL GTAP — alpha lives ONLY here, by design.)
-  R_alpha   <- (if (!is.null(etr_results)) etr_results$R_alpha else NULL) %||% 1
-  anchor_fy <- inputs$model_params$alpha_transition$anchor_fy %||% 2026
-  alpha_phi <- function(fy) pmax(0, pmin(1, 1 - (fy - anchor_fy) / 5))
-  if (abs(R_alpha - 1) > 1e-12) {
-    message(sprintf('  Alpha revenue transition: R_alpha=%.4f, anchor FY%d, 5-yr linear -> GTAP',
-                    R_alpha, anchor_fy))
-  }
+  # Both import volume and the collected rate follow the quarterly GDP clock.
+  # For a static call without ETR detail the supplied rate is the only rate.
+  if (is.null(etr_results)) etr_results <- list(short_run_etr_increase = etr_increase)
+  timing <- assumptions$long_run_transition
+  fy_rates <- fiscal_year_revenue_rates(cbo$fiscal_year, etr_results, etr_increase,
+                                        qmwreg, timing)
 
-  # -------------------------------------------------------------------------
-  # Time-varying: compute per-FY etr_increase if available
-  # -------------------------------------------------------------------------
-
-  etr_increase_by_date <- if (!is.null(etr_results)) etr_results$etr_increase_by_date else NULL
-  use_fy_etr <- !is.null(etr_increase_by_date)
-
-  if (use_fy_etr) {
-    fiscal_years <- cbo$fiscal_year
-    fy_etr_vec <- compute_fy_weighted_etr_increase(etr_increase_by_date, fiscal_years)
-    # Guard the named-vector lookup used below in total_etr: a missing FY name
-    # (or an NA value) would otherwise propagate silently into net_revenue and
-    # the 10-year sum.
-    fy_lookup <- fy_etr_vec[as.character(fiscal_years)]
-    if (anyNA(fy_lookup)) {
-      bad_fy <- fiscal_years[is.na(fy_lookup)]
-      stop('No per-FY etr_increase for fiscal year(s): ',
-           paste(bad_fy, collapse = ', '),
-           ' (compute_fy_weighted_etr_increase returned NA/missing)')
-    }
-    message('  Time-varying: using per-FY day-weighted etr_increase')
-    for (fy in fiscal_years) {
-      val <- fy_etr_vec[as.character(fy)]
-      message(sprintf('    FY%d: etr_increase=%.4f (%.2f%%)', fy, val, val * 100))
-    }
-  }
-
-  # -------------------------------------------------------------------------
-  # Build revenue calculation table
-  # -------------------------------------------------------------------------
-
-  # Create phase-in lookup (all years must be specified)
-  get_phase_in <- function(fy) {
-    # Handle both integer and character keys in the YAML
-    key <- as.character(fy)
-    if (!key %in% names(phase_in_schedule)) {
-      stop('Missing phase_in value for fiscal year: ', fy)
-    }
-    return(phase_in_schedule[[key]])
-  }
-
-  # Calculate revenue for each fiscal year
-  # Note: baseline_etr comes from CBO data (duties/imports) and varies by year
   refund_fy26 <- refund_2026 * 0.75
   refund_fy27 <- refund_2026 * 0.25
 
   revenue_data <- cbo %>%
+    left_join(fy_rates, by = 'fiscal_year') %>%
     mutate(
-      # Get phase-in for each year
-      phase_in = sapply(fiscal_year, get_phase_in),
-
-      # Step 1: Calculate new imports with GTAP import response
-      new_imports = imports_bn * (1 - phase_in) +
-                    phase_in * imports_bn * (1 + qmwreg / 100),
-
-      # Step 2: Calculate total ETR (CBO baseline + policy increase)
-      # baseline_etr already exists in CBO data (duties/imports)
-      # Time-varying: use per-FY etr_increase; static: scalar etr_increase.
-      # The policy increase is scaled by the alpha->GTAP transition factor
-      # (1 + phi(FY)*(R_alpha-1)); R_alpha=1 leaves it unchanged.
-      total_etr = baseline_etr + (if (use_fy_etr) {
-        fy_etr_vec[as.character(fiscal_year)]
-      } else {
-        etr_increase
-      }) * (1 + alpha_phi(fiscal_year) * (R_alpha - 1)),
+      new_imports = imports_bn * imports_ratio,
+      total_etr = baseline_etr + policy_rate,
 
       # Step 3: Calculate new duties
       new_duties = new_imports * total_etr,
@@ -252,7 +153,8 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
         TRUE ~ 0
       ),
       net_revenue = gross_revenue + compliance_adj + income_adj + refund_adj
-    )
+    ) %>%
+    select(-imports_ratio, -policy_rate)
 
   # -------------------------------------------------------------------------
   # Calculate 10-year totals (FY2026-FY2035)
@@ -285,8 +187,7 @@ calculate_revenue <- function(inputs, etr_results = NULL) {
       income_effect = income_effect,
       qmwreg = qmwreg,
       etr_increase = etr_increase,
-      R_alpha = R_alpha,
-      alpha_anchor_fy = anchor_fy
+      long_run_transition = timing
     )
   )
 

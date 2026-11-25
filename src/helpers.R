@@ -65,37 +65,25 @@ assert_has_columns <- function(data, required_cols, context = NULL) {
 # MACRO HELPERS
 # =============================================================================
 
-#' Blend USMM quarterly GDP deviations into a GTAP long-run target
-#'
-#' Applies the shared linear blend used across macro reporting:
-#' 2025Q1 starts at the raw USMM deviation, then over 16 quarters the deviation
-#' transitions linearly to the GTAP long-run GDP effect. Quarters before 2025Q1
-#' are left unblended.
-#'
-#' @param year Integer vector of calendar years
-#' @param quarter Integer vector of calendar quarters (1-4)
-#' @param raw_deviation Numeric vector of raw USMM GDP deviations in percent
-#' @param gtap_long_run_gdp Scalar GTAP long-run GDP effect in percent; NULL
-#'   returns raw_deviation unchanged
-#' @param blend_start_year Start year for the blend window (default: 2025)
-#' @param blend_start_quarter Start quarter for the blend window (default: 1)
-#' @param blend_horizon_quarters Number of quarters until pure GTAP LR (default: 16)
-#' @return Numeric vector of blended GDP deviations in percent
-blend_usmm_gdp_deviation <- function(year, quarter, raw_deviation,
-                                     gtap_long_run_gdp = NULL,
-                                     blend_start_year = 2025L,
-                                     blend_start_quarter = 1L,
-                                     blend_horizon_quarters = 16L) {
-  if (is.null(gtap_long_run_gdp)) {
-    return(raw_deviation)
+# The same clock governs GDP, tariff collections and the response of imports.
+long_run_weight <- function(year, quarter, timing = NULL) {
+  if (is.null(timing)) {
+    timing <- yaml::read_yaml('config/global_assumptions.yaml')$long_run_transition
   }
+  required <- c('start_year', 'start_quarter', 'quarters')
+  if (!all(required %in% names(timing)) ||
+      !all(vapply(timing[required], function(x) {
+        is.numeric(x) && length(x) == 1L && is.finite(x) && x == floor(x)
+      }, logical(1))) || !timing$start_quarter %in% 1:4 || timing$quarters < 1) {
+    stop('Invalid long_run_transition in global assumptions')
+  }
+  elapsed <- 4 * (year - timing$start_year) + quarter - timing$start_quarter
+  pmin(1, pmax(0, elapsed / timing$quarters))
+}
 
-  q_index <- (year - blend_start_year) * 4 + (quarter - blend_start_quarter)
-  blend_weight <- pmax(0, 1 - q_index / blend_horizon_quarters)
-
-  ifelse(
-    q_index < 0,
-    raw_deviation,
-    blend_weight * raw_deviation + (1 - blend_weight) * gtap_long_run_gdp
-  )
+blend_usmm_gdp_deviation <- function(year, quarter, raw_deviation,
+                                     gtap_long_run_gdp = NULL, timing = NULL) {
+  if (is.null(gtap_long_run_gdp)) return(raw_deviation)
+  weight <- long_run_weight(year, quarter, timing)
+  (1 - weight) * raw_deviation + weight * gtap_long_run_gdp
 }

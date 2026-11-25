@@ -58,21 +58,10 @@ compliance_effect: 0.10
 income_effect: 0.23
 
 # -----------------------------------------------------------------------------
-# Phase-in Schedule
+# Timing of the move from short-run estimates to GTAP
 # -----------------------------------------------------------------------------
-
-# Fraction of tariff effects phased in by fiscal year
-# All fiscal years used by the model must be listed
-phase_in:
-  2025: 0.33
-  2026: 0.66
-  2027: 1.00
-  2028: 1.00
-  2029: 1.00
-  2030: 1.00
-  2031: 1.00
-  2032: 1.00
-  2033: 1.00
-  2034: 1.00
-  2035: 1.00
-
+# GTAP has zero weight in the start quarter and full weight this many quarters later.
+long_run_transition:
+  start_year: 2027
+  start_quarter: 2
+  quarters: 12
