@@ -14,20 +14,18 @@
 #
 # Validation (read_dashboard_config): ids unique, exactly one default: true.
 
+# Section 301 excess-capacity release: current law plus the proposal as
+# proposed, both on one tracker vintage (2026-11-25-12) and solved in GTAP at
+# 2027-04-01. The no-deals and all-deals variants were also run under vintage
+# 202611251330 (their config/scenarios folders remain) but are not published on
+# the dashboard.
+# Labels surface in the dashboard's scenario pickers, legends and table headers.
 scenarios:
-  - id: tracker_actual_2026-11-09-09
-    label: 'Current law (Section 122 expires)'
+  - id: tracker_actual_2026-11-25-12
+    label: 'Current law'
     short_label: 'Current law'
     default: true
-  - id: tracker_no_s338_2026-11-09-09
-    label: 'Excluding the Section 338 tariff actions'
-    short_label: 'Ex Section 338'
-    default: false
-  - id: tracker_no_s301_2026-11-09-09
-    label: 'Excluding the Section 301 tariff actions'
-    short_label: 'Ex Section 301'
-    default: false
-  - id: tracker_no_s232_2026-11-09-09
-    label: 'Excluding the Section 232 tariff actions'
-    short_label: 'Ex Section 232'
+  - id: tracker_ec301_proposed_2026-11-25-12
+    label: 'Excess-capacity Section 301 tariffs, as proposed'
+    short_label: 'Excess capacity: as proposed'
     default: false

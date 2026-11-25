@@ -76,7 +76,7 @@ schedule.**
 |---|---|
 | **Conventional revenue** | **Full daily path**, day-weighted per fiscal year. (The GTAP behavioral *level* — the substitution/quantity response — comes from the single `gtap_reference_date` solve, then is scaled across years by the time path.) |
 | **Macro** (GDP, unemployment, PCE, payroll, fed funds) | **Full path**, sampled at `usmm_dates`, decomposed into permanent + temporary + refund impulses. |
-| **Dynamic revenue** | Blends the macro (time-path) and GTAP (reference-date) responses over 16 quarters. |
+| **Dynamic revenue** | Uses the short-run macro path through 2027 Q1, then blends linearly to the GTAP (reference-date) long run over 12 quarters, reaching it in 2030 Q2 (`long_run_transition` in `global_assumptions.yaml`). |
 | **Prices** (pre-sub, PE post-sub, GE) | **Single `gtap_reference_date` snapshot** — long-run, as-if-permanent. |
 | **Sector output** | **Single `gtap_reference_date` snapshot.** |
 | **Foreign GDP** | **Single `gtap_reference_date` snapshot** (long-run GE). |

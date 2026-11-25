@@ -163,7 +163,9 @@ calculate_etr_increase <- function(post_sub_etr, baseline_etr) {
 #'
 #' @return Tibble with date and weighted_etr columns
 calculate_per_date_weighted_etrs <- function(etr_matrix_by_date, etr_dates,
-                                              viws_baseline, import_baseline_dollars) {
+                                              viws_baseline, import_baseline_dollars,
+                                              viws = viws_baseline, alpha_within = 1,
+                                              alpha_between = 1, passthrough = character()) {
 
   results <- tibble(date = as.Date(character()), weighted_etr = numeric())
 
@@ -173,10 +175,9 @@ calculate_per_date_weighted_etrs <- function(etr_matrix_by_date, etr_dates,
       filter(date == d_date) %>%
       select(-date)
 
-    # Use baseline VIWS as both pre and post (pre-substitution weighting)
     country_etrs <- calculate_country_etrs(
-      etr_slice, viws_baseline,
-      viws_baseline, import_baseline_dollars
+      etr_slice, viws, viws_baseline, import_baseline_dollars,
+      alpha_within, alpha_between, passthrough
     )
     weighted <- calculate_weighted_etr(country_etrs)
 
@@ -475,6 +476,32 @@ calculate_etr <- function(inputs) {
   # (b) eta'-adjusted increase: the USMM impulse when noncompliance is active
   b_etr_increase <- b_pre_sub_etr / 100
 
+  # Apply each date's rates to a common import basket. For calibrated runs
+  # the historical trade mix allows for substitution using the fitted alphas.
+  # Scale the goods rate to the all-import denominator used for CBO revenue.
+  goods <- rownames(import_baseline_dollars)
+  goods_share <- sum(viws_baseline[goods, COUNTRY_CONFIG$viws]) / mtax$imports_baseline
+  short_rate <- b_etr_increase
+  short_schedule <- b_etr_increase_by_date
+  if (isTRUE(inputs$alpha_active)) {
+    historical_weights <- list(
+      viws = inputs$historical_viws, viws_baseline = viws_baseline,
+      import_baseline_dollars = import_baseline_dollars, alpha_within = inputs$alpha_within,
+      alpha_between = inputs$alpha_between, passthrough = inputs$alpha_passthrough
+    )
+    short_country <- do.call(calculate_country_etrs,
+                             c(list(etr_matrix = inputs$etr_matrix_b), historical_weights))
+    short_rate <- calculate_weighted_etr(short_country) / 100
+    if (isTRUE(inputs$is_time_varying)) {
+      short_schedule <- do.call(calculate_per_date_weighted_etrs, c(list(
+        etr_matrix_by_date = inputs$etr_matrix_by_date_b, etr_dates = inputs$etr_dates
+      ), historical_weights)) %>% transmute(date, etr_increase = weighted_etr / 100)
+    }
+  }
+  if (!is.null(short_schedule)) {
+    short_schedule <- mutate(short_schedule, etr_increase = etr_increase * goods_share)
+  }
+
   results <- list(
     # Main ETR results (as percentages) - goods-weighted for display.
     # Pre-sub is reported eta'-adjusted (the b_* values): noncompliance applies to
@@ -499,6 +526,8 @@ calculate_etr <- function(inputs) {
     # R_alpha = (alpha-corrected post-sub ETR)/(full-GTAP post-sub ETR); 1 when
     # alpha is inactive (revenue then bit-for-bit unchanged). post_sub_etr_alpha
     # is a diagnostic; the published post-sub ETR stays full-GTAP.
+    short_run_etr_increase = short_rate * goods_share,
+    short_run_etr_by_date = short_schedule,
     R_alpha = R_alpha,
     post_sub_etr_alpha = post_sub_etr_alpha,
     # Per-date etr_increase for revenue (NULL for static scenarios)

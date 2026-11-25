@@ -57,8 +57,6 @@ calculate_macro <- function(inputs) {
   # -------------------------------------------------------------------------
   # GDP Q4-Q4 growth differential using blended USMM→GTAP path
   # -------------------------------------------------------------------------
-  # The blended path linearly transitions from USMM (weight=1 at 2025Q1)
-  # to GTAP long-run (weight=0 at 2029Q1) over 16 quarters.
   # blended_gdp_tariff = gdp_baseline * (1 + blended_deviation / 100)
   # where blended_deviation = w * usmm_dev + (1-w) * gtap_lr_gdp
 
@@ -77,7 +75,8 @@ calculate_macro <- function(inputs) {
         year = year,
         quarter = quarter,
         raw_deviation = raw_deviation,
-        gtap_long_run_gdp = gtap_lr_gdp
+        gtap_long_run_gdp = gtap_lr_gdp,
+        timing = inputs$assumptions$long_run_transition
       ),
       gdp_blended = gdp_baseline * (1 + blended_deviation / 100)
     )

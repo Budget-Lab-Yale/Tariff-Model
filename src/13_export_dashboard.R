@@ -33,7 +33,6 @@ suppressPackageStartupMessages({
 })
 
 # interfaces.R  -> read_interface_config(), tariff_model_version(), git_commit()
-# helpers.R     -> blend_usmm_gdp_deviation()
 source('src/interfaces.R')
 source('src/helpers.R')
 
@@ -104,12 +103,28 @@ AUTHORITY_SERIES <- tribble(
   'etr_s122',        'section_122',
   'etr_s338',        'section_338',
   'etr_section_201', 'section_201',
-  'etr_other',       'other'
+  'etr_other',       'other',
+  'etr_s301ec',      'section_301'
 )
 
-# Thirteen curated summary-statistics metrics. `source` = 'key' (key_results.csv,
+# Columns in AUTHORITY_SERIES that a tracker series may omit. etr_s301ec (the
+# proposed Section 301 excess-capacity tariffs) appears only in series whose
+# rate panel carries rate_s301ec; where absent it contributes zero. It is summed
+# into section_301 on the assumption that the tracker reports it OUTSIDE etr_301,
+# like etr_s301br. If a tracker build instead folds it into etr_301, summing it
+# counts it twice; the reconciliation against daily_overall.csv in
+# build_daily_rates() then stops the export.
+AUTHORITY_OPTIONAL_COLS <- c('etr_s301ec')
+
+# Largest allowed gap (percentage points) between the sum of the stacked
+# authority series and the overall weighted rate on any date.
+AUTHORITY_RECONCILE_TOL_PP <- 1e-6
+
+# Ten curated summary-statistics metrics. `source` = 'key' (key_results.csv,
 # looked up by `key`) or 'sector' (sector_effects.csv, overall_gdp). Values are
-# already in the stated unit; nothing is rescaled.
+# already in the stated unit; nothing is rescaled. The three dated short-run rows
+# (real GDP growth 2025 Q4/Q4 and 2026 Q4/Q4, unemployment rate 2026 Q4) were
+# removed for the November 2026 release; key_results.csv still reports them.
 SUMMARY_METRICS <- tribble(
   ~metric,                ~category,                 ~series,                          ~unit,    ~source, ~key,
   'etr_statutory_level',  'Tariff rate',             'Average statutory rate',         'pct',    'key',   'statutory_all_in_etr',
@@ -121,10 +136,7 @@ SUMMARY_METRICS <- tribble(
   'price_postsub',        'Consumer price increase', 'Post-substitution', 'pct',    'key',   'pe_postsub_price_increase',
   'hh_cost_presub',       'Household cost',          'Pre-substitution',  'usd',    'key',   'pre_sub_per_hh_cost',
   'hh_cost_postsub',      'Household cost',          'Post-substitution', 'usd',    'key',   'post_sub_per_hh_cost',
-  'gdp_2025_q4q4',        'Real GDP',                '2025 Q4/Q4',        'pp',     'key',   'gdp_2025_q4q4',
-  'gdp_2026_q4q4',        'Real GDP',                '2026 Q4/Q4',        'pp',     'key',   'gdp_2026_q4q4',
-  'gdp_long_run',         'Real GDP',                'Long-run',          'pct',    'sector','overall_gdp',
-  'unemployment_2026_q4', 'Unemployment rate',       '2026 Q4',           'pp',     'key',   'urate_2026_q4'
+  'gdp_long_run',         'Real GDP',                'Long-run',          'pct',    'sector','overall_gdp'
 )
 
 # Census cty_code partner label (country_partner_mapping) -> partner group code
@@ -370,7 +382,7 @@ build_summary_stats <- function(outputs) {
   if (length(missing) > 0) {
     stop('summary-statistics: missing metric(s): ', paste(missing, collapse = ', '))
   }
-  if (nrow(res) != 13L) stop('summary-statistics: expected 13 metrics, got ', nrow(res))
+  if (nrow(res) != 10L) stop('summary-statistics: expected 10 metrics, got ', nrow(res))
 
   res %>% transmute(category, series, value, unit, metric)
 }
@@ -456,31 +468,6 @@ build_distribution <- function(outputs, concept) {
 }
 
 
-build_real_gdp_path <- function(outputs) {
-  macro <- outputs$macro_quarterly
-  gtap_lr_gdp <- outputs$foreign_gdp %>% filter(region == 'usa') %>% pull(gdp_change_pct)
-  if (length(gtap_lr_gdp) != 1L) stop('real-gdp: could not find foreign_gdp usa row')
-
-  res <- macro %>%
-    filter(year >= 2025) %>%
-    arrange(year, quarter) %>%
-    mutate(
-      time = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),
-      raw_deviation = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
-      value = blend_usmm_gdp_deviation(
-        year = year, quarter = quarter,
-        raw_deviation = raw_deviation, gtap_long_run_gdp = gtap_lr_gdp
-      ),
-      series = 'gdp_level'
-    )
-
-  n_q <- nrow(res)
-  if (n_q != 44L) stop('real-gdp: expected 44 quarters (2025Q1-2035Q4), got ', n_q)
-
-  res %>% transmute(time, series, value)
-}
-
-
 build_gdp_by_category <- function(outputs) {
   sectors <- outputs$sector_effects %>%
     left_join(SECTOR_NAMES, by = 'sector')
@@ -537,14 +524,15 @@ build_revenue_by_year <- function(outputs) {
 }
 
 
-# Registry of the 8 scenario figures: slug -> (builder, kind).
+# Registry of the 7 scenario figures: slug -> (builder, kind). The quarterly
+# real-GDP path chart (slug real-gdp) was removed for the November 2026 release;
+# the long-run GDP effect stays in summary-statistics and gdp-by-category.
 SCENARIO_FIGURES <- list(
   list(slug = 'summary-statistics',      kind = 'categorical', build = function(o) build_summary_stats(o)),
   list(slug = 'etr-by-country',          kind = 'categorical', build = function(o) build_etr_by_country(o)),
   list(slug = 'consumer-prices',         kind = 'categorical', build = function(o) build_consumer_prices(o)),
   list(slug = 'distribution-pct-income', kind = 'categorical', build = function(o) build_distribution(o, 'pct')),
   list(slug = 'distribution-dollars',    kind = 'categorical', build = function(o) build_distribution(o, 'dollars')),
-  list(slug = 'real-gdp',                kind = 'line',        build = function(o) build_real_gdp_path(o)),
   list(slug = 'gdp-by-category',         kind = 'categorical', build = function(o) build_gdp_by_category(o)),
   list(slug = 'revenue-by-year',         kind = 'categorical', build = function(o) build_revenue_by_year(o))
 )
@@ -635,10 +623,17 @@ build_daily_rates <- function(daily_dir, which, as_of) {
     path <- file.path(daily_dir, 'daily_by_authority.csv')
     if (!file.exists(path)) stop('tracker daily file not found: ', path)
     raw <- read_csv(path, show_col_types = FALSE)
+    for (oc in setdiff(AUTHORITY_OPTIONAL_COLS, names(raw))) raw[[oc]] <- 0
     missing <- setdiff(AUTHORITY_SERIES$col, names(raw))
     if (length(missing) > 0) stop('daily_by_authority missing etr columns: ',
                                   paste(missing, collapse = ', '))
-    raw %>%
+    # A tracker authority column with no dashboard series would otherwise drop
+    # out of the stacked chart without notice.
+    unknown <- setdiff(grep('^etr_', names(raw), value = TRUE), AUTHORITY_SERIES$col)
+    if (length(unknown) > 0) stop('daily_by_authority has etr columns with no dashboard ',
+                                  'series (add them to AUTHORITY_SERIES): ',
+                                  paste(unknown, collapse = ', '))
+    out <- raw %>%
       transmute(time = as.Date(date), projected = flag_projected(time, as_of),
                 across(all_of(AUTHORITY_SERIES$col), ~ .x * 100)) %>%
       pivot_longer(all_of(AUTHORITY_SERIES$col), names_to = 'col', values_to = 'value') %>%
@@ -646,6 +641,28 @@ build_daily_rates <- function(daily_dir, which, as_of) {
       group_by(time, series, projected) %>%
       summarise(value = sum(value), .groups = 'drop') %>%
       select(time, series, value, projected)
+
+    # The stacked series must add up to the overall rate on every date. This
+    # catches an authority column counted twice (e.g. a tracker build that folds
+    # etr_s301ec into etr_301) or one the mapping misses.
+    overall_path <- file.path(daily_dir, 'daily_overall.csv')
+    if (!file.exists(overall_path)) stop('tracker daily file not found: ', overall_path)
+    recon <- out %>%
+      group_by(time) %>%
+      summarise(stacked = sum(value), .groups = 'drop') %>%
+      left_join(read_csv(overall_path, show_col_types = FALSE) %>%
+                  transmute(time = as.Date(date), overall = weighted_etr * 100),
+                by = 'time')
+    if (any(is.na(recon$overall))) stop('daily_by_authority dates missing from ', overall_path)
+    gap <- max(abs(recon$stacked - recon$overall))
+    if (gap > AUTHORITY_RECONCILE_TOL_PP) {
+      worst <- recon[which.max(abs(recon$stacked - recon$overall)), ]
+      stop(sprintf(paste0('daily-rate-by-authority: stacked series sum to %.4f%% but the ',
+                          'overall rate is %.4f%% on %s (%s). Is an authority column counted ',
+                          'twice, e.g. etr_s301ec already inside etr_301?'),
+                   worst$stacked, worst$overall, worst$time, daily_dir))
+    }
+    out
 
   } else if (which == 'by_category') {
     path <- file.path(daily_dir, 'daily_by_category.csv')
@@ -903,7 +920,8 @@ export_dashboard <- function(interface_vintage, write_local = FALSE,
 
   figure_inventory <- list(
     statutory = c('daily-rate-overall', 'daily-rate-by-authority',
-                  'daily-rate-by-country', 'daily-rate-by-category'),
+                  'daily-rate-by-country', 'daily-rate-by-category',
+                  'daily-rate-by-hs'),
     default   = map_chr(SCENARIO_FIGURES, 'slug'),
     alternative = map_chr(SCENARIO_FIGURES, 'slug')
   )

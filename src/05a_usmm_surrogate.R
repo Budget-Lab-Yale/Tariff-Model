@@ -227,229 +227,87 @@ date_to_quarter_index <- function(d) {
 }
 
 
-#' Decompose a tariff scenario into permanent, temporary, and refund components
-#'
-#' Given a time-varying ETR schedule, decomposes it into:
-#' - Permanent component: the final (last-date) ETR level
-#' - Intermediate components: each step change that later reverses
-#' - Refund component: scaled by actual/calibration ratio
-#'
-#' @param etr_increase_by_date Tibble with date and etr_increase columns (or NULL for static)
-#' @param etr_increase Scalar ETR increase (used for static scenarios)
-#' @param refund_2026 Refund amount in billions (default: 0)
-#' @param temp_component_dates Flat list of two dates c(onset, offset) defining a single
-#'   temporary window that uses the temp IRF (from model_params$temp_component_dates).
-#'   Only one onset/offset pair is supported. NULL means all components use shifted-perm.
-#' @return List with perm_pp, components tibble, and refund_scalar
-decompose_shocks <- function(etr_increase_by_date = NULL,
-                              etr_increase = NULL,
-                              refund_2026 = 0,
-                              temp_component_dates = NULL) {
+# Each permanent rate change enters in its own quarter. The undated scenario
+# retains the onset of the original permanent-response experiment, 2025 Q2.
+decompose_shocks <- function(etr_increase_by_date = NULL, etr_increase = NULL,
+                             refund_2026 = 0, temp_component_dates = NULL) {
+  schedule <- etr_increase_by_date
+  if (is.null(schedule)) {
+    if (is.null(etr_increase)) stop('A dated rate schedule or a static rate is required')
+    schedule <- tibble(date = as.Date('2025-04-01'), etr_increase = etr_increase)
+  }
+  schedule <- arrange(schedule, date)
+  if (!nrow(schedule) || anyNA(schedule$date) || anyDuplicated(schedule$date) ||
+      any(!is.finite(schedule$etr_increase))) stop('Invalid USMM rate schedule')
 
-  refund_scalar <- refund_2026 / REFUND_CALIBRATION_BN
+  steps <- function(dates, level) {
+    tibble(onset_q = date_to_quarter_index(dates),
+           delta_pp = level - lag(level, default = 0)) %>%
+      filter(abs(delta_pp) > 1e-10)
+  }
+  all_perm <- steps(schedule$date, 100 * schedule$etr_increase)
+  permanent <- all_perm
+  temporary <- all_perm[0, ]
 
-  # Static scenario: single permanent shock, no components
-
-  if (is.null(etr_increase_by_date)) {
-    if (is.null(etr_increase)) {
-      stop('Either etr_increase_by_date or etr_increase must be provided')
+  if (!is.null(temp_component_dates) && !is.null(etr_increase_by_date)) {
+    window <- as.Date(unlist(temp_component_dates, use.names = FALSE))
+    if (length(window) != 2L || anyNA(window) || window[2] <= window[1]) {
+      stop('temp_component_dates requires an onset followed by an end date')
     }
-    return(list(
-      perm_pp = etr_increase * 100,  # Convert to percentage points
-      components = tibble(
-        onset_date = as.Date(character(0)),
-        offset_date = as.Date(character(0)),
-        onset_q = integer(0),
-        offset_q = integer(0),
-        delta_pp = numeric(0),
-        use_temp_irf = logical(0)
-      ),
-      refund_scalar = refund_scalar
-    ))
+    dates <- sort(unique(c(schedule$date, window)))
+    level <- c(0, 100 * schedule$etr_increase)[1L + findInterval(dates, schedule$date)]
+    inside <- dates >= window[1] & dates < window[2]
+    prior <- c(0, level[dates < window[1]])
+    permanent_level <- level
+    permanent_level[inside] <- tail(prior, 1)
+    permanent <- steps(dates, permanent_level)
+
+    # The temporary experiment already includes the reversal. At onset apply
+    # the announced window's current size. Later revisions affect only the
+    # remaining fraction of the window, starting when the revision takes effect.
+    # This retains duration weighting without using future rates at onset.
+    revisions <- (level - lag(level, default = 0))[inside]
+    remaining <- as.numeric(window[2] - dates[inside]) / as.numeric(diff(window))
+    temporary <- tibble(onset_q = date_to_quarter_index(dates[inside]),
+                        delta_pp = revisions * remaining) %>%
+      filter(abs(delta_pp) > 1e-10)
   }
 
-  # Time-varying scenario: N-date decomposition
-  schedule <- etr_increase_by_date %>%
-    arrange(date) %>%
-    mutate(etr_pp = etr_increase * 100)
-
-  n_dates <- nrow(schedule)
-  perm_pp <- schedule$etr_pp[n_dates]  # Last date = permanent level
-
-  # Parse temp_component_dates into a single onset/offset pair for matching.
-  # Only one pair is supported; temp_component_dates must be a flat list of
-  # exactly two date strings: [onset, offset].
-  temp_pairs <- NULL
-  if (!is.null(temp_component_dates)) {
-    stopifnot(length(temp_component_dates) == 2)
-    temp_pairs <- tibble(
-      onset = as.Date(temp_component_dates[[1]]),
-      offset = as.Date(temp_component_dates[[2]])
-    )
-  }
-
-  # Build components representing the excess above the permanent level at each
-  # intermediate date. Each component captures the CUMULATIVE excess (date[i]
-  # minus perm), active from date[i] to date[i+1]. This ensures the components
-  # telescope correctly: at any date, perm + active component = scheduled ETR.
-  #
-  # For schedule [d1, d2, d3] with perm = d3:
-  #   comp1: delta = d1-perm, onset=date1, offset=date2
-  #   comp2: delta = d2-perm, onset=date2, offset=date3
-  # At date1: d3 + (d1-d3) = d1  ✓
-  # At date2: d3 + (d2-d3) = d2  ✓
-  # At date3: d3            = d3  ✓
-
-  components <- tibble(
-    onset_date = as.Date(character(0)),
-    offset_date = as.Date(character(0)),
-    onset_q = integer(0),
-    offset_q = integer(0),
-    delta_pp = numeric(0),
-    use_temp_irf = logical(0)
-  )
-
-  if (n_dates > 1) {
-    for (i in 1:(n_dates - 1)) {
-      delta <- schedule$etr_pp[i] - perm_pp
-      if (abs(delta) < 1e-10) next  # Skip zero-delta components
-
-      onset <- schedule$date[i]
-      offset <- schedule$date[i + 1]
-
-      # Check if this component matches temp_component_dates
-      use_temp <- FALSE
-      if (!is.null(temp_pairs)) {
-        use_temp <- any(onset >= temp_pairs$onset & offset <= temp_pairs$offset)
-      }
-
-      components <- bind_rows(components, tibble(
-        onset_date = onset,
-        offset_date = offset,
-        onset_q = date_to_quarter_index(onset),
-        offset_q = date_to_quarter_index(offset),
-        delta_pp = delta,
-        use_temp_irf = use_temp
-      ))
-    }
-  }
-
-  return(list(
-    perm_pp = perm_pp,
-    components = components,
-    refund_scalar = refund_scalar
-  ))
+  list(permanent = permanent, temporary = temporary, all_perm = all_perm,
+       refund_scalar = refund_2026 / REFUND_CALIBRATION_BN)
 }
 
 
-# =============================================================================
-# RESPONSE CONSTRUCTION
-# =============================================================================
-
-#' Shift an IRF by a number of quarters (zero-pad the front)
-#'
-#' @param irf_vals Numeric vector of IRF values
-#' @param shift Number of quarters to shift forward (positive = delay)
-#' @return Shifted numeric vector (same length as input)
+# Moving a response earlier can expose quarters beyond the available series.
+# Hold its last observed response in those quarters.
 shift_irf <- function(irf_vals, shift) {
-  n <- length(irf_vals)
-  if (shift <= 0) return(irf_vals)
-  if (shift >= n) return(rep(0, n))
-  c(rep(0, shift), irf_vals[1:(n - shift)])
+  index <- seq_along(irf_vals) - shift
+  ifelse(index < 1L, 0, irf_vals[pmin(length(irf_vals), pmax(1L, index))])
 }
 
 
-#' Construct composite USMM response from decomposed shocks
-#'
-#' Builds the full macro response by summing:
-#' 1. Permanent component: scaled perm IRF (re-centered on USMM_SHOCK_QUARTER)
-#' 2. Intermediate components:
-#'    - non-temp segments: shifted-perm difference (USMM_SHOCK_QUARTER onset)
-#'    - the announced-temporary window (base case only): a single collapsed temp
-#'      impulse, duration-weighted over its segments, re-centered on
-#'      USMM_TEMP_SHOCK_QUARTER (the temp family's native onset)
-#' 3. Refund component: scaled refund IRF
-#'
-#' @param shocks Decomposition from decompose_shocks()
-#' @param irfs IRF data from load_usmm_irfs()
-#' @param use_temp_irf If FALSE, ALL components use shifted-perm (for all-perm variant)
-#' @return Tibble with year, quarter, and diff columns for each USMM variable
+# Interpolate each change separately, then add the shifted responses. This
+# assumes the effects of separate tariff decisions add together. The size of
+# each individual response still follows the original 2/5/10-point brackets.
 construct_usmm_response <- function(shocks, irfs, use_temp_irf = TRUE) {
+  result <- select(irfs$perm[['2']], year, quarter)
+  for (var in USMM_VARS) result[[var]] <- 0
 
-  n_quarters <- nrow(irfs$perm$`2`)
-
-  # Start with year/quarter from any IRF
-  result <- irfs$perm$`2` %>%
-    select(year, quarter)
-
-  for (var in USMM_VARS) {
-    result[[var]] <- 0
-  }
-
-  # 1. Permanent component
-  if (abs(shocks$perm_pp) > 1e-10) {
-    perm_irf <- interpolate_irf(irfs$perm, shocks$perm_pp, PERM_SIZES)
-    for (var in USMM_VARS) {
-      result[[var]] <- result[[var]] + perm_irf[[var]]
-    }
-  }
-
-  # 2. Intermediate components
-  if (nrow(shocks$components) > 0) {
-    comps <- shocks$components
-
-    # In the base case, the announced-temporary window is modeled with the temp
-    # IRF (expectations channel). decompose_shocks may split that single window
-    # into several schedule segments (e.g. a mid-window step); those segments are
-    # collapsed into ONE temp impulse so the window's temporary response is applied
-    # once, not once per segment (summing un-truncated temp IRFs would double-count
-    # the rise-and-revert dynamics each already embeds). The impulse is sized to the
-    # duration-weighted-average excess over the window and placed at the window
-    # onset. With a single temp segment this reduces exactly to that segment.
-    #
-    # The all-perm variant (use_temp_irf = FALSE) routes every component through
-    # shifted-perm telescoping, which reproduces the stepped path exactly and is
-    # left unchanged.
-    is_temp <- isTRUE(use_temp_irf) & comps$use_temp_irf
-
-    # Non-temp components (and all components in the all-perm variant): shifted-perm
-    #   contribution = perm_irf(t - onset) - perm_irf(t - offset), re-centered on the
-    #   perm family's native onset (USMM_SHOCK_QUARTER).
-    for (i in which(!is_temp)) {
-      comp <- comps[i, ]
-      onset_shift <- comp$onset_q - USMM_SHOCK_QUARTER
-      offset_shift <- comp$offset_q - USMM_SHOCK_QUARTER
-      perm_irf <- interpolate_irf(irfs$perm, comp$delta_pp, PERM_SIZES)
+  add_steps <- function(result, steps, family, sizes, native_onset) {
+    for (i in seq_len(nrow(steps))) {
+      response <- interpolate_irf(family, steps$delta_pp[i], sizes)
       for (var in USMM_VARS) {
-        on_vals <- shift_irf(perm_irf[[var]], onset_shift)
-        off_vals <- shift_irf(perm_irf[[var]], offset_shift)
-        result[[var]] <- result[[var]] + (on_vals - off_vals)
+        values <- response[[var]]
+        values[seq_len(native_onset - 1L)] <- 0
+        result[[var]] <- result[[var]] + shift_irf(values, steps$onset_q[i] - native_onset)
       }
     }
-
-    # Temp window (base case only): a single collapsed impulse via the temp IRF,
-    # re-centered on the temp family's native onset (USMM_TEMP_SHOCK_QUARTER).
-    if (any(is_temp)) {
-      temp_comps <- comps[is_temp, ]
-      durations <- as.numeric(temp_comps$offset_date - temp_comps$onset_date)
-      if (any(durations <= 0)) {
-        stop('USMM temp window has a non-positive-duration component')
-      }
-      wavg_delta <- sum(temp_comps$delta_pp * durations) / sum(durations)
-      window_onset_q <- min(temp_comps$onset_q)
-      onset_shift <- window_onset_q - USMM_TEMP_SHOCK_QUARTER
-
-      if (nrow(temp_comps) > 1) {
-        message(sprintf(
-          '    Collapsed %d temp segments into one temp impulse: %+.2f pp (duration-weighted) at %s',
-          nrow(temp_comps), wavg_delta, format(min(temp_comps$onset_date))))
-      }
-
-      temp_irf <- interpolate_irf(irfs$temp, wavg_delta, TEMP_SIZES)
-      for (var in USMM_VARS) {
-        result[[var]] <- result[[var]] + shift_irf(temp_irf[[var]], onset_shift)
-      }
-    }
+    result
+  }
+  permanent <- if (use_temp_irf) shocks$permanent else shocks$all_perm
+  result <- add_steps(result, permanent, irfs$perm, PERM_SIZES, USMM_SHOCK_QUARTER)
+  if (use_temp_irf) {
+    result <- add_steps(result, shocks$temporary, irfs$temp, TEMP_SIZES, USMM_TEMP_SHOCK_QUARTER)
   }
 
   # 3. Refund component
@@ -573,6 +431,14 @@ run_usmm_surrogate <- function(etr_results, inputs) {
            paste(head(sort(available), 10), collapse = ', '),
            if (length(available) > 10) ', ...' else '')
     }
+    # Each retained date now enters at its own quarter, so tariffs in force
+    # before the first retained date would be dropped from the response.
+    first_tariff <- min(etr_increase_by_date$date[abs(etr_increase_by_date$etr_increase) > 1e-10])
+    if (min(usmm_dates_parsed) > first_tariff) {
+      stop('usmm_dates starts at ', min(usmm_dates_parsed), ' but tariffs are in force from ',
+           first_tariff, '; the earlier tariffs would have no macro response. ',
+           'Add an earlier date to usmm_dates or remove usmm_dates.')
+    }
     message(sprintf('  Filtering ETR schedule to %d usmm_dates (from %d total)',
                     length(usmm_dates_parsed), nrow(etr_increase_by_date)))
     etr_increase_by_date <- etr_increase_by_date %>%
@@ -591,16 +457,8 @@ run_usmm_surrogate <- function(etr_results, inputs) {
     temp_component_dates = temp_component_dates
   )
 
-  # Log decomposition
-  message(sprintf('  Permanent shock: %.2f pp', shocks$perm_pp))
-  if (nrow(shocks$components) > 0) {
-    for (i in seq_len(nrow(shocks$components))) {
-      comp <- shocks$components[i, ]
-      irf_type <- if (comp$use_temp_irf) 'temp' else 'shifted-perm'
-      message(sprintf('  Component %d: %+.2f pp (%s to %s, %s)',
-                      i, comp$delta_pp, comp$onset_date, comp$offset_date, irf_type))
-    }
-  }
+  message(sprintf('  USMM rate changes: %d permanent, %d temporary',
+                  nrow(shocks$permanent), nrow(shocks$temporary)))
   if (abs(shocks$refund_scalar) > 1e-10) {
     message(sprintf('  Refund scalar: %.4f (= $%.0fB / $%dB)',
                     shocks$refund_scalar, refund_2026, REFUND_CALIBRATION_BN))
