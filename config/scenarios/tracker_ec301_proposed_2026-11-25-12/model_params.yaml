@@ -1,7 +1,7 @@
 # =============================================================================
-# Model Parameters: tracker_ec301_no_deals_VINTAGE_TBD
+# Model Parameters: tracker_ec301_proposed_2026-11-25-12
 # =============================================================================
-# Current law plus the proposed excess-capacity Section 301 tariffs with every economy at its higher no-deal rate (tracker series ec301_no_deals).
+# Current law plus the proposed excess-capacity Section 301 tariffs at each economy's headline (as-proposed) rate (tracker series ec301_proposed).
 #
 # One of four scenarios on the Section 301 excess-capacity comparison vintage
 # (tracker series actual, ec301_proposed, ec301_no_deals, ec301_all_deals). The
@@ -17,16 +17,16 @@
 # gempack_linux_run_model_s301ec.sbatch sets. Run without that variable, the
 # model looks in the production root and stops with "No rate panel found".
 #
-# VINTAGE_TBD: replace with the tracker vintage id (YYYY-MM-DD-HH) once the
-# bundle is published, here, in the folder name and in config/dashboard.yaml.
+# Tracker vintage 2026-11-25-12 (Fable implementation, commit eb99a72), published in
+# the s301ec-fable validation root.
 #
 # Otherwise as tracker_actual_2026-11-09-09: retaliation on; eta/alpha reuse
 # the tracker_actual_2026-11-01-13 calibration (its 2025-06..2026-03 window is
 # unaffected by tariffs that start in 2027).
 
 rate_panel:
-  vintage: 'VINTAGE_TBD'
-  tracker_scenario: 'ec301_no_deals'
+  vintage: '2026-11-25-12'
+  tracker_scenario: 'ec301_proposed'
   baseline_date: '2025-01-01'
   interval_end: 'inclusive'
 
