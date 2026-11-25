@@ -120,9 +120,11 @@ AUTHORITY_OPTIONAL_COLS <- c('etr_s301ec')
 # authority series and the overall weighted rate on any date.
 AUTHORITY_RECONCILE_TOL_PP <- 1e-6
 
-# Thirteen curated summary-statistics metrics. `source` = 'key' (key_results.csv,
+# Ten curated summary-statistics metrics. `source` = 'key' (key_results.csv,
 # looked up by `key`) or 'sector' (sector_effects.csv, overall_gdp). Values are
-# already in the stated unit; nothing is rescaled.
+# already in the stated unit; nothing is rescaled. The three dated short-run rows
+# (real GDP growth 2025 Q4/Q4 and 2026 Q4/Q4, unemployment rate 2026 Q4) were
+# removed for the November 2026 release; key_results.csv still reports them.
 SUMMARY_METRICS <- tribble(
   ~metric,                ~category,                 ~series,                          ~unit,    ~source, ~key,
   'etr_statutory_level',  'Tariff rate',             'Average statutory rate',         'pct',    'key',   'statutory_all_in_etr',
@@ -134,10 +136,7 @@ SUMMARY_METRICS <- tribble(
   'price_postsub',        'Consumer price increase', 'Post-substitution', 'pct',    'key',   'pe_postsub_price_increase',
   'hh_cost_presub',       'Household cost',          'Pre-substitution',  'usd',    'key',   'pre_sub_per_hh_cost',
   'hh_cost_postsub',      'Household cost',          'Post-substitution', 'usd',    'key',   'post_sub_per_hh_cost',
-  'gdp_2025_q4q4',        'Real GDP',                '2025 Q4/Q4',        'pp',     'key',   'gdp_2025_q4q4',
-  'gdp_2026_q4q4',        'Real GDP',                '2026 Q4/Q4',        'pp',     'key',   'gdp_2026_q4q4',
-  'gdp_long_run',         'Real GDP',                'Long-run',          'pct',    'sector','overall_gdp',
-  'unemployment_2026_q4', 'Unemployment rate',       '2026 Q4',           'pp',     'key',   'urate_2026_q4'
+  'gdp_long_run',         'Real GDP',                'Long-run',          'pct',    'sector','overall_gdp'
 )
 
 # Census cty_code partner label (country_partner_mapping) -> partner group code
@@ -383,7 +382,7 @@ build_summary_stats <- function(outputs) {
   if (length(missing) > 0) {
     stop('summary-statistics: missing metric(s): ', paste(missing, collapse = ', '))
   }
-  if (nrow(res) != 13L) stop('summary-statistics: expected 13 metrics, got ', nrow(res))
+  if (nrow(res) != 10L) stop('summary-statistics: expected 10 metrics, got ', nrow(res))
 
   res %>% transmute(category, series, value, unit, metric)
 }
@@ -469,25 +468,6 @@ build_distribution <- function(outputs, concept) {
 }
 
 
-build_real_gdp_path <- function(outputs) {
-  macro <- outputs$macro_quarterly
-  # macro_quarterly already contains the published blended GDP level.
-  res <- macro %>%
-    filter(year >= 2025) %>%
-    arrange(year, quarter) %>%
-    mutate(
-      time = as.Date(sprintf('%d-%02d-15', year, quarter * 3)),
-      value = (gdp_tariff - gdp_baseline) / gdp_baseline * 100,
-      series = 'gdp_level'
-    )
-
-  n_q <- nrow(res)
-  if (n_q != 44L) stop('real-gdp: expected 44 quarters (2025Q1-2035Q4), got ', n_q)
-
-  res %>% transmute(time, series, value)
-}
-
-
 build_gdp_by_category <- function(outputs) {
   sectors <- outputs$sector_effects %>%
     left_join(SECTOR_NAMES, by = 'sector')
@@ -544,14 +524,15 @@ build_revenue_by_year <- function(outputs) {
 }
 
 
-# Registry of the 8 scenario figures: slug -> (builder, kind).
+# Registry of the 7 scenario figures: slug -> (builder, kind). The quarterly
+# real-GDP path chart (slug real-gdp) was removed for the November 2026 release;
+# the long-run GDP effect stays in summary-statistics and gdp-by-category.
 SCENARIO_FIGURES <- list(
   list(slug = 'summary-statistics',      kind = 'categorical', build = function(o) build_summary_stats(o)),
   list(slug = 'etr-by-country',          kind = 'categorical', build = function(o) build_etr_by_country(o)),
   list(slug = 'consumer-prices',         kind = 'categorical', build = function(o) build_consumer_prices(o)),
   list(slug = 'distribution-pct-income', kind = 'categorical', build = function(o) build_distribution(o, 'pct')),
   list(slug = 'distribution-dollars',    kind = 'categorical', build = function(o) build_distribution(o, 'dollars')),
-  list(slug = 'real-gdp',                kind = 'line',        build = function(o) build_real_gdp_path(o)),
   list(slug = 'gdp-by-category',         kind = 'categorical', build = function(o) build_gdp_by_category(o)),
   list(slug = 'revenue-by-year',         kind = 'categorical', build = function(o) build_revenue_by_year(o))
 )
@@ -939,7 +920,8 @@ export_dashboard <- function(interface_vintage, write_local = FALSE,
 
   figure_inventory <- list(
     statutory = c('daily-rate-overall', 'daily-rate-by-authority',
-                  'daily-rate-by-country', 'daily-rate-by-category'),
+                  'daily-rate-by-country', 'daily-rate-by-category',
+                  'daily-rate-by-hs'),
     default   = map_chr(SCENARIO_FIGURES, 'slug'),
     alternative = map_chr(SCENARIO_FIGURES, 'slug')
   )

@@ -5,7 +5,6 @@ source('src/04_calculate_revenue.R')
 source('src/05a_usmm_surrogate.R')
 source('src/05_calculate_macro.R')
 source('src/07_calculate_dynamic_revenue.R')
-source('src/13_export_dashboard.R')
 
 same <- function(x, y) isTRUE(all.equal(x, y, tolerance = 1e-10, check.attributes = FALSE))
 irfs <- load_usmm_irfs()
@@ -28,7 +27,7 @@ run_case <- function(schedule, gdp, imports, postsub) {
   revenue <- calculate_revenue(inputs, etr)
   dynamic <- calculate_dynamic_revenue(inputs, revenue)
   list(macro = macro, raw = usmm$macro_quarterly, revenue = revenue$by_year,
-       dynamic = dynamic$by_year, chart = build_real_gdp_path(list(macro_quarterly = macro)))
+       dynamic = dynamic$by_year)
 }
 ref <- suppressMessages(run_case(policy, -.5, -5, .08))
 alt <- suppressMessages(run_case(proposal, -1.5, -12, .06))
@@ -51,7 +50,7 @@ stopifnot(all(w[before] == 0), w[start] == 0, w[start + 6] == .5,
                c(0, 0, .5, 1)))
 dev <- with(alt$macro, (gdp_tariff / gdp_baseline - 1) * 100)
 raw <- with(alt$raw, (gdp_tariff / gdp_baseline - 1) * 100)
-stopifnot(same(dev, (1-w)*raw + w*(-1.5)), same(alt$chart$value, dev[alt$macro$year >= 2025]))
+stopifnot(same(dev, (1-w)*raw + w*(-1.5)))
 # Only Jul-Sep has positive GTAP weight in FY2027. FY2031 is fully phased in.
 stopifnot(same(alt$revenue$phase_in[alt$revenue$fiscal_year == 2027], (92/365)/12),
           all(alt$revenue$phase_in[alt$revenue$fiscal_year >= 2031] == 1),
@@ -84,4 +83,4 @@ expected <- irfs$perm[['2']]$gdpr +
   shift_irf(interpolate_irf(irfs$perm, 12)$gdpr, date_to_quarter_index(dates[2]) - 6L) +
   shift_irf(interpolate_irf(irfs$perm, -3)$gdpr, date_to_quarter_index(dates[3]) - 6L)
 stopifnot(same(response$gdpr, expected))
-message('PASS: policy dates, single-step equivalence, temporary changes, blend, dashboard and fiscal years')
+message('PASS: policy dates, single-step equivalence, temporary changes, blend and fiscal years')

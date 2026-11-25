@@ -137,7 +137,7 @@
 
 <h3>Summary of results <span style="color:var(--faint);font-weight:400">(Table 1 from above)</span></h3>
 <p>Pre- and post-substitution.</p>
-<div class="data"><span class="lbl">Data</span><code>default-scenario/summary-statistics</code> — 12 fixed metrics. Columns <code>series</code> (carries the "Pre-substitution" / "Post-substitution" split), <code>unit</code> (pct/usd/usd_bn/pp), <code>metric</code>.</div>
+<div class="data"><span class="lbl">Data</span><code>default-scenario/summary-statistics</code> — 10 fixed metrics. Columns <code>series</code> (carries the "Pre-substitution" / "Post-substitution" split), <code>unit</code> (pct/usd/usd_bn/pp), <code>metric</code>.</div>
 
 <h3>ETRs <span style="color:var(--faint);font-weight:400">(Table 2 from above)</span></h3>
 <p>Pre- and post-substitution, by country, with a total row.</p>
@@ -155,9 +155,6 @@
 <p>Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
 <div class="data"><span class="lbl">Data</span><code>default-scenario/distribution-dollars</code> — same shape as above, dollar units; the <code>"Total"</code> row is the average household cost (matches the per-household cost on summary-statistics).</div>
 
-<h3>US Real GDP effects <span style="color:var(--faint);font-weight:400">(Figure 3 from above)</span></h3>
-<div class="data"><span class="lbl">Data</span><code>default-scenario/real-gdp</code> — line chart. 44 rows, 2025Q1–2035Q4, mid-quarter dates in <code>time</code>.</div>
-
 <h3>US Real GDP effect, by category <span style="color:var(--faint);font-weight:400">(Figures 4 and 5 from above)</span></h3>
 <p>Toggle by Sector or by Country group. Move the total category to the far left and give it a different color (or other clear delineation).</p>
 <div class="data"><span class="lbl">Data</span><code>default-scenario/gdp-by-category</code> — <code>dimension</code> = the Sector/Country toggle (<code>sector</code> / <code>country</code>); <code>category_code</code> = key. <b>The total for each side is already included</b> (<code>overall_gdp</code> for sectors, <code>world</code> for countries) — filter it out and render it separately on the far left.</div>
@@ -168,7 +165,7 @@
 
 
 <div class="tab-h"><span class="num">Tab 4</span><h2>Projected Tariff Effects: Alternative Policy Scenarios</h2></div>
-<p class="tab-intro">Same 8 figures as Tab 3, under <code>alternative-scenarios/</code>, but every row is stacked across <b>all</b> scenarios in <code>config/dashboard.yaml</code> and tagged with two extra columns:</p>
+<p class="tab-intro">Same 7 figures as Tab 3, under <code>alternative-scenarios/</code>, but every row is stacked across <b>all</b> scenarios in <code>config/dashboard.yaml</code> and tagged with two extra columns:</p>
 <ul>
   <li><code>scenario</code> — which policy scenario the row belongs to.</li>
   <li><code>measure</code> — <code>level</code> / <code>delta_vs_default</code>, the toggle between showing 1) <code>level</code>, i.e., each scenario's own effects relative to the January 2025 baseline, and 2) <code>delta_vs_default</code>, the "delta" or incremental effect relative to the default scenario.</li>
@@ -196,10 +193,6 @@
 <h3>Distribution of household income, by decile, in 2025 dollars</h3>
 <p>Same as Tab 3, with bars for different scenarios. Toggle a "total" column on and off, with a different color (or other clear delineation).</p>
 <div class="data"><span class="lbl">Data</span><code>alternative-scenarios/distribution-dollars</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>. Includes the <code>"Total"</code> row, as in Tab 3.</div>
-
-<h3>US Real GDP effects, by year</h3>
-<p>Same as Tab 3, with lines for different scenarios.</p>
-<div class="data"><span class="lbl">Data</span><code>alternative-scenarios/real-gdp</code> — Tab 3 columns + <code>scenario</code>/<code>measure</code>.</div>
 
 <h3>US Real GDP effect, by category</h3>
 <p>Same as Tab 3, with bars for different scenarios. Toggle by Sector or by Country group. Move the total category to the far left and give it a different color (or other clear delineation).</p>

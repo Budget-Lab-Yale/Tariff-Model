@@ -87,7 +87,7 @@ Some text.
 
 Pre- and post-substitution
 
-`default-scenario/summary-statistics` — 13 fixed metrics. Columns `series` (e.g. the "Average statutory rate" / "Effective rate, pre-substitution" / "Effective rate, post-substitution" split under the `Tariff rate` category), `unit` (pct/usd/usd_bn/pp), `metric`.
+`default-scenario/summary-statistics` — 10 fixed metrics. Columns `series` (e.g. the "Average statutory rate" / "Effective rate, pre-substitution" / "Effective rate, post-substitution" split under the `Tariff rate` category), `unit` (pct/usd/usd_bn/pp), `metric`.
 
 ## ETRs (Table 2 from above)
 
@@ -113,10 +113,6 @@ Toggle a "total" column on and off, with a different color (or other clear delin
 
 `default-scenario/distribution-dollars` — same shape as above, dollar units; the `"Total"` row is the average household cost (matches the per-household cost on summary-statistics).
 
-## US Real GDP effects (Figure 3 from above)
-
-`default-scenario/real-gdp` — line chart. 44 rows, 2025Q1–2035Q4, mid-quarter dates in `time`.
-
 ## US Real GDP effect, by category (Figures 4 and 5 from above)
 
 Toggle by Sector or by Country group. Move the total category to the far left and give it a different color (or other clear delineation).
@@ -133,7 +129,7 @@ A bar graph with two sets of bars, dynamic and conventional. Toggle a "total" co
 
 # Tab 4) Projected Tariff Effects: Alternative Policy Scenarios
 
-Same 8 figures as Tab 3, under `alternative-scenarios/`, but every row is stacked across **all** scenarios in `config/dashboard.yaml` and tagged with two extra columns:
+Same 7 figures as Tab 3, under `alternative-scenarios/`, but every row is stacked across **all** scenarios in `config/dashboard.yaml` and tagged with two extra columns:
 
 - `scenario` — which policy scenario the row belongs to.
 - `measure` — `level` / `delta_vs_default`, the toggle between showing 1) `level`, i.e., each scenario's own effects relative to the January 2025 baseline, and 2) `delta_vs_default`, the "delta" or incremental effect relative to the default scenario.
@@ -171,12 +167,6 @@ Same as Tab 3, with bars for different scenarios. Toggle a "total" column on and
 Same as Tab 3, with bars for different scenarios. Toggle a "total" column on and off, with a different color (or other clear delineation).
 
 `alternative-scenarios/distribution-dollars` — Tab 3 columns + `scenario`/`measure`. Includes the `"Total"` row, as in Tab 3.
-
-## US Real GDP effects, by year
-
-Same as Tab 3, with lines for different scenarios.
-
-`alternative-scenarios/real-gdp` — Tab 3 columns + `scenario`/`measure`.
 
 ## US Real GDP effect, by category
 
